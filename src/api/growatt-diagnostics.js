@@ -27,7 +27,7 @@ export function growattTimeline(repository, filters) {
   const { rows, has_more } = repository.growattTimeline(filters);
   return {
     ...filters, has_more,
-    rows: rows.map((row) => ({ ...row, at: new Date(row.at_ms).toISOString(), label: row.source === 'packet' ? recordLabel(row.record_type) : ({ connected: 'Verbonden', disconnected: 'Verbinding gesloten', idle_disconnect: 'Inactiviteit', incomplete_timeout: 'Onvolledig pakket', incomplete_frame: 'Onvolledig pakket' })[row.status] ?? 'Verbinding' }))
+    rows: rows.map((row) => ({ ...row, at: new Date(row.at_ms).toISOString(), label: row.source === 'packet' ? recordLabel(row.record_type) : ({ connected: 'Verbonden', disconnected: 'Verbinding gesloten', idle_disconnect: 'Inactiviteit', incomplete_timeout: 'Onvolledig pakket', incomplete_frame: 'Onvolledig pakket', reply_sent: 'Antwoord', reply_error: 'Antwoordfout', time_sync_sent: 'Tijdsynchronisatie', time_sync_error: 'Synchronisatiefout' })[row.status] ?? 'Verbinding' }))
   };
 }
 

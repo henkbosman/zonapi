@@ -106,7 +106,7 @@ function renderTimeline(data) {
   if (!data.rows.length) showEmpty(body, 8, 'Geen berichten voor dit filter');
   for (const row of data.rows) {
     const packet = row.source === 'packet';
-    const isError = packet ? !['control', 'announcement'].includes(row.status) && !row.status.startsWith('decoded:') : !['connected', 'disconnected', 'idle_disconnect'].includes(row.status);
+    const isError = packet ? !['control', 'announcement'].includes(row.status) && !row.status.startsWith('decoded:') : !['connected', 'disconnected', 'idle_disconnect', 'reply_sent', 'time_sync_sent'].includes(row.status);
     const item = addRow(body, [
       time(row.at), row.label, row.record_type?.toUpperCase() ?? '—',
       packet ? row.record_type?.slice(0, 2).toUpperCase() ?? '—' : '—', row.status,
@@ -172,6 +172,23 @@ async function refresh() {
   }
 }
 
+/** Wist de ruwe pakketten en verbindingslogs na bevestiging; input: geen; output: Promise<void>. */
+async function clearLogs() {
+  if (!window.confirm('Alle Growatt-berichten en logs verwijderen?')) return;
+  const button = element('#clear-logs');
+  button.disabled = true;
+  refreshNumber++;
+  try {
+    const response = await fetch('/api/v1/growatt/diagnostics', { method: 'DELETE', cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    offset = 0;
+    element('#frame-detail').hidden = true;
+    await refresh();
+  } catch (error) {
+    element('#connection').textContent = `Fout: ${error.message}`;
+  } finally { button.disabled = false; }
+}
+
 /** Wijzigt de tijdlijnfilters en start op de nieuwste pagina; input: geen (leest selectievelden); output: void. */
 function changeFilter() {
   if (element('#view-filter').value === 'events') {
@@ -195,6 +212,7 @@ function changePage(direction) {
 document.addEventListener('click', handleFrameClick);
 for (const id of ['#view-filter', '#type-filter', '#address-filter']) element(id).addEventListener('change', changeFilter);
 element('#refresh-now').addEventListener('click', () => { void refresh(); });
+element('#clear-logs').addEventListener('click', () => { void clearLogs(); });
 element('#newer').addEventListener('click', () => changePage(-1));
 element('#older').addEventListener('click', () => changePage(1));
 void refresh();

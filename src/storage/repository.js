@@ -36,6 +36,16 @@ export function createRepository(db) {
     markFrame(id, status) { return q.frameUpdate.run(status, id); },
     /** Bewaart een fout van de TCP-ontvanger; input: tijd, peer, soort, detail; output: SQLite-resultaat. */
     saveGrowattEvent(at, peer, kind, detail) { return q.growattEvent.run(at, peer, kind, String(detail).slice(0, 300)); },
+    /** Verwijdert alleen ruwe Growatt-berichten en logs; input: geen; output: aantallen verwijderde rijen (metingen blijven staan). */
+    clearGrowattDiagnostics() {
+      db.exec('BEGIN');
+      try {
+        const frames_deleted = db.prepare('DELETE FROM growatt_frames').run().changes;
+        const events_deleted = db.prepare('DELETE FROM growatt_events').run().changes;
+        db.exec('COMMIT');
+        return { frames_deleted, events_deleted };
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
+    },
     /** Leest recente pakketmetadata zonder ruwe inhoud; input: limiet; output: nieuwste rijen. */
     recentGrowattFrames(limit) { return db.prepare('SELECT id,received_ms,peer,protocol,record_type,status,length(raw) AS size_bytes FROM growatt_frames ORDER BY id DESC LIMIT ?').all(limit); },
     /** Leest pakketten en TCP-gebeurtenissen als één tijdlijn met filters; input: {limit,offset,type,address,view}; output: {rows,has_more}. */
@@ -51,7 +61,7 @@ export function createRepository(db) {
       if (address) { frames.push('substr(record_type,1,2)=?'); frameParams.push(address); }
       if (view === 'errors') {
         frames.push("status NOT IN ('control','announcement') AND status NOT LIKE 'decoded:%'");
-        events.push("kind NOT IN ('connected','disconnected','idle_disconnect')");
+        events.push("kind NOT IN ('connected','disconnected','idle_disconnect','reply_sent','time_sync_sent')");
       }
       const frameSql = `SELECT id,received_ms AS at_ms,peer,'packet' AS source,protocol,record_type,status,length(raw) AS size_bytes,NULL AS detail FROM growatt_frames ${frames.length ? `WHERE ${frames.join(' AND ')}` : ''}`;
       const eventSql = `SELECT id,at_ms,peer,'event' AS source,NULL AS protocol,NULL AS record_type,kind AS status,NULL AS size_bytes,detail FROM growatt_events ${events.length ? `WHERE ${events.join(' AND ')}` : ''}`;
@@ -84,7 +94,7 @@ export function createRepository(db) {
       SELECT received_ms AS at_ms,peer,status,record_type AS detail,id AS frame_id
       FROM growatt_frames WHERE status NOT IN ('control','announcement') AND status NOT LIKE 'decoded:%'
       UNION ALL
-      SELECT at_ms,peer,kind AS status,detail,NULL AS frame_id FROM growatt_events WHERE kind NOT IN ('connected','disconnected','idle_disconnect')
+      SELECT at_ms,peer,kind AS status,detail,NULL AS frame_id FROM growatt_events WHERE kind NOT IN ('connected','disconnected','idle_disconnect','reply_sent','time_sync_sent')
       ORDER BY at_ms DESC LIMIT ?
     `).all(limit); },
     /** Bewaart omvormermeting zonder oude buffers live te maken; input: meetobject; output: SQLite-resultaat. */

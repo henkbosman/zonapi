@@ -1,8 +1,9 @@
+import { drawProductionChart } from './dashboard-production-chart.js';
+
 /** Zoekt één dashboardelement; input: CSS-selector; output: Element of null. */
 const $ = (selector) => document.querySelector(selector);
 const dutchTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit' });
 const dutchDay = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-let hours = 3;
 
 /** Leest één endpoint met expliciete foutstatus; input: pad; output: Promise<JSON> of fout. */
 async function json(path) {
@@ -88,7 +89,8 @@ function renderStatus(status) {
   $('#now').textContent = dutchDay.format(new Date(status.time));
   $('#source').textContent = `Weerbron: ${status.weather.source}`;
   $('#sun').textContent = status.weather.sunrise ? `Zon ${dutchTime.format(new Date(status.weather.sunrise))}–${dutchTime.format(new Date(status.weather.sunset))}` : 'Zonuren: locatie ontbreekt';
-  $('#pv-now').textContent = watts(status.growatt.power_w);
+  const freshInverters = status.growatt.inverters.filter((item) => item.fresh && Number.isFinite(item.power_w));
+  $('#pv-now').textContent = watts(status.growatt.power_w ?? (freshInverters.length ? freshInverters.reduce((sum, item) => sum + item.power_w, 0) : null));
   $('#pv-sub').textContent = `${status.growatt.active_inverters}/${status.growatt.expected_inverters} omvormers recent`;
   $('#net-now').textContent = watts(status.homewizard.net_power_w);
   $('#net-sub').textContent = status.homewizard.selected_device ? status.homewizard.selected_device.toUpperCase() : 'Geen recente netmeting';
@@ -108,21 +110,17 @@ function renderStatus(status) {
 /** Haalt huidige gegevens, grafieken en apparaatadviezen op; input: geen; output: Promise<void>. */
 async function refresh() {
   try {
-    const [status, forecast, profiles, history] = await Promise.all([
-      json('/api/v1/status'), json(`/api/v1/forecast?hours=${hours}`), json('/api/v1/appliances'), json('/api/v1/history?metric=inverter&limit=5000')
+    const [status, forecast, profiles, production] = await Promise.all([
+      json('/api/v1/status'), json('/api/v1/forecast?hours=3'), json('/api/v1/appliances'), json('/api/v1/production/day')
     ]);
     renderStatus(status);
-    drawChart($('#pv-chart'), forecast.slots.map((slot) => ({ time:slot.start, value:slot.power_w })), '#137771');
+    drawProductionChart($('#pv-chart'), production, forecast.slots);
+    const recent = production.points.at(-1);
+    $('#chart-coverage').textContent = recent ? `${recent.active_inverters}/${recent.expected_inverters} omvormers` : '';
     drawChart($('#ghi-chart'), forecast.slots.map((slot) => ({ time:slot.start, value:slot.ghi_w_m2 })), '#e6a321');
     $('#forecast-note').hidden = forecast.status === 'ok';
     $('#forecast-note').textContent = forecast.status === 'ok' ? '' : `Voorspelling: ${forecast.status}`;
-    const buckets = new Map();
-    for (const row of history.rows) {
-      const key = Math.floor(row.measured_ms / 300000);
-      if (!buckets.has(key)) buckets.set(key, new Map());
-      buckets.get(key).set(row.serial, row.power_w);
-    }
-    drawChart($('#history-chart'), [...buckets].filter(([, values]) => values.size === status.growatt.expected_inverters).map(([key, values]) => ({ time:new Date(key * 300000).toISOString(), value:[...values.values()].reduce((total, item) => total + item, 0) })), '#137771');
+    drawChart($('#history-chart'), production.points.map((point) => ({ time:point.time, value:point.power_w })), '#137771');
     $('#appliance-list').replaceChildren();
     const advice = await Promise.all(profiles.profiles.map((profile) => json(`/api/v1/appliances/${profile.id}/advice`).then((result) => ({ profile, result }))));
     for (const item of advice) showAppliance(item.profile, item.result);
@@ -132,15 +130,5 @@ async function refresh() {
   }
 }
 
-/** Wisselt voorspellingvenster en vernieuwt grafieken; input: muisklik-event; output: void. */
-function chooseHours(event) {
-  const button = event.target.closest('[data-hours]');
-  if (!button) return;
-  hours = Number(button.dataset.hours);
-  document.querySelectorAll('[data-hours]').forEach((item) => item.classList.toggle('active', item === button));
-  void refresh();
-}
-
-document.querySelector('.segmented').addEventListener('click', chooseHours);
 void refresh();
 setInterval(() => { void refresh(); }, 30000);

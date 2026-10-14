@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { root } from '../config/load.js';
 import { forecastResponse, irradianceResponse } from './forecast.js';
 import { productionResponse, metersResponse } from './measurements.js';
+import { productionSeries } from './production-series.js';
 import { growattLimitParam, growattOverview, growattFrameDetail, growattTimelineParams, growattTimeline } from './growatt-diagnostics.js';
 import { getBaseload } from '../appliances/baseload.js';
 import { loadProfiles } from '../appliances/load-profiles.js';
@@ -15,6 +16,7 @@ const staticFiles = new Map([
   ['/growatt', ['growatt.html', 'text/html; charset=utf-8']],
   ['/dashboard.css', ['dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard.js', ['dashboard.js', 'text/javascript; charset=utf-8']],
+  ['/dashboard-production-chart.js', ['dashboard-production-chart.js', 'text/javascript; charset=utf-8']],
   ['/growatt.css', ['growatt.css', 'text/css; charset=utf-8']],
   ['/growatt.js', ['growatt.js', 'text/javascript; charset=utf-8']]
 ]);
@@ -44,9 +46,10 @@ export function timeParam(value, defaultMs) {
 /** Start een leesbare LAN-API met dashboard; input: dienstafhankelijkheden; output: luisterende http.Server. */
 export function startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard }) {
   const server = http.createServer((request, response) => {
-    if (request.method !== 'GET') return sendJson(response, 405, { error: 'Alleen GET beschikbaar' });
     try {
       const url = new URL(request.url, 'http://localhost');
+      if (request.method === 'DELETE' && url.pathname === '/api/v1/growatt/diagnostics') return sendJson(response, 200, repository.clearGrowattDiagnostics());
+      if (request.method !== 'GET') return sendJson(response, 405, { error: 'Methode niet beschikbaar' });
       if (staticFiles.has(url.pathname)) {
         const [file, type] = staticFiles.get(url.pathname);
         response.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'", 'X-Content-Type-Options': 'nosniff' });
@@ -65,6 +68,16 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
         return frame ? sendJson(response, 200, frame) : sendJson(response, 404, { error: 'Pakket niet gevonden' });
       }
       if (url.pathname === '/api/v1/production/current') return sendJson(response, 200, productionResponse(repository.currentInverters(), settings.growatt.expected_inverters, settings.growatt.fresh_minutes, now, panels.inverters.map((item) => item.serial)));
+      if (url.pathname === '/api/v1/production/day') {
+        const { sunrise, sunset } = weather.status();
+        const from = sunrise ? Date.parse(sunrise) : now - 26 * 3600000;
+        const to = Math.min(now, sunset ? Date.parse(sunset) : now) + 1;
+        const rows = to > from ? repository.history('inverter', from, to, 5000) : [];
+        return sendJson(response, 200, {
+          sunrise: sunrise ?? null, sunset: sunset ?? null, now: new Date(now).toISOString(), fresh_minutes: settings.growatt.fresh_minutes,
+          points: productionSeries(rows, now, sunrise, sunset, settings.growatt.expected_inverters, settings.growatt.fresh_minutes, panels.inverters.map((item) => item.serial))
+        });
+      }
       if (url.pathname === '/api/v1/meters/current') return sendJson(response, 200, metersResponse(repository.currentMeters(), now, settings.homewizard.net_meter_priority));
       if (url.pathname === '/api/v1/appliances') {
         const { profiles, errors } = loadProfiles(join(root, 'config/appliances'));

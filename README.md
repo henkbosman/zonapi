@@ -1,11 +1,11 @@
 # ZonAPI — lokaal zonnestroomadvies
 
-Node.js-dienst voor een Growatt ShineLanBox, lokale HomeWizard-meters, Open-Meteo-instraling, een SQLite-historie, ESP32-endpoints en een dashboard. **Er is geen verbinding met Growatt geprogrammeerd.** De Growatt TCP-listener ontvangt de ShineLanBox-pakketten en stuurt alleen lokaal gemaakte ontvangstbevestigingen terug. De enige externe dienst is de gekozen weerservice.
+Node.js-dienst voor een Growatt ShineLanBox, lokale HomeWizard-meters, Open-Meteo-instraling, een SQLite-historie, ESP32-endpoints en een dashboard. **Er is geen verbinding met Growatt geprogrammeerd.** De Growatt TCP-listener ontvangt de ShineLanBox-pakketten en stuurt uitsluitend lokale protocolbevestigingen en een configureerbare tijdsynchronisatie terug. De enige externe dienst is de gekozen weerservice.
 
 ## Wat is al werkend en wat vereist controle?
 
 - Alle softwareonderdelen, database, scheduler, HomeWizard v1/v2, API, dashboard en machineberekening zijn aanwezig. Integratietests gebruiken synthetische weer- en Growatt-pakketten.
-- De Growatt-decoder gebruikt de generieke offsets uit [Grott](https://github.com/johanmeijer/grott/blob/master/grottconf.py), de CRC en XOR-maskering uit [Grottserver](https://github.com/johanmeijer/grott/blob/master/grottserver.py) en lokale acknowledgements. **De exacte combinatie ShineLanBox 7.0.0.4 + vier MIC 2000TL-X via RF is niet op echte pakketten getest.** Onbekende layouts worden in de eigen SQLite-database bewaard en als `unknown_layout` getoond. Tijdens de eerste live-aansluiting moet worden gecontroleerd of alle vier de serienummers en vermogens kloppen. Pas de indien nodig exacte layout aan in `config/layouts/`.
+- De Growatt-decoder gebruikt de generieke offsets uit [Grott](https://github.com/johanmeijer/grott/blob/master/grottconf.py), de CRC en XOR-maskering uit [Grottserver](https://github.com/johanmeijer/grott/blob/master/grottserver.py), lokale ACK's en de tijdsynchronisatie. Bij de aangesloten ShineLanBox 7.0.0.4 zijn volgens de live-observatie `xx04`-berichten voor drie van de vier MIC 2000TL-X-omvormers ontvangen. Onbekende layouts worden in de eigen SQLite-database bewaard en als `unknown_layout` getoond. Controleer in `/growatt` het serienummer en vermogen per omvormer en vergelijk met de eigen metingen.
 - Open-Meteo en je HomeWizard-apparaten waren tijdens ontwikkeling niet vanuit dit project bereikbaar; voor live data zijn jouw locatie, paneelwaarden en lokale meteradressen nog nodig.
 
 ## Snel starten op Arch Linux
@@ -19,13 +19,17 @@ Node.js-dienst voor een Growatt ShineLanBox, lokale HomeWizard-meters, Open-Mete
 
 Herstart na wijzigingen van `settings.json`, `panels.json` en `layouts/*.json`. Apparatenprofielen uit `config/appliances/*.json` worden opnieuw ingelezen bij elke API-aanvraag. Het dashboard maakt zichzelf elke 30 seconden opnieuw actueel.
 
+### Bestaande installatie bijwerken
+
+Stop de Node-dienst en bewaar een kopie van `data/zonapi.sqlite`. Kopieer voor deze versie de mappen `src/` en `public/` uit het archief naar de bestaande installatie en start de dienst opnieuw. Behoud de eigen `config/settings.json`, `config/panels.json`, `config/appliances/` en de hele `data/`-map. De bestaande database wordt bij de eerste start gemigreerd; de opgeslagen opbrengst blijft behouden. Als de instelling `growatt.time_sync_on_announcement` ontbreekt, staat de lokale tijdsynchronisatie standaard aan. Na een nieuwe `xx03`-aanmelding zijn de `reply_sent`- en `time_sync_sent`-regels zichtbaar op `/growatt`.
+
 ### Instellingen
 
 | Bestand/veld | Vul in / werking |
 | --- | --- |
 | `settings.json > location` | Breedte- en lengtegraad van je locatie. Er wordt vóór dit is ingevuld geen extern weerverzoek gedaan. |
 | `settings.json > http` | LAN-IP en HTTP-poort voor ESP32's/dashboard. Begint uit voorzorg op `127.0.0.1`. |
-| `settings.json > growatt` | LAN-IP/poort voor ShineLanBox; standaard 5279, verwacht vier omvormers. `idle_timeout_minutes` is standaard 30 en kan van 1 tot 120 worden ingesteld. Ook bij een bestaand instellingenbestand zonder dit veld geldt 30 minuten. |
+| `settings.json > growatt` | LAN-IP/poort voor ShineLanBox; standaard 5279, verwacht vier omvormers. `idle_timeout_minutes` is standaard 30 (instelbaar 1–120). `time_sync_on_announcement` is standaard `true`, ook in bestaande configuraties zonder dit veld; zet op `false` om de lokale tijdopdracht na `xx03` uit te schakelen. |
 | `settings.json > weather.max_requests_per_local_day` | Standaard 12, instelbaar 0–48; `0` pauzeert de externe bron. Een mislukte poging telt mee; teller overleeft herstart. Alleen tussen zonsopkomst en zonsondergang, met minimaal ongeveer één uur tussen normale pogingen. |
 | `settings.json > weather.forecast_days` | Standaard 3; verleng als het adviesvenster veel langer dan 24 uur wordt. Kwartierstarttijden worden tegen de **uurvoorspelling** getoetst; dit is geen echte kwartierprognose. |
 | `settings.json > advice.search_hours` | Standaard 24; advies controleert ook de **volledige** cyclus voorbij dat laatste starttijdstip. |
@@ -59,16 +63,18 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | `GET /api/v1/forecast?hours=3` | GHI/DNI/DHI en eigen PV-berekening voor komende uren; `power_w:null` met ontbrekende configuratie als panelen nog niet ingesteld zijn. |
 | `GET /api/v1/irradiance?hours=3` | Instraling per uur en berekende GTI per paneelgroep. |
 | `GET /api/v1/production/current` | Afzonderlijke omvormers plus uitsluitend bij vier verse metingen een betrouwbare som. |
+| `GET /api/v1/production/day` | Beschikbare omvormermetingen van vandaag, samengevoegd op meettijd, met het aantal actieve omvormers per punt en zonsopgang/-ondergang. |
 | `GET /api/v1/growatt?limit=50` | Growatt-listener, ontvangen pakkettypen/statussen, omvormers en recente fouten; maximaal 100 pakketten per aanvraag. |
 | `GET /api/v1/growatt/timeline?type=xx04&limit=100` | Gecombineerde chronologische lijst van ontvangen pakketten en TCP-gebeurtenissen, met filters `type` (`xx04` of `5004`), `address` (`50`–`53`), `view` (`all`, `packets`, `errors`, `events`) en paginering via `offset`. `has_more` geeft aan of er meer regels zijn. |
 | `GET /api/v1/growatt/frames/:id` | Eén ontvangen pakket inclusief de oorspronkelijke hex-inhoud en eventuele gedecodeerde meting. |
+| `DELETE /api/v1/growatt/diagnostics` | Verwijdert Growatt-pakketten en verbindings-/antwoordlogs, behoudt opgeslagen opbrengstmetingen; geeft verwijderde aantallen terug. De Growatt-pagina biedt hiervoor een knop met bevestiging. |
 | `GET /api/v1/meters/current` | P1 en kWh afzonderlijk, plus precies **één** gekozen netto netvermogen. Positief = import, negatief = export. |
 | `GET /api/v1/history?metric=irradiance&from=...&to=...` | Bestaande time series. `metric`: `irradiance`, `pv_forecast`, `inverter`, `p1` of `kwh`; `limit` max. 5000. Bij voorspellingen overschrijft een nieuwere bronwaarde hetzelfde tijdvak. |
 | `GET /api/v1/appliances` | Geldige JSON-profielen en eventuele laad-/validatiefouten. |
 | `GET /api/v1/appliances/wasmachine/advice` | `can_start_now`, `earliest_start`, `best_start`, volledige zonnefractie en status (`ok`, `stale`, `forecast_incomplete`, enzovoort). Ook `droger` en `vaatwasser`. |
 | `GET /api/v1/status` | Bronnen, configuratiefouten, historisch aantal ontvangen frames, zontijden, gebruikt/dagmaximum en volgende weersophaling. |
-| `GET /dashboard` | Lokaal dashboard met voorspelling, historische opbrengst en drie apparaatadviezen. |
-| `GET /growatt` | Growatt-pagina met omvormermetingen, één tijdlijn voor berichten en verbindingsfouten, type-/adresfilters en automatische verversing iedere 15 seconden. |
+| `GET /dashboard` | Gemeten opbrengst en drie uur voorspelling op één as tussen zonsopgang en zonsondergang met lijn voor de huidige tijd; toont ook de beschikbare metingen bij minder dan vier omvormers. |
+| `GET /growatt` | Growatt-pagina met omvormermetingen, tijdlijn voor pakketten, antwoorden, tijdsynchronisatie en verbindingen, filters, verwijderknop en verversing iedere 15 seconden. |
 
 Bijvoorbeeld voor een ESP32: lees `can_start_now` alleen als `status === "ok"`; bij `null`, `stale` of ontbrekende instellingen toon je "onbekend" in plaats van "nee". `earliest_start` kan na drie uur liggen. `best_start` laat de beste optie zien als de drempel nergens wordt gehaald.
 
@@ -81,8 +87,8 @@ Bijvoorbeeld voor een ESP32: lees `can_start_now` alleen als `status === "ok"`; 
 3. Vergelijk meerdere werkelijk gemeten wattages en energietellers **per serienummer** met de eigen omvormers. Controleer herverbinding en of oudere gebufferde pakketten niet het actuele vermogen vervangen. Gebruik desgewenst lokaal `node scripts/inspect-frames.js` voor pakketstatus; `--hex` toont privégegevens, waaronder serienummers.
 4. Verifieer met router/firewall/netwerktrace dat noch de ShineLanBox noch deze dienst verbinding maakt met Growatt. Of jouw ShineLanBox 7.0.0.4 de generieke ACK van de lokale TCP-server accepteert, kan pas met de echte hardware worden bevestigd. Als dat niet zo is, zijn de bewaarde pakketten de input voor een gerichte protocolaanpassing.
 
-Een ontvangen `5004` verschijnt als omvormermeting onder het serienummer van adres `50`. De totale actuele opbrengst wordt pas gevuld wanneer alle vier omvormers een recente `xx04`-meting hebben. Nieuwe TCP-verbindingen en normale sluitingen staan tussen de berichten; na 30 minuten stilte volgt `idle_disconnect`. De listener gebruikt geen TCP-keepalive met korte probe-termijn: die kon een verbinding na ongeveer 70 seconden met `read ETIMEDOUT` beëindigen. Oude `timeout`- en `socket_error`-meldingen uit eerdere versies blijven terug te vinden. Een `incomplete_frame` of `incomplete_timeout` vermeldt ontvangen bytes wanneer een pakket voortijdig stopt.
+Een ontvangen `5004` verschijnt als omvormermeting onder het serienummer van adres `50`. De totale actuele opbrengst in de API wordt pas gevuld wanneer alle vier omvormers een recente `xx04`-meting hebben; de grafiek tekent ook beschikbare deelmetingen en vermeldt hoeveel omvormers meetelden. Bekijk na elk bericht `reply_sent` in `/growatt` voor de lokaal geschreven antwoordbytes. Bij de eerste geldige `xx03` van een TCP-verbinding krijgt de ShineLanBox na de gewone ACK ook een lokale `0118`-tijdsynchronisatie voor dataloggerregister 31, conform [Grottserver](https://github.com/johanmeijer/grott/wiki/Grottserver); dit verschijnt als `time_sync_sent`. Een `xx29` wordt bevestigd maar start zelf geen tijdsynchronisatie. `reply_sent` betekent dat Node de bytes aan de socket heeft overgedragen; controleer de daaropvolgende pakketten om het effect op de logger te zien. Nieuwe TCP-verbindingen en normale sluitingen staan tussen de berichten; na 30 minuten stilte volgt `idle_disconnect`. De listener gebruikt geen TCP-keepalive met korte probe-termijn. `DELETE /api/v1/growatt/diagnostics` wist alleen diagnostische berichten; de opbrengsthistorie blijft aanwezig door een automatische SQLite-migratie bij de eerste start van deze versie.
 
 ## Testen
 
-`npm test` voert de offline integratietests uit voor opslag/overschrijven, daglichtquota, meerdere TCP-fragmenten/CRC/ACK, HomeWizard-netmeting zonder dubbeltelling en een startadvies verder dan drie uur. De tests versturen niets naar externe diensten.
+`npm test` voert de offline integratietests uit voor opslag/overschrijven, daglichtquota, meerdere TCP-fragmenten/CRC/ACK/tijdcommando, meerdere verbindingen, grafiekpunten met minder dan vier omvormers, diagnostiek wissen met behoud van historie, HomeWizard-netmeting zonder dubbeltelling en een startadvies verder dan drie uur. De tests versturen niets naar externe diensten.

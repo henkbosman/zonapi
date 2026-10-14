@@ -39,7 +39,7 @@ export function openDatabase(path) {
     CREATE TABLE IF NOT EXISTS inverter_measurements (
       serial TEXT NOT NULL, measured_ms INTEGER NOT NULL, received_ms INTEGER NOT NULL,
       power_w REAL NOT NULL, energy_today_kwh REAL, energy_total_kwh REAL,
-      frame_id INTEGER NOT NULL REFERENCES growatt_frames(id),
+      frame_id INTEGER REFERENCES growatt_frames(id) ON DELETE SET NULL,
       PRIMARY KEY(serial, measured_ms)
     );
     CREATE INDEX IF NOT EXISTS inverter_received ON inverter_measurements(serial, received_ms);
@@ -50,5 +50,23 @@ export function openDatabase(path) {
     );
     CREATE INDEX IF NOT EXISTS meter_received ON meter_measurements(device, received_ms);
   `);
+  // Oude databases hadden een verplichte frame_id; historische metingen moeten bij het wissen van ruwe berichten blijven bestaan.
+  const oldFrameColumn = db.prepare('PRAGMA table_info(inverter_measurements)').all().find((column) => column.name === 'frame_id');
+  if (oldFrameColumn?.notnull) {
+    db.exec('BEGIN');
+    try {
+      db.exec(`CREATE TABLE inverter_measurements_updated (
+        serial TEXT NOT NULL, measured_ms INTEGER NOT NULL, received_ms INTEGER NOT NULL,
+        power_w REAL NOT NULL, energy_today_kwh REAL, energy_total_kwh REAL,
+        frame_id INTEGER REFERENCES growatt_frames(id) ON DELETE SET NULL,
+        PRIMARY KEY(serial, measured_ms)
+      );
+      INSERT INTO inverter_measurements_updated SELECT * FROM inverter_measurements;
+      DROP TABLE inverter_measurements;
+      ALTER TABLE inverter_measurements_updated RENAME TO inverter_measurements;
+      CREATE INDEX inverter_received ON inverter_measurements(serial, received_ms);`);
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
+  }
   return db;
 }

@@ -13,6 +13,8 @@ import { startGrowattServer, stopGrowattServer } from '../src/growatt/tcp-listen
 import { decodeAnnouncement } from '../src/growatt/announcement.js';
 import { xorPayload } from '../src/growatt/mask.js';
 import { modbusCrc } from '../src/growatt/crc.js';
+import { splitFrames, validateFrame } from '../src/growatt/frame-reader.js';
+import { timeSyncCommand } from '../src/growatt/time-sync.js';
 import { growattOverview, growattFrameDetail } from '../src/api/growatt-diagnostics.js';
 import { startHttpServer } from '../src/api/http-server.js';
 
@@ -52,7 +54,7 @@ test('Growatt-pagina en API tonen pakketmetadata, ruwe inhoud en ontvangerfouten
     const base = `http://127.0.0.1:${server.address().port}`;
     const page = await fetch(`${base}/growatt`);
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /Berichten en verbindingen/);
+    assert.match(await page.text(), /Berichten en logs verwijderen/);
     assert.equal(page.headers.get('cache-control'), 'no-store');
     const dashboard = await (await fetch(`${base}/dashboard`)).text();
     assert.match(dashboard, /href="\/growatt"/);
@@ -138,8 +140,11 @@ test('TCP-verbinding houdt ShineLanBox meetinterval aan en slaat verbindingsinfo
     socket.write(announcementFixture(0x50, 0x29, 'INV1234560'));
     await once(socket, 'data');
     const log = repository.growattTimeline({ limit: 10, offset: 0, type: '', address: '', view: 'all' });
-    assert.deepEqual(log.rows.map((row) => row.source), ['packet', 'event']);
-    assert.equal(log.rows[1].status, 'connected');
+    assert.deepEqual(log.rows.map((row) => row.source), ['event', 'packet', 'event']);
+    assert.equal(log.rows[0].status, 'reply_sent');
+    assert.match(log.rows[0].detail, /5029 #\d+ · 11 bytes · [0-9a-f]{22}/);
+    assert.equal(log.rows[2].status, 'connected');
+    assert.equal(repository.recentGrowattProblems(10).length, 0);
   } finally {
     socket.destroy();
     await new Promise((resolve) => server.close(resolve));
@@ -252,6 +257,57 @@ test('de TCP-ontvanger registreert een 29-bericht als aanmelding', async () => {
   }
 });
 
+test('Grott-tijdcommando is een geldig lokaal v06-18-frame met Nederlandse tijd', () => {
+  const announcement = announcementFixture(0x50, 0x03, 'INV1234560');
+  const command = timeSyncCommand(announcement, Date.parse('2026-10-14T10:05:07Z'));
+  assert.equal(validateFrame(command).ok, true);
+  assert.equal(command[6], 1);
+  assert.equal(command[7], 0x18);
+  const plain = xorPayload(command.subarray(0, -2));
+  assert.equal(plain.subarray(8, 18).toString('ascii'), 'LOG1234567');
+  assert.equal(plain.readUInt16BE(38), 31);
+  assert.equal(plain.readUInt16BE(40), 19);
+  assert.equal(plain.subarray(42, 61).toString('ascii'), '2026-10-14 12:05:07');
+  assert.equal(timeSyncCommand(announcementFixture(0x51, 0x29, 'INV1234561'), Date.now()), null);
+});
+
+test('03-aanmelding krijgt eerst ACK en eenmaal per verbinding een tijdsynchronisatie', async () => {
+  const db = openDatabase(':memory:');
+  const repository = createRepository(db);
+  const server = startGrowattServer({ host: '127.0.0.1', port: 0 }, repository);
+  await once(server, 'listening');
+  const socket = net.createConnection({ host: '127.0.0.1', port: server.address().port });
+  await once(socket, 'connect');
+  socket.setTimeout(2000, () => socket.destroy(new Error('Geen lokaal antwoord')));
+  try {
+    const replies = [];
+    let rest = Buffer.alloc(0);
+    const firstTwo = new Promise((resolve, reject) => {
+      socket.once('error', reject);
+      socket.on('data', (chunk) => {
+        const split = splitFrames(rest, chunk);
+        rest = split.remainder;
+        replies.push(...split.frames);
+        if (replies.length >= 2) resolve();
+      });
+    });
+    socket.write(announcementFixture(0x50, 0x03, 'INV1234560'));
+    await firstTwo;
+    assert.deepEqual(replies.map((frame) => frame[7]), [3, 0x18]);
+    assert.ok(replies.every((frame) => validateFrame(frame).ok));
+    assert.equal(repository.growattTimeline({ limit: 20, offset: 0, type: '', address: '', view: 'all' }).rows.filter((row) => row.status === 'time_sync_sent').length, 1);
+    assert.equal(repository.recentGrowattProblems(10).length, 0);
+    const third = once(socket, 'data');
+    socket.write(announcementFixture(0x51, 0x03, 'INV1234561'));
+    await third;
+    assert.deepEqual(replies.map((frame) => frame[7]), [3, 0x18, 3]);
+  } finally {
+    socket.destroy();
+    await new Promise((resolve) => server.close(resolve));
+    db.close();
+  }
+});
+
 test('bestaande pakketgeschiedenis blijft behouden bij de database-uitbreiding', () => {
   const directory = mkdtempSync(join(tmpdir(), 'zonapi-growatt-'));
   const path = join(directory, 'history.sqlite');
@@ -272,4 +328,37 @@ test('bestaande pakketgeschiedenis blijft behouden bij de database-uitbreiding',
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('historische omvormermetingen blijven bestaan na een migratie en het wissen van logs', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'zonapi-growatt-clear-'));
+  const path = join(directory, 'data.sqlite');
+  try {
+    const old = new DatabaseSync(path);
+    old.exec(`CREATE TABLE growatt_frames (
+      id INTEGER PRIMARY KEY, received_ms INTEGER NOT NULL, peer TEXT NOT NULL,
+      protocol INTEGER, record_type TEXT, status TEXT NOT NULL, raw BLOB NOT NULL
+    );
+    CREATE TABLE inverter_measurements (
+      serial TEXT NOT NULL, measured_ms INTEGER NOT NULL, received_ms INTEGER NOT NULL,
+      power_w REAL NOT NULL, energy_today_kwh REAL, energy_total_kwh REAL,
+      frame_id INTEGER NOT NULL REFERENCES growatt_frames(id), PRIMARY KEY(serial, measured_ms)
+    );`);
+    const id = Number(old.prepare("INSERT INTO growatt_frames(received_ms,peer,protocol,record_type,status,raw) VALUES(1,'local',6,'5004','decoded',x'00')").run().lastInsertRowid);
+    old.prepare('INSERT INTO inverter_measurements VALUES (?,?,?,?,?,?,?)').run('INV1234560', 1, 1, 1200, 2, 200, id);
+    old.close();
+    const db = openDatabase(path);
+    const repository = createRepository(db);
+    repository.saveGrowattEvent(2, 'local', 'socket_error', 'vorige sessie');
+    assert.equal(db.prepare('PRAGMA table_info(inverter_measurements)').all().find((column) => column.name === 'frame_id').notnull, 0);
+    assert.deepEqual(repository.clearGrowattDiagnostics(), { frames_deleted: 1, events_deleted: 1 });
+    assert.equal(repository.recentGrowattFrames(10).length, 0);
+    assert.equal(repository.growattTimeline({ limit: 10, offset: 0, type: '', address: '', view: 'all' }).rows.length, 0);
+    assert.deepEqual(repository.history('inverter', 0, 10, 10).map((row) => ({ power_w: row.power_w, frame_id: row.frame_id })), [{ power_w: 1200, frame_id: null }]);
+    assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+    db.close();
+    const reopened = openDatabase(path);
+    assert.equal(createRepository(reopened).history('inverter', 0, 10, 10)[0].power_w, 1200);
+    reopened.close();
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });

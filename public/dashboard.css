@@ -23,6 +23,12 @@ body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 5%,#
 .tile strong { font-size:32px; letter-spacing:-.04em; margin:12px 0 2px }
 .tile small { font-size:12px; color:var(--muted) }
 .chart-card,.history-card { padding:24px; min-height:310px }
+.pv-chart-card { grid-column:1 / -1 }
+.chart-legend { display:flex; flex-wrap:wrap; align-items:center; gap:16px; font-size:12px; color:var(--muted) }
+.chart-legend span { display:inline-flex; align-items:center; gap:6px }
+.chart-legend i { display:inline-block; width:17px; height:3px; border-radius:3px }
+.legend-measured { background:#137771 }
+.legend-forecast { background:#e6a321 }
 .section-heading { display:flex; justify-content:space-between; align-items:center; gap:18px }
 .section-heading h2 { font-size:23px; letter-spacing:-.04em; margin:5px 0 }
 .unit,.chart-footer { color:var(--muted); font-size:12px; line-height:1.45 }
