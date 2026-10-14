@@ -1,0 +1,47 @@
+:root { color-scheme: light; --ink:#1a2c2e; --muted:#607477; --teal:#136f6b; --mint:#dff2e8; --sun:#e9a823; --line:#dce8e3; --paper:#f7f9f5; --card:#fff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif }
+* { box-sizing: border-box }
+body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 5%,#fcecc5 0%,transparent 27%),var(--paper) }
+.masthead { display:flex; justify-content:space-between; align-items:center; padding:18px max(22px,calc((100vw - 1180px)/2)); background:rgba(255,255,255,.84); border-bottom:1px solid var(--line) }
+.brand { display:flex; align-items:center; gap:12px; font-weight:800; font-size:20px; letter-spacing:-.04em }
+.brand small { display:block; font-size:11px; font-weight:600; letter-spacing:.04em; color:var(--muted) }
+.mark { display:inline-grid; place-items:center; width:38px; height:38px; background:#f9df9d; border-radius:13px; color:#816000; font-size:24px }
+.connection { background:var(--mint); color:var(--teal); border-radius:99px; font-size:12px; font-weight:700; padding:8px 12px }
+.layout { max-width:1224px; padding:24px 22px 70px; margin:auto; display:grid; grid-template-columns:1fr 1fr; gap:20px }
+.intro,.highlights,.appliances,.health { grid-column:1 / -1 }
+.intro { padding:32px 22px 18px }
+.intro h1 { font-size:clamp(30px,4vw,49px); letter-spacing:-.052em; line-height:1.08; margin:8px 0 12px; max-width:640px }
+.intro > p:not(.eyebrow) { color:var(--muted); max-width:690px; line-height:1.55; margin:0 }
+.eyebrow { margin:0; text-transform:uppercase; color:var(--teal); font-weight:800; letter-spacing:.16em; font-size:11px }
+.meta { display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; font-size:12px; color:var(--muted) }
+.meta span { background:#fff; border:1px solid var(--line); padding:8px 12px; border-radius:99px }
+.highlights { display:grid; grid-template-columns:repeat(3,1fr); gap:18px }
+.tile,.chart-card,.history-card,.appliances,.health { background:var(--card); border:1px solid var(--line); border-radius:19px; box-shadow:0 14px 40px rgba(42,85,69,.04) }
+.tile { padding:23px; min-height:145px; display:flex; flex-direction:column }
+.label { color:var(--muted); font-size:13px; font-weight:650 }
+.tile strong { font-size:32px; letter-spacing:-.04em; margin:12px 0 2px }
+.tile small { font-size:12px; color:var(--muted) }
+.chart-card,.history-card { padding:24px; min-height:310px }
+.section-heading { display:flex; justify-content:space-between; align-items:center; gap:18px }
+.section-heading h2 { font-size:23px; letter-spacing:-.04em; margin:5px 0 }
+.hint,.unit,.chart-footer { color:var(--muted); font-size:12px; line-height:1.45 }
+.unit { font-weight:700 }
+.segmented { display:flex; align-items:center; gap:3px; padding:4px; border:1px solid var(--line); border-radius:12px; flex-shrink:0 }
+.segmented button { border:0; background:transparent; color:var(--muted); cursor:pointer; padding:7px 10px; border-radius:8px; font-size:12px; font-weight:800 }
+.segmented button.active { background:var(--ink); color:white }
+.chart { min-height:205px; margin-top:16px }
+.chart.short { min-height:190px }
+.chart svg { display:block; width:100%; height:208px; overflow:visible }
+.chart.short svg { height:180px }
+.empty { min-height:190px; display:grid; place-items:center; color:var(--muted); text-align:center; padding:20px; line-height:1.5; background:#f7faf7; border-radius:12px }
+.appliances { padding:24px }
+.appliance-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:18px }
+.appliance { border:1px solid var(--line); background:#fafcf9; border-radius:14px; padding:19px; min-height:145px }
+.appliance h3 { margin:0 0 5px; font-size:17px }
+.appliance .time { font-weight:800; font-size:21px; margin:15px 0 5px; color:var(--teal) }
+.appliance p { color:var(--muted); font-size:12px; line-height:1.45; margin:5px 0 }
+.appliance .badge { display:inline-block; background:var(--mint); color:var(--teal); border-radius:99px; padding:6px 9px; font-size:11px; font-weight:700; margin-top:8px }
+.health { padding:20px 24px; color:var(--muted); font-size:13px }
+.health h2 { color:var(--ink); margin:0 0 10px; font-size:17px }
+.health ul { margin:8px 0 0; padding-left:19px; line-height:1.7 }
+footer { color:var(--muted); text-align:center; padding:25px; font-size:12px }
+@media (max-width:790px) { .layout { display:block; padding:14px 14px 48px } .layout > section { margin-bottom:16px } .intro { padding:22px 8px 13px } .highlights { grid-template-columns:1fr; gap:10px } .tile { min-height:110px; padding:16px } .tile strong { margin-top:6px } .appliance-grid { grid-template-columns:1fr } .chart-card,.history-card,.appliances { padding:17px } .masthead { padding:13px 16px } .connection { font-size:11px } }

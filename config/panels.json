@@ -1,0 +1,12 @@
+{
+  "expected_panel_count": 20,
+  "inverters": [
+    { "id": "mic-1", "serial": "", "ac_limit_w": 2000 },
+    { "id": "mic-2", "serial": "", "ac_limit_w": 2000 },
+    { "id": "mic-3", "serial": "", "ac_limit_w": 2000 },
+    { "id": "mic-4", "serial": "", "ac_limit_w": 2000 }
+  ],
+  "groups": [
+    { "id": "zuid", "inverter_id": null, "count": 20, "wp_per_panel": null, "tilt_deg": null, "azimuth_deg": 180, "loss_factor": 0.8 }
+  ]
+}

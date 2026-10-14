@@ -1,0 +1,21 @@
+[Unit]
+Description=ZonAPI lokale zonnepanelen- en apparaatadviezen
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zonapi
+Group=zonapi
+WorkingDirectory=/opt/zonapi
+ExecStart=/usr/bin/node /opt/zonapi/src/main.js
+EnvironmentFile=-/etc/zonapi/homewizard.env
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/zonapi/data
+
+[Install]
+WantedBy=multi-user.target

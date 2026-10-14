@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ZonAPI · Lokaal dashboard</title>
+  <link rel="stylesheet" href="/dashboard.css">
+  <script src="/dashboard.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="mark">☀</span><span>ZonAPI <small>lokaal overzicht</small></span></div>
+    <span class="connection" id="connection">Gegevens ophalen…</span>
+  </header>
+  <main class="layout">
+    <section class="intro">
+      <p class="eyebrow">Jouw energie, op jouw netwerk</p>
+      <h1>Wanneer past een apparaat bij de zon?</h1>
+      <p>Voorspelde opbrengst uit zoninstraling, live metingen en het eerste passende startmoment op één plek.</p>
+      <div class="meta"><span id="now">—</span><span id="source">Weerbron: —</span><span id="sun">Zon: —</span></div>
+    </section>
+
+    <section class="highlights" aria-label="Huidige energie">
+      <div class="tile"><div class="label">Zonnepanelen nu</div><strong id="pv-now">—</strong><small id="pv-sub">Wachten op omvormers</small></div>
+      <div class="tile"><div class="label">Netvermogen nu</div><strong id="net-now">—</strong><small id="net-sub">P1 is de voorkeursmeter</small></div>
+      <div class="tile"><div class="label">Weerupdates vandaag</div><strong id="quota">—</strong><small id="next-fetch">Volgende ophaalmoment —</small></div>
+    </section>
+
+    <section class="chart-card">
+      <div class="section-heading"><div><p class="eyebrow">Voorspelling</p><h2>Zonopbrengst</h2></div><div class="segmented"><button type="button" data-hours="3" class="active">3 uur</button><button type="button" data-hours="12">12 uur</button><button type="button" data-hours="24">24 uur</button></div></div>
+      <p class="hint">Berekening uit instraling · W · gemiddelde per uur</p>
+      <div class="chart" id="pv-chart" aria-label="Grafiek voorspelde zonnepanelenopbrengst"></div>
+      <div class="chart-footer" id="forecast-note">Voorspelling wordt geladen…</div>
+    </section>
+
+    <section class="chart-card">
+      <div class="section-heading"><div><p class="eyebrow">Weerbron</p><h2>Zoninstraling</h2></div><span class="unit">GHI · W/m²</span></div>
+      <div class="chart short" id="ghi-chart" aria-label="Grafiek voorspelde globale zoninstraling"></div>
+    </section>
+
+    <section class="appliances">
+      <div class="section-heading"><div><p class="eyebrow">Slim plannen</p><h2>Apparaten</h2></div><span class="hint">Controle over het volledige programma</span></div>
+      <div id="appliance-list" class="appliance-grid"></div>
+    </section>
+
+    <section class="history-card">
+      <div class="section-heading"><div><p class="eyebrow">Historie · 24 uur</p><h2>Gemeten opwek</h2></div><span class="unit">4 omvormers · W</span></div>
+      <div class="chart short" id="history-chart" aria-label="Grafiek historisch gemeten PV-vermogen"></div>
+      <p class="hint">Alleen tijdvakken met vier bekende omvormermetingen worden opgeteld.</p>
+    </section>
+
+    <section class="health" id="health" aria-live="polite"></section>
+  </main>
+  <footer>Alle gegevens blijven lokaal opgeslagen. Alleen Open-Meteo levert een instralingsvoorspelling.</footer>
+</body>
+</html>

@@ -1,0 +1,33 @@
+import { fetchMeter } from './client.js';
+
+/** Plant onafhankelijke LAN-metingen van P1 en kWh; input: instellingen en repository, optionele fetcher; output: {poll,start,stop,status}. */
+export function createHomeWizardPoller(settings, repository, reader = fetchMeter) {
+  let interval = null;
+  let busy = false;
+  const errors = { p1: null, kwh: null };
+
+  /** Leest beide ingestelde apparaten, onafhankelijk van elkaars fouten; input: geen; output: Promise<void>. */
+  async function poll() {
+    if (busy) return;
+    busy = true;
+    try {
+      await Promise.all(['p1', 'kwh'].map(async (device) => {
+        const config = settings.homewizard[device];
+        if (!config?.host) { errors[device] = 'host niet ingesteld'; return; }
+        try { repository.saveMeter(await reader(device, config)); errors[device] = null; }
+        catch (error) { errors[device] = error.message; }
+      }));
+    } finally { busy = false; }
+  }
+
+  /** Start het pollinterval; input: geen; output: void. */
+  function start() { void poll(); interval = setInterval(() => { void poll(); }, settings.homewizard.poll_seconds * 1000); }
+
+  /** Stopt het pollinterval; input: geen; output: void. */
+  function stop() { if (interval) clearInterval(interval); }
+
+  /** Leest de actuele apparaatfouten; input: geen; output: kopie van foutstatus. */
+  function status() { return { ...errors }; }
+
+  return { poll, start, stop, status };
+}

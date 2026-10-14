@@ -1,0 +1,29 @@
+{
+  "timezone": "Europe/Amsterdam",
+  "location": { "latitude": 52.442885, "longitude": 5.854113 },
+  "http": { "host": "127.0.0.1", "port": 3002 },
+  "growatt": { "host": "127.0.0.1", "port": 5279, "expected_inverters": 4, "fresh_minutes": 12 },
+  "weather": {
+    "source": "open-meteo",
+    "max_requests_per_local_day": 12,
+    "forecast_days": 3,
+    "retry_minutes": 60,
+    "stale_after_hours": 4
+  },
+  "homewizard": {
+    "poll_seconds": 30,
+    "connection_phases": 1,
+    "same_net_point": true,
+    "net_meter_priority": ["p1", "kwh"],
+    "p1": { "host": "", "api": "v1", "token_env": "HOMEWIZARD_P1_TOKEN", "ca_file": "", "tls_servername": "", "tls_insecure_skip_verify": false },
+    "kwh": { "host": "", "api": "v1", "token_env": "HOMEWIZARD_KWH_TOKEN", "ca_file": "", "tls_servername": "", "tls_insecure_skip_verify": false }
+  },
+  "advice": {
+    "search_hours": 24,
+    "start_step_minutes": 5,
+    "min_solar_share": 0.7,
+    "reserve_w": 300,
+    "baseload_w": null,
+    "history_days": 7
+  }
+}
