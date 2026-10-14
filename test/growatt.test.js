@@ -31,6 +31,26 @@ function fixture() {
   return frame;
 }
 
+/** Verzamelt complete TCP-antwoorden; input: socket en verwacht frameaantal; output: Promise<Buffer[]> of socketfout. */
+function receiveFrames(socket, expected) {
+  return new Promise((resolve, reject) => {
+    let rest = Buffer.alloc(0);
+    const frames = [];
+    const onError = (error) => { socket.off('data', onData); reject(error); };
+    const onData = (chunk) => {
+      const split = splitFrames(rest, chunk);
+      rest = split.remainder;
+      frames.push(...split.frames);
+      if (frames.length < expected) return;
+      socket.off('data', onData);
+      socket.off('error', onError);
+      resolve(frames);
+    };
+    socket.on('data', onData);
+    socket.once('error', onError);
+  });
+}
+
 test('fragmentatie/coalescentie, CRC, MIC-layout en lokale ACK', () => {
   const frame = fixture();
   let split = splitFrames(Buffer.alloc(0), frame.subarray(0, 17));
@@ -72,4 +92,34 @@ test('TCP-ontvanger slaat echt verzonden frame op en antwoordt lokaal', async ()
   socket.destroy();
   await new Promise((resolve) => server.close(resolve));
   db.close();
+});
+
+test('TCP-ontvanger verwerkt twee frames tegelijk en twee verbindingen parallel', async () => {
+  const db = openDatabase(':memory:');
+  const repository = createRepository(db);
+  const server = startGrowattServer({ host: '127.0.0.1', port: 0 }, repository);
+  await once(server, 'listening');
+  const address = { host: '127.0.0.1', port: server.address().port };
+  const first = net.createConnection(address);
+  const second = net.createConnection(address);
+  try {
+    await Promise.all([once(first, 'connect'), once(second, 'connect')]);
+    first.setTimeout(2000, () => first.destroy(new Error('Geen antwoord op twee frames')));
+    second.setTimeout(2000, () => second.destroy(new Error('Geen antwoord op parallel frame')));
+    const firstReplies = receiveFrames(first, 2);
+    const secondReplies = receiveFrames(second, 1);
+    const frame = fixture();
+    first.write(Buffer.concat([frame, frame]));
+    second.write(frame);
+    const [two, one] = await Promise.all([firstReplies, secondReplies]);
+    assert.equal(two.length, 2);
+    assert.equal(one.length, 1);
+    assert.ok([...two, ...one].every((reply) => validateFrame(reply).ok));
+    assert.equal(repository.recentGrowattFrames(10).length, 3);
+  } finally {
+    first.destroy();
+    second.destroy();
+    await new Promise((resolve) => server.close(resolve));
+    db.close();
+  }
 });

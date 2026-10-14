@@ -21,7 +21,6 @@ export function startGrowattServer(config, repository) {
     const peer = `${socket.remoteAddress ?? 'unknown'}:${socket.remotePort ?? 0}`;
     const idleMinutes = config.idle_timeout_minutes ?? 30;
     repository.saveGrowattEvent(Date.now(), peer, 'connected', 'TCP');
-    socket.setKeepAlive(true, 60000);
     socket.setTimeout(idleMinutes * 60000);
     socket.on('timeout', () => {
       endedByServer = true;
