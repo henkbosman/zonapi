@@ -1,6 +1,6 @@
 {
   "timezone": "Europe/Amsterdam",
-  "location": { "latitude": null, "longitude": null },
+  "location": { "latitude": 52.442903, "longitude": 5.854103 },
   "http": { "host": "192.168.2.210", "port": 3002 },
   "growatt": { "host": "192.168.2.210", "port": 5279, "expected_inverters": 4, "fresh_minutes": 12 },
   "weather": {
