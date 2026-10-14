@@ -29,6 +29,7 @@ export function validateSettings(config) {
   if (!Number.isInteger(config.growatt?.expected_inverters) || config.growatt.expected_inverters < 1) errors.push('growatt.expected_inverters ongeldig');
   if (!Number.isInteger(config.growatt?.idle_timeout_minutes ?? 30) || (config.growatt?.idle_timeout_minutes ?? 30) < 1 || (config.growatt?.idle_timeout_minutes ?? 30) > 120) errors.push('growatt.idle_timeout_minutes moet 1..120 zijn');
   if (config.growatt?.time_sync_on_announcement !== undefined && typeof config.growatt.time_sync_on_announcement !== 'boolean') errors.push('growatt.time_sync_on_announcement moet true of false zijn');
+  if (!Number.isInteger(config.growatt?.time_sync_retry_minutes ?? 10) || (config.growatt?.time_sync_retry_minutes ?? 10) < 1 || (config.growatt?.time_sync_retry_minutes ?? 10) > 120) errors.push('growatt.time_sync_retry_minutes moet 1..120 zijn');
   if (!(config.growatt?.fresh_minutes >= 1 && config.growatt.fresh_minutes <= 120)) errors.push('growatt.fresh_minutes moet 1..120 zijn');
   if (!Array.isArray(config.homewizard?.net_meter_priority) || config.homewizard.net_meter_priority.length !== 2 || new Set(config.homewizard.net_meter_priority).size !== 2 || !config.homewizard.net_meter_priority.every((item) => ['p1', 'kwh'].includes(item))) errors.push('homewizard.net_meter_priority moet p1 en kwh bevatten');
   if (config.homewizard?.connection_phases !== 1 || config.homewizard?.same_net_point !== true) errors.push('meterconfiguratie moet overeenkomen met de bevestigde eenfasige, gedeelde netmeting');

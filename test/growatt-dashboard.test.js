@@ -15,6 +15,8 @@ import { xorPayload } from '../src/growatt/mask.js';
 import { modbusCrc } from '../src/growatt/crc.js';
 import { splitFrames, validateFrame } from '../src/growatt/frame-reader.js';
 import { timeSyncCommand } from '../src/growatt/time-sync.js';
+import { createClockPolicy } from '../src/growatt/clock-policy.js';
+import { decodeRfConfiguration } from '../src/growatt/rf-configuration.js';
 import { growattOverview, growattFrameDetail } from '../src/api/growatt-diagnostics.js';
 import { startHttpServer } from '../src/api/http-server.js';
 
@@ -32,6 +34,34 @@ function announcementFixture(address, kind, serial) {
   const frame = Buffer.alloc(size);
   masked.copy(frame);
   frame.writeUInt16BE(modbusCrc(masked), size - 2);
+  return frame;
+}
+
+/** Bouwt een xx29-rapport met hetzelfde registerformaat als de ShineLanBox; input: geen; output: geldig v06-pakket. */
+function rfConfigurationFixture() {
+  /** Encodeert één RF-configuratieregister; input: registernummer en ASCII-waarde; output: Buffer. */
+  const register = (key, value) => {
+    const data = Buffer.from(value, 'ascii');
+    const part = Buffer.alloc(4 + data.length);
+    part.writeUInt16BE(key, 0);
+    part.writeUInt16BE(data.length, 2);
+    data.copy(part, 4);
+    return part;
+  };
+  const plain = Buffer.concat([Buffer.alloc(100), register(4, '1'), register(21, '7.4.0.4'), register(30, 'GMT+8'), register(31, '2026-10-14 13:34:55')]);
+  plain[3] = 6;
+  plain[6] = 0x51;
+  plain[7] = 0x29;
+  plain[98] = 20;
+  plain[99] = 0x50;
+  plain.writeUInt16BE(plain.length - 6, 4);
+  plain.write('LOG1234567', 8, 'ascii');
+  plain.write('RFS1234567', 38, 'ascii');
+  plain.write('INV1234561', 68, 'ascii');
+  const encrypted = xorPayload(plain);
+  const frame = Buffer.alloc(encrypted.length + 2);
+  encrypted.copy(frame);
+  frame.writeUInt16BE(modbusCrc(encrypted), encrypted.length);
   return frame;
 }
 
@@ -189,7 +219,7 @@ test('vier ShineLanBox-adressen tonen eerdere 03/29-aanmeldingen en serienummers
     const overview = growattOverview(repository, settings, panels, Date.now(), 50);
     assert.deepEqual(overview.announcements.map((item) => item.address), ['50', '51', '52', '53']);
     assert.equal(overview.announcements[0].inverter_serial, 'INV1234560');
-    assert.equal(overview.frames[0].label, 'Aanmelding');
+    assert.equal(overview.frames[0].label, 'RF-configuratie');
     assert.equal(overview.production.active_inverters, 0);
     assert.equal(overview.problems.length, 0);
     assert.equal(growattFrameDetail(repository, overview.announcements[0].frame_id).announcement.inverter_serial, 'INV1234560');
@@ -271,7 +301,38 @@ test('Grott-tijdcommando is een geldig lokaal v06-18-frame met Nederlandse tijd'
   assert.equal(timeSyncCommand(announcementFixture(0x51, 0x29, 'INV1234561'), Date.now()), null);
 });
 
-test('03-aanmelding krijgt eerst ACK en eenmaal per verbinding een tijdsynchronisatie', async () => {
+test('RF-configuratie toont meetinterval, firmware en apparaatklok uit xx29', () => {
+  const frame = rfConfigurationFixture();
+  const config = decodeRfConfiguration(frame);
+  assert.equal(config.address, '51');
+  assert.equal(config.rf_serial, 'RFS1234567');
+  assert.equal(config.update_interval_minutes, 1);
+  assert.equal(config.firmware, '7.4.0.4');
+  assert.equal(config.timezone, 'GMT+8');
+  assert.equal(config.device_time, '2026-10-14 13:34:55');
+  assert.equal(config.registers[31], '2026-10-14 13:34:55');
+  const db = openDatabase(':memory:');
+  try {
+    const repository = createRepository(db);
+    const id = repository.saveFrame(Date.now(), 'local', 6, '5129', 'announcement', frame);
+    assert.deepEqual(growattFrameDetail(repository, id).rf_configuration, config);
+  } finally { db.close(); }
+});
+
+test('kloksynchronisatie herhaalt alleen bij ontbrekende xx04-metingen', () => {
+  const state = createClockPolicy(4, 10);
+  const start = Date.parse('2026-10-14T12:00:00Z');
+  assert.equal(state.shouldSync(start), true);
+  assert.equal(state.shouldSync(start + 9 * 60000), false);
+  state.receivedMeasurement(0x50);
+  state.receivedMeasurement(0x51);
+  state.receivedMeasurement(0x52);
+  assert.equal(state.shouldSync(start + 10 * 60000), true);
+  state.receivedMeasurement(0x53);
+  assert.equal(state.shouldSync(start + 30 * 60000), false);
+});
+
+test('03-aanmeldingen van vier adressen krijgen ACK en tijdopdracht na de eerste ACK', async () => {
   const db = openDatabase(':memory:');
   const repository = createRepository(db);
   const server = startGrowattServer({ host: '127.0.0.1', port: 0 }, repository);
@@ -301,6 +362,19 @@ test('03-aanmelding krijgt eerst ACK en eenmaal per verbinding een tijdsynchroni
     socket.write(announcementFixture(0x51, 0x03, 'INV1234561'));
     await third;
     assert.deepEqual(replies.map((frame) => frame[7]), [3, 0x18, 3]);
+    const next = new Promise((resolve) => {
+      const check = () => {
+        if (replies.length >= 5) { socket.off('data', check); resolve(); }
+      };
+      socket.on('data', check);
+    });
+    socket.write(Buffer.concat([
+      announcementFixture(0x52, 0x03, 'INV1234562'),
+      announcementFixture(0x53, 0x03, 'INV1234563')
+    ]));
+    await next;
+    assert.deepEqual(replies.map((frame) => frame[7]), [3, 0x18, 3, 3, 3]);
+    assert.ok(replies.every((frame) => validateFrame(frame).ok));
   } finally {
     socket.destroy();
     await new Promise((resolve) => server.close(resolve));

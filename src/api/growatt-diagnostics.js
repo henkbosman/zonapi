@@ -1,5 +1,6 @@
 import { productionResponse } from './measurements.js';
 import { decodeAnnouncement, recordLabel } from '../growatt/announcement.js';
+import { decodeRfConfiguration } from '../growatt/rf-configuration.js';
 
 /** Begrenst het aantal pakketten per aanvraag; input: querywaarde of null; output: geheel getal 1..100 of fout. */
 export function growattLimitParam(value) {
@@ -27,7 +28,7 @@ export function growattTimeline(repository, filters) {
   const { rows, has_more } = repository.growattTimeline(filters);
   return {
     ...filters, has_more,
-    rows: rows.map((row) => ({ ...row, at: new Date(row.at_ms).toISOString(), label: row.source === 'packet' ? recordLabel(row.record_type) : ({ connected: 'Verbonden', disconnected: 'Verbinding gesloten', idle_disconnect: 'Inactiviteit', incomplete_timeout: 'Onvolledig pakket', incomplete_frame: 'Onvolledig pakket', reply_sent: 'Antwoord', reply_error: 'Antwoordfout', time_sync_sent: 'Tijdsynchronisatie', time_sync_error: 'Synchronisatiefout' })[row.status] ?? 'Verbinding' }))
+    rows: rows.map((row) => ({ ...row, at: new Date(row.at_ms).toISOString(), label: row.source === 'packet' ? recordLabel(row.record_type) : ({ connected: 'Verbonden', disconnected: 'Verbinding gesloten', idle_disconnect: 'Inactiviteit', incomplete_timeout: 'Onvolledig pakket', incomplete_frame: 'Onvolledig pakket', reply_sent: 'Antwoord', reply_error: 'Antwoordfout', time_sync_sent: 'Tijdsynchronisatie', time_sync_error: 'Synchronisatiefout', time_sync_response: 'Tijdantwoord' })[row.status] ?? 'Verbinding' }))
   };
 }
 
@@ -64,6 +65,7 @@ export function growattFrameDetail(repository, id) {
     protocol: row.protocol, record_type: row.record_type, label: recordLabel(row.record_type), status: row.status,
     size_bytes: row.raw.length, raw_hex: Buffer.from(row.raw).toString('hex'),
     announcement: ['control', 'announcement'].includes(row.status) ? decodeAnnouncement(Buffer.from(row.raw)) : null,
+    rf_configuration: row.record_type?.endsWith('29') ? decodeRfConfiguration(Buffer.from(row.raw)) : null,
     measurement: decoded ? { ...decoded, measured_at: new Date(decoded.measured_ms).toISOString() } : null
   };
 }

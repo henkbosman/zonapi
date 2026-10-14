@@ -5,7 +5,7 @@ import { validateFrame } from './frame-reader.js';
 /** Benoemt de soort van een Growatt-record; input: viercijferig hex-type; output: korte Nederlandse naam. */
 export function recordLabel(type) {
   const kind = type?.slice(-2);
-  return ({ '03': 'Aanmelding', '29': 'Aanmelding', '04': 'Meting', '50': 'Archief', '16': 'Ping' })[kind] ?? 'Overig';
+  return ({ '03': 'Aanmelding', '29': 'RF-configuratie', '04': 'Meting', '50': 'Archief', '18': 'Tijdantwoord', '16': 'Ping' })[kind] ?? 'Overig';
 }
 
 /** Leest de serienummers uit een geldige ShineLanBox v06-aanmelding; input: compleet frame; output: adres, logger, omvormer en soort of null. */

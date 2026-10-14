@@ -106,7 +106,7 @@ function renderTimeline(data) {
   if (!data.rows.length) showEmpty(body, 8, 'Geen berichten voor dit filter');
   for (const row of data.rows) {
     const packet = row.source === 'packet';
-    const isError = packet ? !['control', 'announcement'].includes(row.status) && !row.status.startsWith('decoded:') : !['connected', 'disconnected', 'idle_disconnect', 'reply_sent', 'time_sync_sent'].includes(row.status);
+    const isError = packet ? !['control', 'announcement'].includes(row.status) && !row.status.startsWith('decoded:') : !['connected', 'disconnected', 'idle_disconnect', 'reply_sent', 'time_sync_sent', 'time_sync_response'].includes(row.status);
     const item = addRow(body, [
       time(row.at), row.label, row.record_type?.toUpperCase() ?? '—',
       packet ? row.record_type?.slice(0, 2).toUpperCase() ?? '—' : '—', row.status,
@@ -138,6 +138,13 @@ async function showFrame(id) {
     element('#detail-title').textContent = `Pakket #${frame.id}`;
     fillMeta(element('#detail-meta'), [time(frame.received_at), frame.peer, `v${frame.protocol}`, frame.record_type, frame.label, frame.status, `${frame.size_bytes} bytes`]);
     fillMeta(element('#detail-announcement'), frame.announcement ? [`Adres ${frame.announcement.address}`, `Omvormer ${frame.announcement.inverter_serial}`, `Logger ${frame.announcement.datalogger_serial}`] : []);
+    const rf = frame.rf_configuration;
+    fillMeta(element('#detail-rf-configuration'), rf ? [
+      `RF-stick ${rf.rf_serial}`, `Interval ${rf.update_interval_minutes ?? '—'} min`,
+      `Firmware ${rf.firmware ?? '—'}`, `Tijdzone ${rf.timezone ?? '—'}`,
+      `Apparaatklok ${rf.device_time ?? '—'}`,
+      ...Object.entries(rf.registers).map(([register, value]) => `Register ${register}: ${value}`)
+    ] : []);
     fillMeta(element('#detail-measurement'), frame.measurement ? [frame.measurement.serial, watts(frame.measurement.power_w), `${frame.measurement.energy_today_kwh} kWh vandaag`, `${frame.measurement.energy_total_kwh} kWh totaal`, time(frame.measurement.measured_at)] : []);
     element('#detail-hex').textContent = (frame.raw_hex.match(/.{1,32}/g) ?? []).map((line) => (line.match(/../g) ?? []).join(' ')).join('\n');
     element('#frame-detail').hidden = false;

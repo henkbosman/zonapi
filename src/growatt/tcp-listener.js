@@ -6,15 +6,17 @@ import { decodeRecord } from './decode-record.js';
 import { decodeAnnouncement } from './announcement.js';
 import { localReply } from './protocol-replies.js';
 import { timeSyncCommand } from './time-sync.js';
+import { createClockPolicy } from './clock-policy.js';
 
 const activeGrowattSockets = new WeakMap();
 
-/** Schrijft een lokaal protocolbericht en logt de socketuitkomst; input: socket, server, opslag, peer, pakket-id, soort, bytes en logsoort; output: void. */
-function sendLocal(socket, server, repository, peer, frameId, type, bytes, eventKind) {
+/** Schrijft een lokaal protocolbericht en logt de socketuitkomst; input: socket, server, opslag, peer, pakket-id, soort, bytes, logsoort en optionele callback na succesvolle overdracht; output: void. */
+function sendLocal(socket, server, repository, peer, frameId, type, bytes, eventKind, onWritten) {
   socket.write(bytes, (error) => {
     if (!server.listening) return;
     const detail = `${type} #${frameId} · ${bytes.length} bytes · ${bytes.toString('hex')}`;
     repository.saveGrowattEvent(Date.now(), peer, error ? (eventKind === 'reply_sent' ? 'reply_error' : 'time_sync_error') : eventKind, error ? `${detail} · ${error.message}` : detail);
+    if (!error && !socket.destroyed) onWritten?.();
   });
 }
 
@@ -28,7 +30,7 @@ export function startGrowattServer(config, repository) {
     let framesReceived = 0;
     let repliesQueued = 0;
     let endedByServer = false;
-    let sentTimeSync = false;
+    const clockPolicy = createClockPolicy(config.expected_inverters ?? 4, config.time_sync_retry_minutes ?? 10);
     const peer = `${socket.remoteAddress ?? 'unknown'}:${socket.remotePort ?? 0}`;
     const idleMinutes = config.idle_timeout_minutes ?? 30;
     repository.saveGrowattEvent(Date.now(), peer, 'connected', 'TCP');
@@ -59,24 +61,26 @@ export function startGrowattServer(config, repository) {
           const checked = validateFrame(frame);
           const id = repository.saveFrame(at, peer, checked.version, checked.type, checked.reason, frame);
           if (!checked.ok) continue;
+          if (frame[7] === 0x04 && frame[6] >= 0x50 && frame[6] <= 0x53) clockPolicy.receivedMeasurement(frame[6]);
+          const preparedClock = config.time_sync_on_announcement !== false && frame[7] === 0x03 && frame[6] >= 0x50 && frame[6] <= 0x53
+            ? timeSyncCommand(frame, at) : null;
+          const command = preparedClock && clockPolicy.shouldSync(at) ? preparedClock : null;
+          const reply = localReply(frame);
+          if (reply) {
+            // Schrijf de ACK voordat de decoder en meetopslag worden uitgevoerd.
+            sendLocal(socket, server, repository, peer, id, checked.type, reply, 'reply_sent', command
+              ? () => sendLocal(socket, server, repository, peer, id, '0118', command, 'time_sync_sent') : undefined);
+            repliesQueued++;
+          }
+          if (frame[7] === 0x18) {
+            repository.saveGrowattEvent(at, peer, 'time_sync_response', `${checked.type} #${id} · ${frame.length} bytes · ${frame.toString('hex')}`);
+          }
           const decoded = decodeRecord(frame, layoutDir, at);
           if (decoded) {
             repository.saveInverter({ ...decoded, frame_id: id });
             repository.markFrame(id, decoded.clock_fallback ? `decoded:${decoded.layout}:clock_fallback` : `decoded:${decoded.layout}`);
           } else if (decodeAnnouncement(frame)) repository.markFrame(id, 'announcement');
           else repository.markFrame(id, [0x04, 0x50].includes(frame[7]) ? 'unknown_layout' : 'control');
-          const reply = localReply(frame);
-          if (reply) {
-            sendLocal(socket, server, repository, peer, id, checked.type, reply, 'reply_sent');
-            repliesQueued++;
-          }
-          if (!sentTimeSync && config.time_sync_on_announcement !== false && checked.type.endsWith('03')) {
-            const command = timeSyncCommand(frame, at);
-            if (command) {
-              sendLocal(socket, server, repository, peer, id, '0118', command, 'time_sync_sent');
-              sentTimeSync = true;
-            }
-          }
         }
       } catch (error) {
         endedByServer = true;

@@ -47,7 +47,7 @@
       <div class="timeline-heading"><h2>Berichten en verbindingen</h2><button type="button" id="clear-logs" class="clear-button">Berichten en logs verwijderen</button></div>
       <div class="timeline-filters">
         <label>Toon <select id="view-filter"><option value="all">Alles</option><option value="packets">Pakketten</option><option value="errors">Fouten</option><option value="events">Verbindingen</option></select></label>
-        <label>Type <select id="type-filter"><option value="">Alle typen</option><option value="xx04">xx04 meting</option><option value="xx50">xx50 archief</option><option value="xx03">xx03 aanmelding</option><option value="xx29">xx29 aanmelding</option><option value="xx16">xx16 ping</option></select></label>
+        <label>Type <select id="type-filter"><option value="">Alle typen</option><option value="xx04">xx04 meting</option><option value="xx50">xx50 archief</option><option value="xx03">xx03 aanmelding</option><option value="xx29">xx29 RF-configuratie</option><option value="xx18">xx18 tijdantwoord</option><option value="xx16">xx16 ping</option></select></label>
         <label>Adres <select id="address-filter"><option value="">Alle adressen</option><option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option></select></label>
       </div>
       <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Soort</th><th>Type</th><th>Adres</th><th>Status</th><th>Details</th><th>Bytes</th><th></th></tr></thead><tbody id="timeline"></tbody></table></div>
@@ -58,6 +58,7 @@
       <h2 id="detail-title">Pakket</h2>
       <div class="detail-meta" id="detail-meta"></div>
       <div class="detail-meta" id="detail-announcement"></div>
+      <div class="detail-meta" id="detail-rf-configuration"></div>
       <div class="detail-meta" id="detail-measurement"></div>
       <pre class="raw-hex" id="detail-hex"></pre>
     </section>

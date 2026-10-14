@@ -61,7 +61,7 @@ export function createRepository(db) {
       if (address) { frames.push('substr(record_type,1,2)=?'); frameParams.push(address); }
       if (view === 'errors') {
         frames.push("status NOT IN ('control','announcement') AND status NOT LIKE 'decoded:%'");
-        events.push("kind NOT IN ('connected','disconnected','idle_disconnect','reply_sent','time_sync_sent')");
+        events.push("kind NOT IN ('connected','disconnected','idle_disconnect','reply_sent','time_sync_sent','time_sync_response')");
       }
       const frameSql = `SELECT id,received_ms AS at_ms,peer,'packet' AS source,protocol,record_type,status,length(raw) AS size_bytes,NULL AS detail FROM growatt_frames ${frames.length ? `WHERE ${frames.join(' AND ')}` : ''}`;
       const eventSql = `SELECT id,at_ms,peer,'event' AS source,NULL AS protocol,NULL AS record_type,kind AS status,NULL AS size_bytes,detail FROM growatt_events ${events.length ? `WHERE ${events.join(' AND ')}` : ''}`;
@@ -94,7 +94,7 @@ export function createRepository(db) {
       SELECT received_ms AS at_ms,peer,status,record_type AS detail,id AS frame_id
       FROM growatt_frames WHERE status NOT IN ('control','announcement') AND status NOT LIKE 'decoded:%'
       UNION ALL
-      SELECT at_ms,peer,kind AS status,detail,NULL AS frame_id FROM growatt_events WHERE kind NOT IN ('connected','disconnected','idle_disconnect','reply_sent','time_sync_sent')
+      SELECT at_ms,peer,kind AS status,detail,NULL AS frame_id FROM growatt_events WHERE kind NOT IN ('connected','disconnected','idle_disconnect','reply_sent','time_sync_sent','time_sync_response')
       ORDER BY at_ms DESC LIMIT ?
     `).all(limit); },
     /** Bewaart omvormermeting zonder oude buffers live te maken; input: meetobject; output: SQLite-resultaat. */
