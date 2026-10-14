@@ -5,7 +5,7 @@ import { createRepository } from './storage/repository.js';
 import { createBackupJob } from './storage/backup.js';
 import { createWeatherScheduler } from './weather/scheduler.js';
 import { createHomeWizardPoller } from './homewizard/poller.js';
-import { startGrowattServer } from './growatt/tcp-listener.js';
+import { startGrowattServer, stopGrowattServer } from './growatt/tcp-listener.js';
 import { startHttpServer } from './api/http-server.js';
 
 /** Verbindt afzonderlijke modules tot één lokale dienst; input: geen; output: gestart proces of fout. */
@@ -25,13 +25,16 @@ function main() {
   weather.start();
   homewizard.start();
   backups.start();
-  process.once('SIGTERM', () => stop());
-  process.once('SIGINT', () => stop());
+  process.once('SIGTERM', () => { void stop().catch((error) => console.error('Afsluiten:', error)); });
+  process.once('SIGINT', () => { void stop().catch((error) => console.error('Afsluiten:', error)); });
 
-  /** Sluit listeners en geplande verzoeken bij stoppen; input: geen; output: void. */
-  function stop() {
+  let stopping = false;
+  /** Sluit sockets en listeners voor de database; input: geen; output: Promise<void>. */
+  async function stop() {
+    if (stopping) return;
+    stopping = true;
     weather.stop(); homewizard.stop(); backups.stop();
-    http.close(); growatt.close();
+    await Promise.all([new Promise((resolve) => http.close(resolve)), stopGrowattServer(growatt)]);
     db.close();
   }
 }

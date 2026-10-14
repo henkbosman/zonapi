@@ -6,7 +6,7 @@ let hours = 3;
 
 /** Leest één endpoint met expliciete foutstatus; input: pad; output: Promise<JSON> of fout. */
 async function json(path) {
-  const response = await fetch(path);
+  const response = await fetch(path, { cache: 'no-store' });
   if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
   return response.json();
 }

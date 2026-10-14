@@ -1,11 +1,14 @@
 const dateTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const pageSize = 100;
+let offset = 0;
+let refreshNumber = 0;
 
 /** Vindt één element op de Growatt-pagina; input: CSS-selector; output: Element of null. */
 function element(selector) { return document.querySelector(selector); }
 
 /** Leest één API-endpoint; input: pad; output: Promise met JSON of fout. */
 async function request(path) {
-  const response = await fetch(path);
+  const response = await fetch(path, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
@@ -55,6 +58,7 @@ function renderSummary(data) {
   element('#updated').textContent = `Meetstatus: ${data.production.status}`;
   element('#frame-count').textContent = data.summary.frames_total.toLocaleString('nl-NL');
   element('#power').textContent = watts(data.production.power_w);
+  element('#discovered').textContent = `${data.announcements.length}/${data.production.expected_inverters}`;
   element('#active').textContent = `${data.production.active_inverters}/${data.production.expected_inverters}`;
   element('#last-frame').textContent = time(data.summary.last_received_at);
   const list = element('#frame-statuses');
@@ -71,6 +75,17 @@ function renderSummary(data) {
   }
 }
 
+/** Toont aanmeldingen met hun omvormeradres en serienummers; input: Growatt-overzicht; output: void. */
+function renderAnnouncements(data) {
+  const body = element('#announcements');
+  body.replaceChildren();
+  if (!data.announcements.length) return showEmpty(body, 5, 'Geen aanmeldingen');
+  for (const announcement of data.announcements) addRow(body, [
+    announcement.address, announcement.inverter_serial, announcement.datalogger_serial,
+    time(announcement.last_seen_at), announcement.record_type
+  ]);
+}
+
 /** Toont de laatste meting per omvormer; input: Growatt-overzicht; output: void. */
 function renderInverters(data) {
   const body = element('#inverters');
@@ -84,26 +99,26 @@ function renderInverters(data) {
   ]);
 }
 
-/** Toont de laatste ontvangen pakketheaders; input: Growatt-overzicht; output: void. */
-function renderFrames(data) {
-  const body = element('#frames');
+/** Toont pakketten en verbindingen in chronologische volgorde; input: gefilterde tijdlijn; output: void. */
+function renderTimeline(data) {
+  const body = element('#timeline');
   body.replaceChildren();
-  if (!data.frames.length) return showEmpty(body, 8, 'Geen pakketten');
-  for (const frame of data.frames) addRow(body, [
-    time(frame.received_at), frame.id, frame.peer, `v${frame.protocol}`,
-    frame.record_type, frame.status, frame.size_bytes, frameButton(frame.id)
-  ]);
-}
-
-/** Toont pakket- en ontvangerfouten; input: Growatt-overzicht; output: void. */
-function renderProblems(data) {
-  const body = element('#problems');
-  body.replaceChildren();
-  if (!data.problems.length) return showEmpty(body, 5, 'Geen fouten');
-  for (const problem of data.problems) addRow(body, [
-    time(problem.at), problem.peer, problem.status, problem.detail ?? '—',
-    problem.frame_id === null ? '' : frameButton(problem.frame_id)
-  ]);
+  if (!data.rows.length) showEmpty(body, 8, 'Geen berichten voor dit filter');
+  for (const row of data.rows) {
+    const packet = row.source === 'packet';
+    const isError = packet ? !['control', 'announcement'].includes(row.status) && !row.status.startsWith('decoded:') : !['connected', 'disconnected', 'idle_disconnect'].includes(row.status);
+    const item = addRow(body, [
+      time(row.at), row.label, row.record_type?.toUpperCase() ?? '—',
+      packet ? row.record_type?.slice(0, 2).toUpperCase() ?? '—' : '—', row.status,
+      packet ? row.peer : `${row.peer} · ${row.detail ?? ''}`,
+      row.size_bytes ?? '—', packet ? frameButton(row.id) : '—'
+    ]);
+    if (isError) item.classList.add('timeline-error');
+    else if (!packet) item.classList.add('timeline-event');
+  }
+  element('#newer').disabled = data.offset === 0;
+  element('#older').disabled = !data.has_more;
+  element('#page-info').textContent = data.rows.length ? `${data.offset + 1}–${data.offset + data.rows.length}` : 'Geen resultaten';
 }
 
 /** Maakt compacte metadata voor één pakket; input: container en waarden; output: void. */
@@ -121,7 +136,8 @@ async function showFrame(id) {
   try {
     const frame = await request(`/api/v1/growatt/frames/${id}`);
     element('#detail-title').textContent = `Pakket #${frame.id}`;
-    fillMeta(element('#detail-meta'), [time(frame.received_at), frame.peer, `v${frame.protocol}`, frame.record_type, frame.status, `${frame.size_bytes} bytes`]);
+    fillMeta(element('#detail-meta'), [time(frame.received_at), frame.peer, `v${frame.protocol}`, frame.record_type, frame.label, frame.status, `${frame.size_bytes} bytes`]);
+    fillMeta(element('#detail-announcement'), frame.announcement ? [`Adres ${frame.announcement.address}`, `Omvormer ${frame.announcement.inverter_serial}`, `Logger ${frame.announcement.datalogger_serial}`] : []);
     fillMeta(element('#detail-measurement'), frame.measurement ? [frame.measurement.serial, watts(frame.measurement.power_w), `${frame.measurement.energy_today_kwh} kWh vandaag`, `${frame.measurement.energy_total_kwh} kWh totaal`, time(frame.measurement.measured_at)] : []);
     element('#detail-hex').textContent = (frame.raw_hex.match(/.{1,32}/g) ?? []).map((line) => (line.match(/../g) ?? []).join(' ')).join('\n');
     element('#frame-detail').hidden = false;
@@ -137,20 +153,49 @@ function handleFrameClick(event) {
   if (button) void showFrame(button.dataset.frameId);
 }
 
-/** Vernieuwt de Growatt-metingen en diagnostiek; input: geen; output: Promise<void>. */
+/** Vernieuwt de Growatt-metingen en de gefilterde tijdlijn; input: geen; output: Promise<void>. */
 async function refresh() {
+  const current = ++refreshNumber;
+  const query = new URLSearchParams({ limit: String(pageSize), offset: String(offset), view: element('#view-filter').value });
+  if (element('#type-filter').value) query.set('type', element('#type-filter').value);
+  if (element('#address-filter').value) query.set('address', element('#address-filter').value);
   try {
-    const data = await request('/api/v1/growatt?limit=50');
+    const [data, timeline] = await Promise.all([request('/api/v1/growatt?limit=1'), request(`/api/v1/growatt/timeline?${query}`)]);
+    if (current !== refreshNumber) return;
     renderSummary(data);
+    renderAnnouncements(data);
     renderInverters(data);
-    renderFrames(data);
-    renderProblems(data);
-    element('#connection').textContent = 'Online';
+    renderTimeline(timeline);
+    element('#connection').textContent = `Bijgewerkt ${time(data.server_time)}`;
   } catch (error) {
-    element('#connection').textContent = `Fout: ${error.message}`;
+    if (current === refreshNumber) element('#connection').textContent = `Fout: ${error.message}`;
   }
 }
 
+/** Wijzigt de tijdlijnfilters en start op de nieuwste pagina; input: geen (leest selectievelden); output: void. */
+function changeFilter() {
+  if (element('#view-filter').value === 'events') {
+    element('#type-filter').value = '';
+    element('#address-filter').value = '';
+  }
+  element('#type-filter').disabled = element('#view-filter').value === 'events';
+  element('#address-filter').disabled = element('#view-filter').value === 'events';
+  offset = 0;
+  element('#frame-detail').hidden = true;
+  void refresh();
+}
+
+/** Bladert door de gefilterde tijdlijn; input: richting -1 of 1; output: void. */
+function changePage(direction) {
+  offset = Math.max(0, offset + pageSize * direction);
+  element('#frame-detail').hidden = true;
+  void refresh();
+}
+
 document.addEventListener('click', handleFrameClick);
+for (const id of ['#view-filter', '#type-filter', '#address-filter']) element(id).addEventListener('change', changeFilter);
+element('#refresh-now').addEventListener('click', () => { void refresh(); });
+element('#newer').addEventListener('click', () => changePage(-1));
+element('#older').addEventListener('click', () => changePage(1));
 void refresh();
-setInterval(refresh, 15000);
+setInterval(() => { void refresh(); }, 15000);

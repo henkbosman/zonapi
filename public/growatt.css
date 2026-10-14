@@ -1,6 +1,6 @@
 .growatt-layout .full-card { grid-column:1 / -1; background:var(--card); border:1px solid var(--line); border-radius:19px; box-shadow:0 14px 40px rgba(42,85,69,.04); padding:22px 24px }
 .growatt-layout .full-card h2 { font-size:20px; letter-spacing:-.03em; margin:0 0 16px }
-.growatt-highlights { grid-template-columns:repeat(4,minmax(0,1fr)) }
+.growatt-highlights { grid-template-columns:repeat(5,minmax(0,1fr)) }
 .growatt-highlights .time-value { font-size:19px; letter-spacing:normal; margin-top:17px }
 .status-list { display:flex; flex-wrap:wrap; align-items:center; gap:9px; font-size:13px }
 .status-pill { padding:8px 11px; border-radius:9px; border:1px solid var(--line); background:#f7faf7; font-variant-numeric:tabular-nums }
@@ -14,6 +14,15 @@
 .data-table .empty-row { color:var(--muted); text-align:center; padding:18px }
 .data-table button { border:1px solid var(--line); border-radius:8px; background:var(--paper); color:var(--teal); cursor:pointer; font:inherit; font-weight:700; padding:5px 9px }
 .data-table button:hover { background:var(--mint) }
+.timeline-filters { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-bottom:14px }
+.timeline-filters label { display:grid; gap:5px; color:var(--muted); font-size:12px; font-weight:700 }
+.timeline-filters select { min-width:160px; border:1px solid var(--line); border-radius:8px; background:var(--paper); padding:8px 10px; color:var(--teal); font:inherit; font-size:14px }
+.timeline-filters select:disabled { opacity:.55 }
+.timeline-pager { display:flex; align-items:center; justify-content:center; gap:15px; margin-top:16px; color:var(--muted); font-size:13px }
+.timeline-pager button,.refresh-button { border:1px solid var(--line); border-radius:8px; background:var(--paper); padding:7px 11px; color:var(--teal); cursor:pointer; font:inherit }
+.timeline-pager button:disabled { cursor:default; opacity:.5 }
+.data-table .timeline-error td:first-child { border-left:3px solid #c35e42 }
+.data-table .timeline-event td:first-child { border-left:3px solid var(--line) }
 .detail-meta { display:flex; flex-wrap:wrap; gap:10px; margin:8px 0; font-size:12px; color:var(--muted) }
 .detail-meta span { border:1px solid var(--line); border-radius:8px; padding:7px 10px }
 .raw-hex { background:#172629; color:#d1eadf; border-radius:11px; overflow:auto; padding:16px; font-size:12px; line-height:1.7; margin:16px 0 0; white-space:pre }

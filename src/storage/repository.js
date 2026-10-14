@@ -38,6 +38,43 @@ export function createRepository(db) {
     saveGrowattEvent(at, peer, kind, detail) { return q.growattEvent.run(at, peer, kind, String(detail).slice(0, 300)); },
     /** Leest recente pakketmetadata zonder ruwe inhoud; input: limiet; output: nieuwste rijen. */
     recentGrowattFrames(limit) { return db.prepare('SELECT id,received_ms,peer,protocol,record_type,status,length(raw) AS size_bytes FROM growatt_frames ORDER BY id DESC LIMIT ?').all(limit); },
+    /** Leest pakketten en TCP-gebeurtenissen als één tijdlijn met filters; input: {limit,offset,type,address,view}; output: {rows,has_more}. */
+    growattTimeline({ limit, offset, type, address, view }) {
+      const frames = [];
+      const frameParams = [];
+      const events = [];
+      const eventParams = [];
+      if (type) {
+        frames.push(type.startsWith('xx') ? 'substr(record_type,3,2)=?' : 'record_type=?');
+        frameParams.push(type.startsWith('xx') ? type.slice(2) : type);
+      }
+      if (address) { frames.push('substr(record_type,1,2)=?'); frameParams.push(address); }
+      if (view === 'errors') {
+        frames.push("status NOT IN ('control','announcement') AND status NOT LIKE 'decoded:%'");
+        events.push("kind NOT IN ('connected','disconnected','idle_disconnect')");
+      }
+      const frameSql = `SELECT id,received_ms AS at_ms,peer,'packet' AS source,protocol,record_type,status,length(raw) AS size_bytes,NULL AS detail FROM growatt_frames ${frames.length ? `WHERE ${frames.join(' AND ')}` : ''}`;
+      const eventSql = `SELECT id,at_ms,peer,'event' AS source,NULL AS protocol,NULL AS record_type,kind AS status,NULL AS size_bytes,detail FROM growatt_events ${events.length ? `WHERE ${events.join(' AND ')}` : ''}`;
+      const withFrames = view !== 'events';
+      const withEvents = !type && !address && view !== 'packets';
+      if (!withFrames && !withEvents) return { rows: [], has_more: false };
+      const parts = [];
+      const params = [];
+      if (withFrames) { parts.push(frameSql); params.push(...frameParams); }
+      if (withEvents) { parts.push(eventSql); params.push(...eventParams); }
+      const rows = db.prepare(`${parts.join(' UNION ALL ')} ORDER BY at_ms DESC,source DESC,id DESC LIMIT ? OFFSET ?`).all(...params, limit + 1, offset);
+      return { rows: rows.slice(0, limit), has_more: rows.length > limit };
+    },
+    /** Leest de laatste aanmelding per ShineLanBox-adres, inclusief bestaande historie; input: geen; output: maximaal vier frame-rijen. */
+    latestGrowattAnnouncements() { return db.prepare(`
+      SELECT id,received_ms,record_type,raw FROM growatt_frames
+      WHERE id IN (
+        SELECT MAX(id) FROM growatt_frames
+        WHERE protocol=6 AND record_type IN ('5003','5029','5103','5129','5203','5229','5303','5329')
+          AND status IN ('control','announcement')
+        GROUP BY substr(record_type,1,2)
+      ) ORDER BY id DESC
+    `).all(); },
     /** Leest één compleet pakket; input: positief rij-id; output: rij met Buffer of undefined. */
     growattFrame(id) { return db.prepare('SELECT * FROM growatt_frames WHERE id=?').get(id); },
     /** Leest de gedecodeerde meting bij één pakket; input: rij-id; output: meting of undefined. */
@@ -45,9 +82,9 @@ export function createRepository(db) {
     /** Leest fouten in pakketten en TCP-ontvanger; input: limiet; output: nieuwste foutregels. */
     recentGrowattProblems(limit) { return db.prepare(`
       SELECT received_ms AS at_ms,peer,status,record_type AS detail,id AS frame_id
-      FROM growatt_frames WHERE status<>'control' AND status NOT LIKE 'decoded:%'
+      FROM growatt_frames WHERE status NOT IN ('control','announcement') AND status NOT LIKE 'decoded:%'
       UNION ALL
-      SELECT at_ms,peer,kind AS status,detail,NULL AS frame_id FROM growatt_events
+      SELECT at_ms,peer,kind AS status,detail,NULL AS frame_id FROM growatt_events WHERE kind NOT IN ('connected','disconnected','idle_disconnect')
       ORDER BY at_ms DESC LIMIT ?
     `).all(limit); },
     /** Bewaart omvormermeting zonder oude buffers live te maken; input: meetobject; output: SQLite-resultaat. */

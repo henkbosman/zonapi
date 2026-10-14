@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { root } from '../config/load.js';
 import { forecastResponse, irradianceResponse } from './forecast.js';
 import { productionResponse, metersResponse } from './measurements.js';
-import { growattLimitParam, growattOverview, growattFrameDetail } from './growatt-diagnostics.js';
+import { growattLimitParam, growattOverview, growattFrameDetail, growattTimelineParams, growattTimeline } from './growatt-diagnostics.js';
 import { getBaseload } from '../appliances/baseload.js';
 import { loadProfiles } from '../appliances/load-profiles.js';
 import { advise } from '../appliances/start-advice.js';
@@ -49,7 +49,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       const url = new URL(request.url, 'http://localhost');
       if (staticFiles.has(url.pathname)) {
         const [file, type] = staticFiles.get(url.pathname);
-        response.writeHead(200, { 'Content-Type': type, 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'", 'X-Content-Type-Options': 'nosniff' });
+        response.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'", 'X-Content-Type-Options': 'nosniff' });
         return response.end(readFileSync(join(root, 'public', file)));
       }
       const now = Date.now();
@@ -57,6 +57,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       if (url.pathname === '/api/v1/forecast') return sendJson(response, 200, forecastResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location, now, settings.weather.stale_after_hours));
       if (url.pathname === '/api/v1/irradiance') return sendJson(response, 200, irradianceResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location));
       if (url.pathname === '/api/v1/growatt') return sendJson(response, 200, growattOverview(repository, settings, panels, now, growattLimitParam(url.searchParams.get('limit'))));
+      if (url.pathname === '/api/v1/growatt/timeline') return sendJson(response, 200, growattTimeline(repository, growattTimelineParams(url.searchParams)));
       if (/^\/api\/v1\/growatt\/frames\/[1-9]\d*$/.test(url.pathname)) {
         const id = Number(url.pathname.split('/')[5]);
         if (!Number.isSafeInteger(id)) throw new Error('Ongeldig pakket-id');

@@ -31,6 +31,7 @@ export function openDatabase(path) {
       id INTEGER PRIMARY KEY, received_ms INTEGER NOT NULL, peer TEXT NOT NULL,
       protocol INTEGER, record_type TEXT, status TEXT NOT NULL, raw BLOB NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS growatt_frame_type ON growatt_frames(record_type,id);
     CREATE TABLE IF NOT EXISTS growatt_events (
       id INTEGER PRIMARY KEY, at_ms INTEGER NOT NULL, peer TEXT NOT NULL,
       kind TEXT NOT NULL, detail TEXT NOT NULL

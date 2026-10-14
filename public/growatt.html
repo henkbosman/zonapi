@@ -12,17 +12,18 @@
   <header class="masthead">
     <div class="brand"><span class="mark">☀</span><span>ZonAPI</span></div>
     <nav class="navigation" aria-label="Pagina's"><a href="/dashboard">Overzicht</a><a href="/growatt" aria-current="page">Growatt</a></nav>
-    <span class="connection" id="connection">Gegevens ophalen…</span>
+    <span class="connection" id="connection" aria-live="polite">Gegevens ophalen…</span>
   </header>
   <main class="layout growatt-layout">
     <section class="intro">
       <h1>Growatt</h1>
-      <div class="meta"><span id="listener">TCP: —</span><span id="updated">Laatste pakket: —</span></div>
+      <div class="meta"><span id="listener">TCP: —</span><span id="updated">Meetstatus: —</span><button class="refresh-button" id="refresh-now" type="button">Vernieuwen</button></div>
     </section>
 
     <section class="highlights growatt-highlights" aria-label="Growatt-status">
       <div class="tile"><div class="label">Ontvangen pakketten</div><strong id="frame-count">—</strong></div>
       <div class="tile"><div class="label">Huidige opbrengst</div><strong id="power">—</strong></div>
+      <div class="tile"><div class="label">Herkende adressen</div><strong id="discovered">—</strong></div>
       <div class="tile"><div class="label">Actieve omvormers</div><strong id="active">—</strong></div>
       <div class="tile"><div class="label">Laatste ontvangst</div><strong class="time-value" id="last-frame">—</strong></div>
     </section>
@@ -33,26 +34,34 @@
     </section>
 
     <section class="full-card">
+      <h2>Aangemelde omvormers</h2>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>Adres</th><th>Omvormerserienummer</th><th>Logger</th><th>Laatste aanmelding</th><th>Type</th></tr></thead><tbody id="announcements"></tbody></table></div>
+    </section>
+
+    <section class="full-card">
       <h2>Omvormers</h2>
       <div class="table-scroll"><table class="data-table"><thead><tr><th>Serienummer</th><th>Vermogen</th><th>Vandaag</th><th>Totaal</th><th>Meting</th><th>Status</th></tr></thead><tbody id="inverters"></tbody></table></div>
     </section>
 
     <section class="full-card">
-      <h2>Laatste pakketten</h2>
-      <div class="table-scroll"><table class="data-table"><thead><tr><th>Ontvangen</th><th>ID</th><th>Afzender</th><th>Protocol</th><th>Type</th><th>Status</th><th>Bytes</th><th></th></tr></thead><tbody id="frames"></tbody></table></div>
+      <h2>Berichten en verbindingen</h2>
+      <div class="timeline-filters">
+        <label>Toon <select id="view-filter"><option value="all">Alles</option><option value="packets">Pakketten</option><option value="errors">Fouten</option><option value="events">Verbindingen</option></select></label>
+        <label>Type <select id="type-filter"><option value="">Alle typen</option><option value="xx04">xx04 meting</option><option value="xx50">xx50 archief</option><option value="xx03">xx03 aanmelding</option><option value="xx29">xx29 aanmelding</option><option value="xx16">xx16 ping</option></select></label>
+        <label>Adres <select id="address-filter"><option value="">Alle adressen</option><option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option></select></label>
+      </div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Soort</th><th>Type</th><th>Adres</th><th>Status</th><th>Details</th><th>Bytes</th><th></th></tr></thead><tbody id="timeline"></tbody></table></div>
+      <div class="timeline-pager"><button type="button" id="newer" disabled>Nieuwer</button><span id="page-info">—</span><button type="button" id="older" disabled>Ouder</button></div>
     </section>
 
     <section class="full-card" id="frame-detail" hidden>
       <h2 id="detail-title">Pakket</h2>
       <div class="detail-meta" id="detail-meta"></div>
+      <div class="detail-meta" id="detail-announcement"></div>
       <div class="detail-meta" id="detail-measurement"></div>
       <pre class="raw-hex" id="detail-hex"></pre>
     </section>
 
-    <section class="full-card">
-      <h2>Fouten</h2>
-      <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Afzender</th><th>Status</th><th>Detail</th><th></th></tr></thead><tbody id="problems"></tbody></table></div>
-    </section>
   </main>
 </body>
 </html>

@@ -1,12 +1,12 @@
 {
   "expected_panel_count": 20,
   "inverters": [
-    { "id": "mic-1", "serial": "FUJ2BJ40P4", "ac_limit_w": 2000 },
-    { "id": "mic-2", "serial": "FUJ2BJ402F", "ac_limit_w": 2000 },
-    { "id": "mic-3", "serial": "FUJ2BJ40PQ", "ac_limit_w": 2000 },
-    { "id": "mic-4", "serial": "FUJ2BJ40PA", "ac_limit_w": 2000 }
+    { "id": "081", "serial": "FUJ2BJ40P4", "ac_limit_w": 2000 },
+    { "id": "083", "serial": "FUJ2BJ402F", "ac_limit_w": 2000 },
+    { "id": "082", "serial": "FUJ2BJ40PQ", "ac_limit_w": 2000 },
+    { "id": "080", "serial": "FUJ2BJ40PA", "ac_limit_w": 2000 }
   ],
   "groups": [
-    { "id": "zuid", "inverter_id": null, "count": 20, "wp_per_panel": null, "tilt_deg": null, "azimuth_deg": 180, "loss_factor": 0.8 }
+    { "id": "zuid", "inverter_id": null, "count": 20, "wp_per_panel": 400, "tilt_deg": null, "azimuth_deg": 180, "loss_factor": 0.8 }
   ]
 }
