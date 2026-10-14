@@ -20,7 +20,7 @@ function main() {
   const http = startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard });
   growatt.on('listening', () => console.log(`Growatt TCP luistert op ${settings.growatt.host}:${growatt.address().port}`));
   http.on('listening', () => console.log(`ZonAPI luistert op http://${settings.http.host}:${http.address().port}`));
-  growatt.on('error', (error) => { console.error('Growatt TCP:', error); process.exitCode = 1; });
+  growatt.on('error', (error) => { repository.saveGrowattEvent(Date.now(), settings.growatt.host, 'listener_error', error.message); console.error('Growatt TCP:', error); process.exitCode = 1; });
   http.on('error', (error) => { console.error('HTTP:', error); process.exitCode = 1; });
   weather.start();
   homewizard.start();

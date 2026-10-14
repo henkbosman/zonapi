@@ -28,7 +28,7 @@ function drawChart(container, points, color) {
   if (!valid.length) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'Nog geen meetpunten beschikbaar. Controleer de instellingen en de bronstatus onderaan.';
+    empty.textContent = 'Geen meetpunten';
     container.append(empty);
     return;
   }
@@ -60,24 +60,26 @@ function drawChart(container, points, color) {
 function showAppliance(profile, advice) {
   const card = document.createElement('article'); card.className = 'appliance';
   const title = document.createElement('h3'); title.textContent = profile.name;
-  const sub = document.createElement('p'); sub.textContent = `Cyclus: ${profile.duration_minutes} min · ${profile.estimated_profile ? 'energieprofiel is een schatting' : 'eigen energieprofiel'}`;
+  const sub = document.createElement('p'); sub.textContent = `Cyclus: ${profile.duration_minutes} min`;
   const time = document.createElement('div'); time.className = 'time';
   const details = document.createElement('p');
   const badge = document.createElement('span'); badge.className = 'badge';
   if (advice.status === 'ok' && advice.earliest_start) {
     time.textContent = dutchDay.format(new Date(advice.earliest_start));
-    details.textContent = `Verwacht ${advice.earliest.solar_share_percent}% eigen zon · minimaal ${advice.minimum_solar_share_percent}% gewenst.`;
+    details.textContent = `Eigen zon: ${advice.earliest.solar_share_percent}% · minimum: ${advice.minimum_solar_share_percent}%`;
     badge.textContent = advice.can_start_now ? 'Nu starten kan' : 'Eerstvolgend startmoment';
   } else if (advice.status === 'ok' && advice.best) {
     time.textContent = 'Geen passend moment';
-    details.textContent = `Beste optie: ${dutchDay.format(new Date(advice.best_start))}, ${advice.best.solar_share_percent}% eigen zon.`;
+    details.textContent = `Beste optie: ${dutchDay.format(new Date(advice.best_start))} · eigen zon: ${advice.best.solar_share_percent}%`;
     badge.textContent = 'Onder jouw drempel';
   } else {
     time.textContent = advice.status === 'stale' ? 'Voorspelling verouderd' : 'Nog geen advies';
-    details.textContent = (advice.missing ?? []).join('; ') || (advice.status === 'insufficient_baseload' ? 'Vul een basislast in of verzamel P1- en omvormerhistorie.' : advice.status === 'stale' ? 'Het berekende tijdstip is voorlopig; wacht op de volgende weerupdate.' : 'Wachten op volledige voorspelling en instellingen.');
-    badge.textContent = advice.status;
+    details.textContent = (advice.missing ?? []).join('; ');
+    badge.textContent = advice.status === 'stale' ? 'Weerdata verouderd' : advice.status === 'insufficient_baseload' ? 'Basislast ontbreekt' : 'Onvoldoende data';
   }
-  card.append(title, sub, time, details, badge);
+  card.append(title, sub, time);
+  if (details.textContent) card.append(details);
+  card.append(badge);
   $('#appliance-list').append(card);
 }
 
@@ -89,16 +91,18 @@ function renderStatus(status) {
   $('#pv-now').textContent = watts(status.growatt.power_w);
   $('#pv-sub').textContent = `${status.growatt.active_inverters}/${status.growatt.expected_inverters} omvormers recent`;
   $('#net-now').textContent = watts(status.homewizard.net_power_w);
-  $('#net-sub').textContent = status.homewizard.selected_device ? `${status.homewizard.selected_device.toUpperCase()} · positief = netafname, negatief = teruglevering` : 'Geen recente P1- of kWh-meting';
+  $('#net-sub').textContent = status.homewizard.selected_device ? status.homewizard.selected_device.toUpperCase() : 'Geen recente netmeting';
   $('#quota').textContent = `${status.weather.used_requests} / ${status.weather.max_requests}`;
-  $('#next-fetch').textContent = status.weather.next_fetch ? `Volgende: ${dutchTime.format(new Date(status.weather.next_fetch))}` : 'Volgende ophaalmoment bij daglicht';
-  const problems = [ ...(status.panels.missing ?? []), ...(status.weather.location_configured ? [] : ['Stel breedte- en lengtegraad in.']), ...(status.weather.last_error ? [`Weerbron: ${status.weather.last_error}`] : []), ...Object.entries(status.homewizard.errors).filter(([, error]) => error).map(([key, error]) => `${key}: ${error}`) ];
+  $('#next-fetch').textContent = status.weather.next_fetch ? `Volgende: ${dutchTime.format(new Date(status.weather.next_fetch))}` : 'Volgende: —';
+  const problems = [ ...(status.panels.missing ?? []), ...(status.weather.location_configured ? [] : ['Locatie ontbreekt']), ...(status.weather.last_error ? [`Weerbron: ${status.weather.last_error}`] : []), ...Object.entries(status.homewizard.errors).filter(([, error]) => error).map(([key, error]) => `${key}: ${error}`) ];
   const health = $('#health'); health.replaceChildren();
-  const heading = document.createElement('h2'); heading.textContent = problems.length ? 'Nog instellen of controleren' : 'Bronnen en instellingen';
-  health.append(heading);
-  const text = document.createElement('div'); text.textContent = problems.length ? 'De API toont onvolledige gegevens als status en verzint geen meetwaarden.' : `De weerdienst, ${status.growatt.active_inverters} omvormers en lokale meters worden afzonderlijk bewaakt.`;
-  health.append(text);
-  if (problems.length) { const list = document.createElement('ul'); for (const problem of problems) { const item = document.createElement('li'); item.textContent = problem; list.append(item); } health.append(list); }
+  health.hidden = problems.length === 0;
+  if (problems.length) {
+    const heading = document.createElement('h2'); heading.textContent = 'Aandachtspunten';
+    const list = document.createElement('ul');
+    for (const problem of problems) { const item = document.createElement('li'); item.textContent = problem; list.append(item); }
+    health.append(heading, list);
+  }
 }
 
 /** Haalt huidige gegevens, grafieken en apparaatadviezen op; input: geen; output: Promise<void>. */
@@ -110,7 +114,8 @@ async function refresh() {
     renderStatus(status);
     drawChart($('#pv-chart'), forecast.slots.map((slot) => ({ time:slot.start, value:slot.power_w })), '#137771');
     drawChart($('#ghi-chart'), forecast.slots.map((slot) => ({ time:slot.start, value:slot.ghi_w_m2 })), '#e6a321');
-    $('#forecast-note').textContent = forecast.status === 'ok' ? 'Gebaseerd op actuele, lokaal opgeslagen instralingsverwachting.' : `Bronstatus: ${forecast.status}. De cijfers zijn schattingen.`;
+    $('#forecast-note').hidden = forecast.status === 'ok';
+    $('#forecast-note').textContent = forecast.status === 'ok' ? '' : `Voorspelling: ${forecast.status}`;
     const buckets = new Map();
     for (const row of history.rows) {
       const key = Math.floor(row.measured_ms / 300000);
@@ -121,7 +126,7 @@ async function refresh() {
     $('#appliance-list').replaceChildren();
     const advice = await Promise.all(profiles.profiles.map((profile) => json(`/api/v1/appliances/${profile.id}/advice`).then((result) => ({ profile, result }))));
     for (const item of advice) showAppliance(item.profile, item.result);
-    $('#connection').textContent = 'Verbonden met lokaal netwerk';
+    $('#connection').textContent = 'Online';
   } catch (error) {
     $('#connection').textContent = `Kon gegevens niet ophalen: ${error.message}`;
   }

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { root } from '../config/load.js';
 import { forecastResponse, irradianceResponse } from './forecast.js';
 import { productionResponse, metersResponse } from './measurements.js';
+import { growattLimitParam, growattOverview, growattFrameDetail } from './growatt-diagnostics.js';
 import { getBaseload } from '../appliances/baseload.js';
 import { loadProfiles } from '../appliances/load-profiles.js';
 import { advise } from '../appliances/start-advice.js';
@@ -11,8 +12,11 @@ import { advise } from '../appliances/start-advice.js';
 const staticFiles = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/dashboard', ['index.html', 'text/html; charset=utf-8']],
+  ['/growatt', ['growatt.html', 'text/html; charset=utf-8']],
   ['/dashboard.css', ['dashboard.css', 'text/css; charset=utf-8']],
-  ['/dashboard.js', ['dashboard.js', 'text/javascript; charset=utf-8']]
+  ['/dashboard.js', ['dashboard.js', 'text/javascript; charset=utf-8']],
+  ['/growatt.css', ['growatt.css', 'text/css; charset=utf-8']],
+  ['/growatt.js', ['growatt.js', 'text/javascript; charset=utf-8']]
 ]);
 
 /** Schrijft JSON met vaste beveiligingsheaders; input: HTTP-response, statuscode, object; output: void. */
@@ -52,6 +56,13 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       const forecastRows = (hours) => repository.forecast(now, now + hours * 3600000);
       if (url.pathname === '/api/v1/forecast') return sendJson(response, 200, forecastResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location, now, settings.weather.stale_after_hours));
       if (url.pathname === '/api/v1/irradiance') return sendJson(response, 200, irradianceResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location));
+      if (url.pathname === '/api/v1/growatt') return sendJson(response, 200, growattOverview(repository, settings, panels, now, growattLimitParam(url.searchParams.get('limit'))));
+      if (/^\/api\/v1\/growatt\/frames\/[1-9]\d*$/.test(url.pathname)) {
+        const id = Number(url.pathname.split('/')[5]);
+        if (!Number.isSafeInteger(id)) throw new Error('Ongeldig pakket-id');
+        const frame = growattFrameDetail(repository, id);
+        return frame ? sendJson(response, 200, frame) : sendJson(response, 404, { error: 'Pakket niet gevonden' });
+      }
       if (url.pathname === '/api/v1/production/current') return sendJson(response, 200, productionResponse(repository.currentInverters(), settings.growatt.expected_inverters, settings.growatt.fresh_minutes, now, panels.inverters.map((item) => item.serial)));
       if (url.pathname === '/api/v1/meters/current') return sendJson(response, 200, metersResponse(repository.currentMeters(), now, settings.homewizard.net_meter_priority));
       if (url.pathname === '/api/v1/appliances') {

@@ -31,6 +31,10 @@ export function openDatabase(path) {
       id INTEGER PRIMARY KEY, received_ms INTEGER NOT NULL, peer TEXT NOT NULL,
       protocol INTEGER, record_type TEXT, status TEXT NOT NULL, raw BLOB NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS growatt_events (
+      id INTEGER PRIMARY KEY, at_ms INTEGER NOT NULL, peer TEXT NOT NULL,
+      kind TEXT NOT NULL, detail TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS inverter_measurements (
       serial TEXT NOT NULL, measured_ms INTEGER NOT NULL, received_ms INTEGER NOT NULL,
       power_w REAL NOT NULL, energy_today_kwh REAL, energy_total_kwh REAL,

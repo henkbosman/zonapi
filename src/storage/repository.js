@@ -8,6 +8,7 @@ export function createRepository(db) {
     callUpdate: db.prepare('UPDATE weather_calls SET status=?,detail=? WHERE id=?'),
     frame: db.prepare('INSERT INTO growatt_frames(received_ms,peer,protocol,record_type,status,raw) VALUES(?,?,?,?,?,?)'),
     frameUpdate: db.prepare('UPDATE growatt_frames SET status=? WHERE id=?'),
+    growattEvent: db.prepare('INSERT INTO growatt_events(at_ms,peer,kind,detail) VALUES(?,?,?,?)'),
     inverter: db.prepare('INSERT INTO inverter_measurements VALUES (?,?,?,?,?,?,?) ON CONFLICT(serial,measured_ms) DO UPDATE SET received_ms=excluded.received_ms,power_w=excluded.power_w,energy_today_kwh=excluded.energy_today_kwh,energy_total_kwh=excluded.energy_total_kwh,frame_id=excluded.frame_id WHERE excluded.received_ms > inverter_measurements.received_ms'),
     meter: db.prepare('INSERT INTO meter_measurements VALUES (?,?,?,?,?,?) ON CONFLICT(device,measured_ms) DO UPDATE SET received_ms=excluded.received_ms,net_power_w=excluded.net_power_w,import_kwh=excluded.import_kwh,export_kwh=excluded.export_kwh WHERE excluded.received_ms > meter_measurements.received_ms')
   };
@@ -33,6 +34,22 @@ export function createRepository(db) {
     saveFrame(at, peer, version, type, status, raw) { return Number(q.frame.run(at, peer, version, type, status, raw).lastInsertRowid); },
     /** Corrigeert de parse-status van een pakket; input: rij-id, status; output: SQLite-resultaat. */
     markFrame(id, status) { return q.frameUpdate.run(status, id); },
+    /** Bewaart een fout van de TCP-ontvanger; input: tijd, peer, soort, detail; output: SQLite-resultaat. */
+    saveGrowattEvent(at, peer, kind, detail) { return q.growattEvent.run(at, peer, kind, String(detail).slice(0, 300)); },
+    /** Leest recente pakketmetadata zonder ruwe inhoud; input: limiet; output: nieuwste rijen. */
+    recentGrowattFrames(limit) { return db.prepare('SELECT id,received_ms,peer,protocol,record_type,status,length(raw) AS size_bytes FROM growatt_frames ORDER BY id DESC LIMIT ?').all(limit); },
+    /** Leest één compleet pakket; input: positief rij-id; output: rij met Buffer of undefined. */
+    growattFrame(id) { return db.prepare('SELECT * FROM growatt_frames WHERE id=?').get(id); },
+    /** Leest de gedecodeerde meting bij één pakket; input: rij-id; output: meting of undefined. */
+    growattFrameMeasurement(id) { return db.prepare('SELECT serial,measured_ms,power_w,energy_today_kwh,energy_total_kwh FROM inverter_measurements WHERE frame_id=? LIMIT 1').get(id); },
+    /** Leest fouten in pakketten en TCP-ontvanger; input: limiet; output: nieuwste foutregels. */
+    recentGrowattProblems(limit) { return db.prepare(`
+      SELECT received_ms AS at_ms,peer,status,record_type AS detail,id AS frame_id
+      FROM growatt_frames WHERE status<>'control' AND status NOT LIKE 'decoded:%'
+      UNION ALL
+      SELECT at_ms,peer,kind AS status,detail,NULL AS frame_id FROM growatt_events
+      ORDER BY at_ms DESC LIMIT ?
+    `).all(limit); },
     /** Bewaart omvormermeting zonder oude buffers live te maken; input: meetobject; output: SQLite-resultaat. */
     saveInverter(v) { return q.inverter.run(v.serial, v.measured_ms, v.received_ms, v.power_w, v.energy_today_kwh, v.energy_total_kwh, v.frame_id); },
     /** Bewaart lokale HomeWizard-meting; input: meetobject; output: SQLite-resultaat. */

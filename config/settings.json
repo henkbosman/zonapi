@@ -1,8 +1,8 @@
 {
   "timezone": "Europe/Amsterdam",
-  "location": { "latitude": 52.442885, "longitude": 5.854113 },
-  "http": { "host": "192.168.2.210", "port": 3002 },
-  "growatt": { "host": "192.168.2.210", "port": 5279, "expected_inverters": 4, "fresh_minutes": 12 },
+  "location": { "latitude": null, "longitude": null },
+  "http": { "host": "127.0.0.1", "port": 8080 },
+  "growatt": { "host": "127.0.0.1", "port": 5279, "expected_inverters": 4, "fresh_minutes": 12 },
   "weather": {
     "source": "open-meteo",
     "max_requests_per_local_day": 12,
