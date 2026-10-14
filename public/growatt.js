@@ -54,7 +54,11 @@ function frameButton(id) {
 
 /** Toont luisteradres, metingen en aantallen; input: Growatt-overzicht; output: void. */
 function renderSummary(data) {
-  element('#listener').textContent = `TCP: ${data.listener.host}:${data.listener.port}`;
+  const listener = data.listener;
+  const state = listener.listening === true ? 'luistert' : listener.listening === false ? 'luistert niet' : 'status onbekend';
+  const error = listener.last_error ? ` · ${listener.last_error.code ?? listener.last_error.message}` : '';
+  element('#listener').textContent = `TCP: ${listener.host}:${listener.port} · ${state}${error}`;
+  element('#db-path').textContent = `Database: ${data.database_path ?? 'geheugen'}`;
   element('#updated').textContent = `Meetstatus: ${data.production.status}`;
   element('#frame-count').textContent = data.summary.frames_total.toLocaleString('nl-NL');
   element('#power').textContent = watts(data.production.power_w);

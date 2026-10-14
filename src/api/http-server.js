@@ -6,6 +6,7 @@ import { forecastResponse, irradianceResponse } from './forecast.js';
 import { productionResponse, metersResponse } from './measurements.js';
 import { productionSeries } from './production-series.js';
 import { growattLimitParam, growattOverview, growattFrameDetail, growattTimelineParams, growattTimeline } from './growatt-diagnostics.js';
+import { growattListenerStatus } from '../growatt/listener-status.js';
 import { getBaseload } from '../appliances/baseload.js';
 import { loadProfiles } from '../appliances/load-profiles.js';
 import { advise } from '../appliances/start-advice.js';
@@ -44,7 +45,7 @@ export function timeParam(value, defaultMs) {
 }
 
 /** Start een leesbare LAN-API met dashboard; input: dienstafhankelijkheden; output: luisterende http.Server. */
-export function startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard }) {
+export function startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard, growattRuntime }) {
   const server = http.createServer((request, response) => {
     try {
       const url = new URL(request.url, 'http://localhost');
@@ -59,7 +60,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       const forecastRows = (hours) => repository.forecast(now, now + hours * 3600000);
       if (url.pathname === '/api/v1/forecast') return sendJson(response, 200, forecastResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location, now, settings.weather.stale_after_hours));
       if (url.pathname === '/api/v1/irradiance') return sendJson(response, 200, irradianceResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location));
-      if (url.pathname === '/api/v1/growatt') return sendJson(response, 200, growattOverview(repository, settings, panels, now, growattLimitParam(url.searchParams.get('limit'))));
+      if (url.pathname === '/api/v1/growatt') return sendJson(response, 200, growattOverview(repository, settings, panels, now, growattLimitParam(url.searchParams.get('limit')), growattRuntime));
       if (url.pathname === '/api/v1/growatt/timeline') return sendJson(response, 200, growattTimeline(repository, growattTimelineParams(url.searchParams)));
       if (/^\/api\/v1\/growatt\/frames\/[1-9]\d*$/.test(url.pathname)) {
         const id = Number(url.pathname.split('/')[5]);
@@ -103,7 +104,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       }
       if (url.pathname === '/api/v1/status') {
         const sunlight = weather.status();
-        return sendJson(response, 200, { time: new Date(now).toISOString(), timezone: settings.timezone, weather: sunlight, panels: { expected: panels.expected_panel_count, groups: panels.groups.length, missing: panelErrors }, growatt: { expected_inverters: settings.growatt.expected_inverters, frames: repository.frameStatus(), ...productionResponse(repository.currentInverters(), settings.growatt.expected_inverters, settings.growatt.fresh_minutes, now, panels.inverters.map((item) => item.serial)) }, homewizard: { errors: homewizard.status(), ...metersResponse(repository.currentMeters(), now, settings.homewizard.net_meter_priority) }, baseload: getBaseload(settings, repository, now) });
+        return sendJson(response, 200, { time: new Date(now).toISOString(), timezone: settings.timezone, weather: sunlight, panels: { expected: panels.expected_panel_count, groups: panels.groups.length, missing: panelErrors }, growatt: { listener: growattListenerStatus(growattRuntime, settings.growatt), database_path: repository.databasePath(), expected_inverters: settings.growatt.expected_inverters, frames: repository.frameStatus(), ...productionResponse(repository.currentInverters(), settings.growatt.expected_inverters, settings.growatt.fresh_minutes, now, panels.inverters.map((item) => item.serial)) }, homewizard: { errors: homewizard.status(), ...metersResponse(repository.currentMeters(), now, settings.homewizard.net_meter_priority) }, baseload: getBaseload(settings, repository, now) });
       }
       return sendJson(response, 404, { error: 'Endpoint bestaat niet' });
     } catch (error) {

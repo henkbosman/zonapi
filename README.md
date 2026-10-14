@@ -21,7 +21,21 @@ Herstart na wijzigingen van `settings.json`, `panels.json` en `layouts/*.json`. 
 
 ### Bestaande installatie bijwerken
 
-Stop de Node-dienst en bewaar een kopie van `data/zonapi.sqlite`. Kopieer voor deze versie de mappen `src/` en `public/` uit het archief naar de bestaande installatie en start de dienst opnieuw. Behoud de eigen `config/settings.json`, `config/panels.json`, `config/appliances/` en de hele `data/`-map. De bestaande database wordt bij de eerste start gemigreerd; de opgeslagen opbrengst blijft behouden. Als `growatt.time_sync_on_announcement` ontbreekt, staat de lokale tijdsynchronisatie standaard aan; zonder `growatt.time_sync_retry_minutes` is het herhaalinterval 10 minuten. Na een nieuwe `xx03`-aanmelding staan `reply_sent` en `time_sync_sent` in `/growatt`. De dienst verstuurt opnieuw een tijdopdracht als de vier `xx04`-adressen op die verbinding uitblijven.
+Stop de Node-dienst en bewaar een kopie van `data/zonapi.sqlite`. Kopieer voor deze versie de mappen `src/` en `public/` uit het archief naar de bestaande installatie en start de dienst opnieuw. Behoud de eigen `config/settings.json`, `config/panels.json`, `config/appliances/` en de hele `data/`-map. Pak de voorbeeldmap `data/` niet over de installatie heen uit. De bestaande database wordt bij de eerste start gemigreerd; de opgeslagen opbrengst blijft behouden. Als `growatt.time_sync_on_announcement` ontbreekt, staat de lokale tijdsynchronisatie standaard aan; zonder `growatt.time_sync_retry_minutes` is het herhaalinterval 10 minuten. Na een nieuwe `xx03`-aanmelding staan `reply_sent` en `time_sync_sent` in `/growatt`. De dienst verstuurt opnieuw een tijdopdracht als de vier `xx04`-adressen op die verbinding uitblijven.
+
+Het losse updatearchief bevat uitsluitend `src/`, `public/` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
+
+### Growatt-teller op nul
+
+Open `/growatt` en lees `TCP`, `Database` en `Ontvangen pakketten`; dezelfde velden staan in `GET /api/v1/growatt` (`listener`, `database_path`, `summary.frames_total`). De teller leest de actieve SQLite-database; hij wordt ook nul na de knop **Berichten en logs verwijderen**. Historische vermogensmetingen blijven dan wel bestaan. De TCP-status is `true` als poort 5279 werkelijk luistert. Bij `false` geeft `listener.last_error` de foutcode, bijvoorbeeld `EADDRINUSE` of `EADDRNOTAVAIL`. Als hij luistert maar er geen nieuwe berichten zijn, controleer in `GET /api/v1/growatt/timeline?view=events&limit=20` of er TCP-verbindingen worden geopend. Op de server:
+
+```sh
+curl -s http://192.168.2.210:3002/api/v1/growatt
+sudo ss -ltnp '( sport = :5279 )'
+sudo journalctl -u zonapi -n 50 --no-pager
+```
+
+Vergelijk `database_path` met het databasebestand van de bestaande installatie. Als een nieuwe installatiemap is gebruikt, start de dienst dan weer vanuit de oorspronkelijke map met zijn bestaande `data/`-map.
 
 ### Instellingen
 
@@ -64,7 +78,7 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | `GET /api/v1/irradiance?hours=3` | Instraling per uur en berekende GTI per paneelgroep. |
 | `GET /api/v1/production/current` | Afzonderlijke omvormers plus uitsluitend bij vier verse metingen een betrouwbare som. |
 | `GET /api/v1/production/day` | Beschikbare omvormermetingen van vandaag, samengevoegd op meettijd, met het aantal actieve omvormers per punt en zonsopgang/-ondergang. |
-| `GET /api/v1/growatt?limit=50` | Growatt-listener, ontvangen pakkettypen/statussen, omvormers en recente fouten; maximaal 100 pakketten per aanvraag. |
+| `GET /api/v1/growatt?limit=50` | Feitelijke TCP-luisterstatus/fout, actieve databasepad, ontvangen pakkettypen/statussen, omvormers en recente fouten; maximaal 100 pakketten per aanvraag. |
 | `GET /api/v1/growatt/timeline?type=xx04&limit=100` | Gecombineerde chronologische lijst van ontvangen pakketten en TCP-gebeurtenissen, met filters `type` (`xx04` of `5004`), `address` (`50`–`53`), `view` (`all`, `packets`, `errors`, `events`) en paginering via `offset`. `has_more` geeft aan of er meer regels zijn. |
 | `GET /api/v1/growatt/frames/:id` | Eén ontvangen pakket inclusief de oorspronkelijke hex-inhoud en eventuele gedecodeerde meting. |
 | `DELETE /api/v1/growatt/diagnostics` | Verwijdert Growatt-pakketten en verbindings-/antwoordlogs, behoudt opgeslagen opbrengstmetingen; geeft verwijderde aantallen terug. De Growatt-pagina biedt hiervoor een knop met bevestiging. |

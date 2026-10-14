@@ -17,10 +17,16 @@ function main() {
   const homewizard = createHomeWizardPoller(settings, repository);
   const backups = createBackupJob(db, join(root, 'data'));
   const growatt = startGrowattServer(settings.growatt, repository);
-  const http = startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard });
+  const growattRuntime = { server: growatt, last_error: null };
+  const http = startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard, growattRuntime });
   growatt.on('listening', () => console.log(`Growatt TCP luistert op ${settings.growatt.host}:${growatt.address().port}`));
   http.on('listening', () => console.log(`ZonAPI luistert op http://${settings.http.host}:${http.address().port}`));
-  growatt.on('error', (error) => { repository.saveGrowattEvent(Date.now(), settings.growatt.host, 'listener_error', error.message); console.error('Growatt TCP:', error); process.exitCode = 1; });
+  growatt.on('error', (error) => {
+    growattRuntime.last_error = { code: error.code ?? null, message: error.message, at: new Date().toISOString() };
+    repository.saveGrowattEvent(Date.now(), settings.growatt.host, 'listener_error', error.message);
+    console.error('Growatt TCP:', error);
+    process.exitCode = 1;
+  });
   http.on('error', (error) => { console.error('HTTP:', error); process.exitCode = 1; });
   weather.start();
   homewizard.start();

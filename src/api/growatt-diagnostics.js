@@ -1,6 +1,7 @@
 import { productionResponse } from './measurements.js';
 import { decodeAnnouncement, recordLabel } from '../growatt/announcement.js';
 import { decodeRfConfiguration } from '../growatt/rf-configuration.js';
+import { growattListenerStatus } from '../growatt/listener-status.js';
 
 /** Begrenst het aantal pakketten per aanvraag; input: querywaarde of null; output: geheel getal 1..100 of fout. */
 export function growattLimitParam(value) {
@@ -32,8 +33,8 @@ export function growattTimeline(repository, filters) {
   };
 }
 
-/** Stelt de Growatt-diagnose samen; input: repository, instellingen, panelen, huidige tijd en limiet; output: JSON-geschikt overzicht. */
-export function growattOverview(repository, settings, panels, now, limit) {
+/** Stelt de Growatt-diagnose samen; input: repository, instellingen, panelen, tijd, limiet en optionele listener; output: JSON-geschikt overzicht. */
+export function growattOverview(repository, settings, panels, now, limit, growattRuntime) {
   const statuses = repository.frameStatus();
   const frames = repository.recentGrowattFrames(limit);
   const announcements = repository.latestGrowattAnnouncements().map((row) => {
@@ -42,7 +43,8 @@ export function growattOverview(repository, settings, panels, now, limit) {
   }).filter(Boolean).sort((a, b) => a.address.localeCompare(b.address));
   return {
     server_time: new Date(now).toISOString(),
-    listener: { host: settings.growatt.host, port: settings.growatt.port },
+    listener: growattListenerStatus(growattRuntime, settings.growatt),
+    database_path: repository.databasePath(),
     summary: {
       frames_total: statuses.reduce((total, row) => total + row.count, 0),
       last_received_at: frames.length ? new Date(frames[0].received_ms).toISOString() : null

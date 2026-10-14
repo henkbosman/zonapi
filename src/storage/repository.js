@@ -124,6 +124,8 @@ export function createRepository(db) {
     },
     /** Leest diagnostische frame-tellingen; input: geen; output: rijen per status. */
     frameStatus() { return db.prepare('SELECT status,COUNT(*) AS count FROM growatt_frames GROUP BY status').all(); },
+    /** Geeft het pad van de actieve hoofddatabase; input: geen; output: absoluut pad of null bij geheugenopslag. */
+    databasePath() { return db.prepare('PRAGMA database_list').all().find((item) => item.name === 'main')?.file || null; },
     /** Leest database-instantie voor gecontroleerde transacties; input: geen; output: DatabaseSync. */
     database() { return db; }
   };
