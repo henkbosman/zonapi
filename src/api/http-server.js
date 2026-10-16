@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { root } from '../config/load.js';
 import { forecastResponse, irradianceResponse } from './forecast.js';
+import { dayForecastResponse } from './day-forecast.js';
 import { productionResponse, metersResponse } from './measurements.js';
 import { productionSeries } from './production-series.js';
 import { growattLimitParam, growattOverview, growattFrameDetail, growattTimelineParams, growattTimeline } from './growatt-diagnostics.js';
@@ -28,6 +29,7 @@ const staticFiles = new Map([
   ['/dashboard.css', ['dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard.js', ['dashboard.js', 'text/javascript; charset=utf-8']],
   ['/dashboard-production-chart.js', ['dashboard-production-chart.js', 'text/javascript; charset=utf-8']],
+  ['/production-chart-series.js', ['production-chart-series.js', 'text/javascript; charset=utf-8']],
   ['/growatt.css', ['growatt.css', 'text/css; charset=utf-8']],
   ['/growatt.js', ['growatt.js', 'text/javascript; charset=utf-8']],
   ['/weather.css', ['weather.css', 'text/css; charset=utf-8']],
@@ -83,6 +85,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       const now = Date.now();
       const forecastRows = (hours) => repository.forecast(now, now + hours * 3600000);
       if (url.pathname === '/api/v1/forecast') return sendJson(response, 200, forecastResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location, now, settings.weather.stale_after_hours));
+      if (url.pathname === '/api/v1/forecast/day') return sendJson(response, 200, dayForecastResponse(repository, settings, panels, panelErrors, weather.status(), now));
       if (url.pathname === '/api/v1/irradiance') return sendJson(response, 200, irradianceResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location));
       if (url.pathname === '/api/v1/growatt') return sendJson(response, 200, growattOverview(repository, settings, panels, now, growattLimitParam(url.searchParams.get('limit')), growattRuntime));
       if (url.pathname === '/api/v1/weather') return sendJson(response, 200, weatherOverview(repository, settings, weather, now, weatherCallParams(url.searchParams)));

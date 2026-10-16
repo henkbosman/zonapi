@@ -1,4 +1,5 @@
 import { attachTimeCursor } from './chart-cursor.js';
+import { forecastLinePoints, lineValueAt } from './production-chart-series.js';
 
 const timeLabel = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit' });
 
@@ -34,7 +35,7 @@ function drawLine(svg, points, x, y, color, maxGapMs) {
   }
 }
 
-/** Tekent werkelijke opbrengst en drie uur voorspelling tussen zonsopkomst en zonsondergang; input: container, dagdata en voorspelslots; output: void. */
+/** Tekent werkelijke opbrengst en de volledige dagvoorspelling tussen zonsopkomst en zonsondergang; input: container, dagdata en voorspelslots; output: void. */
 export function drawProductionChart(container, day, slots) {
   container.replaceChildren();
   const now = Date.parse(day.now);
@@ -46,17 +47,10 @@ export function drawProductionChart(container, day, slots) {
   }
   const start = sunrise, end = sunset;
   const measured = day.points.filter((point) => Number.isFinite(point.power_w) && Date.parse(point.time) >= start && Date.parse(point.time) <= end)
-    .map((point) => ({ ms: Date.parse(point.time), value: point.power_w, count: point.active_inverters, expected: point.expected_inverters }));
-  const forecastEnd = Math.min(end, now + 3 * 3600000);
-  const forecast = [];
-  if (forecastEnd > now) {
-    for (const slot of slots) {
-      const from = Math.max(start, now, Date.parse(slot.start)), to = Math.min(forecastEnd, Date.parse(slot.end));
-      if (!Number.isFinite(slot.power_w) || !Number.isFinite(from) || !Number.isFinite(to) || from >= to) continue;
-      forecast.push({ ms: from, value: slot.power_w }, { ms: to, value: slot.power_w });
-    }
-  }
-  const svg = node('svg', { viewBox: '0 0 780 255', preserveAspectRatio: 'none', role: 'img', 'aria-label': 'Gemeten zonopbrengst en voorspelling tot drie uur na nu' });
+    .map((point) => ({ ms: Date.parse(point.time), value: point.power_w, count: point.active_inverters, expected: point.expected_inverters }))
+    .sort((a, b) => a.ms - b.ms);
+  const forecast = forecastLinePoints(slots, start, end);
+  const svg = node('svg', { viewBox: '0 0 780 255', preserveAspectRatio: 'none', role: 'group', 'aria-label': 'Gemeten en voorspelde zonopbrengst tussen zonsopkomst en zonsondergang' });
   const left = 52, right = 762, top = 20, bottom = 207;
   const maxPower = Math.max(500, Math.ceil(Math.max(0, ...measured.map((point) => point.value), ...forecast.map((point) => point.value)) / 500) * 500);
   const x = (ms) => left + (right - left) * (ms - start) / (end - start);
@@ -78,6 +72,9 @@ export function drawProductionChart(container, day, slots) {
     svg.append(node('line', { x1: nowX, x2: nowX, y1: top, y2: bottom, stroke: '#172629', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }));
     label(svg, 'Nu', Math.min(right - 12, Math.max(left + 12, nowX)), 14);
   }
-  attachTimeCursor(svg, { start, end, left, right, top, bottom, width: 780 });
+  attachTimeCursor(svg, { start, end, left, right, top, bottom, width: 780 }, [
+    { label: 'Gemeten', color: '#137771', valueAt: (ms) => lineValueAt(measured, ms, (day.fresh_minutes ?? 12) * 60000) },
+    { label: 'Voorspelling', color: '#996200', valueAt: (ms) => lineValueAt(forecast, ms, 75 * 60000) }
+  ]);
   container.append(svg);
 }

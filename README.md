@@ -33,7 +33,7 @@ Op `/growatt`, `/weather` en `/homewizard` schakelt **Logging aan / Logging uit*
 
 Logs staan aanvankelijk aan. Automatische opschoning houdt standaard de nieuwste 5000 regels per bron over; Growatt-berichten en verbindingslogs delen deze limiet. Opschoning vindt plaats bij starten en na elke 100 nieuwe logregels. SQLite hergebruikt de vrijgekomen pagina's. Stel optioneel `"logging": { "max_entries_per_source": 5000 }` in `settings.json` in; toegestaan is 100–100000. Deze limiet geldt uitsluitend voor diagnosegegevens.
 
-De Zonopbrengst-grafiek houdt de volledige daglichtas aan, ook zonder meetpunten of buiten de zonuren. Beweeg de muis over de grafiek voor een verticale lijn met tijd; de toetsen Home, End en de pijlen werken na focus op de grafiek. De gemeten opbrengst, huidige tijd en voorspelling voor maximaal drie uur blijven samen zichtbaar.
+De Zonopbrengst-grafiek toont de voorspelling van zonsopkomst tot zonsondergang, ook voor het verstreken deel van de dag. De uurpunten worden met rechte, schuine lijnen verbonden. Beweeg de muis over de grafiek voor een verticale lijn met tijd, gemeten vermogen en voorspeld vermogen in watt; de getoonde waarden volgen de getekende lijnen. Meetgaten blijven onderbroken. De toetsen Home, End en de pijlen werken na focus op de grafiek. De lijn voor de huidige tijd blijft zichtbaar. De dagvoorspelling komt uit de bestaande database en doet geen extra weerverzoeken.
 
 Het dashboard geeft per apparaat een starttijd op iedere dag van `weather.forecast_days`. De volledige cyclus moet binnen de zonuren van die dag passen. Vandaag worden alleen toekomstige starttijden gezocht. Dezelfde apparaatprofielen, basislast, reserve en minimale zonnefractie gelden als voor het bestaande ESP32-advies. Ontbrekende of verouderde gegevens worden afzonderlijk weergegeven. Het bestaande `/advice`-endpoint blijft `advice.search_hours` gebruiken; het nieuwe `/appliances/daily` gebruikt alle ingestelde voorspeldagen.
 
@@ -94,6 +94,7 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | Pad | Resultaat |
 | --- | --- |
 | `GET /api/v1/forecast?hours=3` | GHI/DNI/DHI en eigen PV-berekening voor komende uren; `power_w:null` met ontbrekende configuratie als panelen nog niet ingesteld zijn. |
+| `GET /api/v1/forecast/day` | Voorspelling voor de volledige dag uit de cache, met zonsopkomst/-ondergang en aangrenzende uurpunten voor het aansluiten van de grafieklijn op de daggrenzen. |
 | `GET /api/v1/irradiance?hours=3` | Instraling per uur en berekende GTI per paneelgroep. |
 | `GET /api/v1/production/current` | Afzonderlijke omvormers plus uitsluitend bij vier verse metingen een betrouwbare som. |
 | `GET /api/v1/production/day` | Beschikbare omvormermetingen van vandaag, samengevoegd op meettijd, met het aantal actieve omvormers per punt en zonsopgang/-ondergang. |
@@ -115,7 +116,7 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | `GET /api/v1/appliances/daily` | Per voorspelde lokale dag zontijden en startadviezen voor alle apparaatprofielen. |
 | `GET /api/v1/appliances/wasmachine/advice` | `can_start_now`, `earliest_start`, `best_start`, volledige zonnefractie en status (`ok`, `stale`, `forecast_incomplete`, enzovoort). Ook `droger` en `vaatwasser`. |
 | `GET /api/v1/status` | Bronnen, configuratiefouten, historisch aantal ontvangen frames, zontijden, gebruikt/dagmaximum en volgende weersophaling. |
-| `GET /dashboard` | Gemeten opbrengst en drie uur voorspelling op één as tussen zonsopgang en zonsondergang met lijn voor de huidige tijd; toont ook de beschikbare metingen bij minder dan vier omvormers. |
+| `GET /dashboard` | Gemeten opbrengst en de volledige dagvoorspelling tussen zonsopkomst en zonsondergang, schuine verbindingen tussen uurpunten, huidige-tijdlijn en tijd-/waardecursor; toont ook de beschikbare metingen bij minder dan vier omvormers. |
 | `GET /growatt` | Growatt-pagina met omvormermetingen, tijdlijn voor pakketten, antwoorden, tijdsynchronisatie en verbindingen, filters, verwijderknop en verversing iedere 15 seconden. |
 | `GET /weather` | Weerpagina met zontijden, bronverzoeken, fouten, instralingsgrafiek en handmatige ophaalknop, verversing iedere 15 seconden. |
 | `GET /homewizard` | Lokale meterinformatie, poll-logs, filters, logbeheer en handmatig ophalen; verversing iedere 15 seconden. |

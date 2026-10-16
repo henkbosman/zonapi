@@ -7,27 +7,44 @@ function node(tag, attributes) {
   return element;
 }
 
-/** Voegt een aanwijsbare tijdcursor toe; input: SVG en tijd-/plotgrenzen; output: void. */
-export function attachTimeCursor(svg, { start, end, left, right, top, bottom, width }) {
+/** Voegt een aanwijsbare tijd- en waardecursor toe; input: SVG, tijd-/plotgrenzen en optionele {label,color,valueAt}[]-reeksen; output: void. */
+export function attachTimeCursor(svg, { start, end, left, right, top, bottom, width }, series = []) {
   const cursor = node('g', { visibility: 'hidden', 'pointer-events': 'none', 'data-chart-cursor': '' });
   const line = node('line', { y1: top, y2: bottom, stroke: '#172629', 'stroke-width': 1.2 });
   const background = node('rect', { y: bottom + 3, width: 56, height: 22, rx: 5, fill: '#172629' });
   const text = node('text', { y: bottom + 18, fill: '#fff', 'font-size': 12, 'text-anchor': 'middle' });
   cursor.append(line, background, text);
+  const values = node('g', { 'data-chart-values': '' });
+  const boxWidth = 204;
+  const box = node('rect', { width: boxWidth, height: 14 + series.length * 23, rx: 8, fill: '#fff', stroke: '#dce8e3', 'stroke-width': 1.2 });
+  values.append(box);
+  const rows = series.map((item) => {
+    const row = node('text', { fill: item.color, 'font-size': 13, 'font-weight': 600 });
+    values.append(row);
+    return row;
+  });
+  if (series.length) cursor.append(values);
   const target = node('rect', { x: left, y: top, width: right - left, height: bottom - top, fill: 'transparent', tabindex: 0,
     role: 'slider', 'aria-label': 'Tijd in zonopbrengstgrafiek', 'aria-valuemin': start, 'aria-valuemax': end });
   let time = start;
 
-  /** Plaatst cursor en tijdlabel binnen de dagas; input: epoch-ms; output: void. */
+  /** Plaatst cursor, tijd en waarden op de getekende lijnen; input: epoch-ms; output: void. */
   function show(ms) {
-    time = Math.min(end, Math.max(start, ms));
+    time = Math.round(Math.min(end, Math.max(start, ms)));
     const x = left + (time - start) / (end - start) * (right - left);
     const center = Math.max(left + 28, Math.min(right - 28, x));
     line.setAttribute('x1', x); line.setAttribute('x2', x);
     background.setAttribute('x', center - 28); text.setAttribute('x', center);
     text.textContent = timeFormat.format(new Date(time));
+    const boxX = Math.max(left + 5, Math.min(right - boxWidth - 5, x + 12 > right - boxWidth ? x - boxWidth - 12 : x + 12));
+    box.setAttribute('x', boxX); box.setAttribute('y', top + 7);
+    for (const [index, item] of series.entries()) {
+      const value = item.valueAt(time);
+      rows[index].setAttribute('x', boxX + 12); rows[index].setAttribute('y', top + 31 + index * 23);
+      rows[index].textContent = `${item.label}: ${Number.isFinite(value) ? `${Math.round(value).toLocaleString('nl-NL')} W` : '—'}`;
+    }
     target.setAttribute('aria-valuenow', Math.round(time));
-    target.setAttribute('aria-valuetext', text.textContent);
+    target.setAttribute('aria-valuetext', [text.textContent, ...rows.map((row) => row.textContent)].join(', '));
     cursor.setAttribute('visibility', 'visible');
   }
 

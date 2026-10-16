@@ -73,3 +73,34 @@ test('daggrafiek toont drie omvormers en logs wissen bewaart hun metingen', asyn
     db.close();
   }
 });
+
+test('dagvoorspelling leest ochtend en middag uit de cache en laat het bestaande drie-uursendpoint intact', async () => {
+  const { settings: defaults } = loadConfiguration();
+  const settings = { ...defaults, http: { host: '127.0.0.1', port: 0 }, location: { latitude: 52, longitude: 5 } };
+  const panels = { inverters: [{ id: 'mic', ac_limit_w: 2000 }], groups: [{ id: 'zuid', inverter_id: 'mic', count: 5, wp_per_panel: 400, tilt_deg: 0, azimuth_deg: 180, loss_factor: 0.8 }] };
+  const db = openDatabase(':memory:');
+  const repository = createRepository(db);
+  const now = Date.now();
+  const sunrise = new Date(now - 6 * 3600000).toISOString(), sunset = new Date(now + 10 * 3600000).toISOString();
+  for (let hour = -8; hour < 13; hour++) repository.saveForecast({ source: 'open-meteo', start_ms: now + hour * 3600000, end_ms: now + (hour + 1) * 3600000, ghi: 200, dni: 0, dhi: 200, fetched_ms: now });
+  const server = startHttpServer({ settings, panels, panelErrors: [], repository, weather: { status: () => ({ sunrise, sunset }) }, homewizard: { status: () => ({ p1: null, kwh: null }) } });
+  await once(server, 'listening');
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const day = await (await fetch(`${base}/api/v1/forecast/day`)).json();
+    assert.equal(day.status, 'ok');
+    assert.equal(day.sunrise, sunrise);
+    assert.equal(day.sunset, sunset);
+    assert.ok(day.slots.some((slot) => Date.parse(slot.start) < now - 4 * 3600000));
+    assert.ok(day.slots.some((slot) => Date.parse(slot.start) > now + 8 * 3600000));
+    assert.ok(day.slots.every((slot) => slot.power_w === 320));
+    assert.equal(repository.lastCall(), null);
+    const upcoming = await (await fetch(`${base}/api/v1/forecast?hours=3`)).json();
+    assert.ok(upcoming.slots.length > 0 && upcoming.slots.length <= 4);
+    assert.ok(upcoming.slots.every((slot) => Date.parse(slot.end) > now && Date.parse(slot.start) < Date.parse(day.now) + 3 * 3600000 + 1000));
+    assert.equal((await fetch(`${base}/production-chart-series.js`)).status, 200);
+    const html = await (await fetch(`${base}/dashboard`)).text();
+    assert.match(html, /Voorspelling · hele dag/);
+    assert.doesNotMatch(html, /Voorspelling · 3 uur/);
+  } finally { await new Promise((resolve) => server.close(resolve)); db.close(); }
+});
