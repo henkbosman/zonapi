@@ -6,7 +6,7 @@ Node.js-dienst voor een Growatt ShineLanBox, lokale HomeWizard-meters, Open-Mete
 
 - Alle softwareonderdelen, database, scheduler, HomeWizard v1/v2, API, dashboard en machineberekening zijn aanwezig. Integratietests gebruiken synthetische weer- en Growatt-pakketten.
 - De Growatt-decoder gebruikt de generieke offsets uit [Grott](https://github.com/johanmeijer/grott/blob/master/grottconf.py). De ACK-volgorde, tijdopdracht en de interpretatie van de automatische `xx03`/`xx04`-rapporten zijn ook vergeleken met de onafhankelijke [growatt-protocol](https://github.com/FezVrasta/growatt-datalogger/blob/main/packages/growatt-protocol/README.md)- en [shine2mqtt](https://github.com/bremme/shine2mqtt/blob/main/docs/protocol.md)-implementaties. Bij de aangesloten ShineLanBox 7.0.0.4 zijn volgens de live-observatie `xx04`-berichten voor drie van de vier MIC 2000TL-X-omvormers ontvangen. Onbekende layouts worden in de eigen SQLite-database bewaard en als `unknown_layout` getoond. Controleer in `/growatt` het serienummer en vermogen per omvormer en vergelijk met de eigen metingen.
-- Open-Meteo en je HomeWizard-apparaten waren tijdens ontwikkeling niet vanuit dit project bereikbaar; voor live data zijn jouw locatie, paneelwaarden en lokale meteradressen nog nodig.
+- De voorbeeldconfiguratie bevat lege locatie- en meteradressen; vul daarvoor je eigen instellingen in. Een ingestelde Open-Meteo-locatie en paneelverdeling zijn direct te controleren op `/weather`.
 
 ## Snel starten op Arch Linux
 
@@ -21,9 +21,13 @@ Herstart na wijzigingen van `settings.json`, `panels.json` en `layouts/*.json`. 
 
 ### Bestaande installatie bijwerken
 
-Stop de Node-dienst en bewaar een kopie van `data/zonapi.sqlite`. Kopieer voor deze versie de mappen `src/` en `public/` uit het archief naar de bestaande installatie en start de dienst opnieuw. Behoud de eigen `config/settings.json`, `config/panels.json`, `config/appliances/` en de hele `data/`-map. Pak de voorbeeldmap `data/` niet over de installatie heen uit. De bestaande database wordt bij de eerste start gemigreerd; de opgeslagen opbrengst blijft behouden. Als `growatt.time_sync_on_announcement` ontbreekt, staat de lokale tijdsynchronisatie standaard aan; zonder `growatt.time_sync_retry_minutes` is het herhaalinterval 10 minuten. Na een nieuwe `xx03`-aanmelding staan `reply_sent` en `time_sync_sent` in `/growatt`. De dienst verstuurt opnieuw een tijdopdracht als de vier `xx04`-adressen op die verbinding uitblijven.
+Stop de Node-dienst en bewaar een kopie van `data/zonapi.sqlite`. Kopieer voor deze versie de mappen `src/` en `public/` uit het archief naar de bestaande installatie en start de dienst opnieuw. Behoud de eigen `config/settings.json`, `config/panels.json`, `config/appliances/` en de hele `data/`-map. Pak de voorbeeldmap `data/` niet over de installatie heen uit. De bestaande database krijgt bij de eerste start extra weerdiagnosekolommen; eerdere weerpogingen, historische instraling en opbrengst blijven behouden. Als `growatt.time_sync_on_announcement` ontbreekt, staat de lokale tijdsynchronisatie standaard aan; zonder `growatt.time_sync_retry_minutes` is het herhaalinterval 10 minuten. Na een nieuwe `xx03`-aanmelding staan `reply_sent` en `time_sync_sent` in `/growatt`. De dienst verstuurt opnieuw een tijdopdracht als de vier `xx04`-adressen op die verbinding uitblijven.
 
 Het losse updatearchief bevat uitsluitend `src/`, `public/` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
+
+### Weerdiagnose
+
+Open `/weather` voor de ingestelde locatie, het werkelijk opgebouwde Open-Meteo-adres, zontijden, aanvraaggeschiedenis, HTTP-status, fouttekst en opgeslagen instraling. `Nu ophalen` slaat het normale tijdsinterval over voor één poging; daglichtgrenzen en `max_requests_per_local_day` blijven gelden. Een eerdere HTTP 400 kan als oude fout zichtbaar blijven in de geschiedenis; een nieuw verzoek slaat de volledige foutreden van Open-Meteo op. Het Open-Meteo-verzoek laat `models` weg, zodat Open-Meteo zelf het standaardmodel kiest.
 
 ### Growatt-teller op nul
 
@@ -79,6 +83,8 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | `GET /api/v1/production/current` | Afzonderlijke omvormers plus uitsluitend bij vier verse metingen een betrouwbare som. |
 | `GET /api/v1/production/day` | Beschikbare omvormermetingen van vandaag, samengevoegd op meettijd, met het aantal actieve omvormers per punt en zonsopgang/-ondergang. |
 | `GET /api/v1/growatt?limit=50` | Feitelijke TCP-luisterstatus/fout, actieve databasepad, ontvangen pakkettypen/statussen, omvormers en recente fouten; maximaal 100 pakketten per aanvraag. |
+| `GET /api/v1/weather?status=all&limit=50&offset=0` | Weerstatus, aangemaakte aanvraag-URL, zoninstraling van vandaag en gefilterde, pagineerbare aanvragen met HTTP-status en foutreden. Statusfilter: `all`, `ok`, `error`, `pending`. |
+| `POST /api/v1/weather/refresh` | Probeert direct eenmaal het weer op te halen als er daglicht en dagelijks quotum beschikbaar is; resultaat bevat `attempted`, `reason` en bijgewerkte status. |
 | `GET /api/v1/growatt/timeline?type=xx04&limit=100` | Gecombineerde chronologische lijst van ontvangen pakketten en TCP-gebeurtenissen, met filters `type` (`xx04` of `5004`), `address` (`50`–`53`), `view` (`all`, `packets`, `errors`, `events`) en paginering via `offset`. `has_more` geeft aan of er meer regels zijn. |
 | `GET /api/v1/growatt/frames/:id` | Eén ontvangen pakket inclusief de oorspronkelijke hex-inhoud en eventuele gedecodeerde meting. |
 | `DELETE /api/v1/growatt/diagnostics` | Verwijdert Growatt-pakketten en verbindings-/antwoordlogs, behoudt opgeslagen opbrengstmetingen; geeft verwijderde aantallen terug. De Growatt-pagina biedt hiervoor een knop met bevestiging. |
@@ -89,6 +95,7 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | `GET /api/v1/status` | Bronnen, configuratiefouten, historisch aantal ontvangen frames, zontijden, gebruikt/dagmaximum en volgende weersophaling. |
 | `GET /dashboard` | Gemeten opbrengst en drie uur voorspelling op één as tussen zonsopgang en zonsondergang met lijn voor de huidige tijd; toont ook de beschikbare metingen bij minder dan vier omvormers. |
 | `GET /growatt` | Growatt-pagina met omvormermetingen, tijdlijn voor pakketten, antwoorden, tijdsynchronisatie en verbindingen, filters, verwijderknop en verversing iedere 15 seconden. |
+| `GET /weather` | Weerpagina met zontijden, bronverzoeken, fouten, instralingsgrafiek en handmatige ophaalknop, verversing iedere 15 seconden. |
 
 Bijvoorbeeld voor een ESP32: lees `can_start_now` alleen als `status === "ok"`; bij `null`, `stale` of ontbrekende instellingen toon je "onbekend" in plaats van "nee". `earliest_start` kan na drie uur liggen. `best_start` laat de beste optie zien als de drempel nergens wordt gehaald.
 

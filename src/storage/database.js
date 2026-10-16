@@ -24,7 +24,8 @@ export function openDatabase(path) {
     );
     CREATE TABLE IF NOT EXISTS weather_calls (
       id INTEGER PRIMARY KEY, local_date TEXT NOT NULL, attempted_ms INTEGER NOT NULL,
-      status TEXT NOT NULL, detail TEXT
+      status TEXT NOT NULL, detail TEXT, source TEXT, request_url TEXT,
+      http_status INTEGER, duration_ms INTEGER, forecast_rows INTEGER, sun_days INTEGER
     );
     CREATE INDEX IF NOT EXISTS weather_calls_date ON weather_calls(local_date);
     CREATE TABLE IF NOT EXISTS growatt_frames (
@@ -50,6 +51,11 @@ export function openDatabase(path) {
     );
     CREATE INDEX IF NOT EXISTS meter_received ON meter_measurements(device, received_ms);
   `);
+  // Bestaande weerhistorie behouden en nieuwe diagnosevelden toevoegen.
+  const weatherColumns = new Set(db.prepare('PRAGMA table_info(weather_calls)').all().map((column) => column.name));
+  for (const [name, type] of Object.entries({ source: 'TEXT', request_url: 'TEXT', http_status: 'INTEGER', duration_ms: 'INTEGER', forecast_rows: 'INTEGER', sun_days: 'INTEGER' })) {
+    if (!weatherColumns.has(name)) db.exec(`ALTER TABLE weather_calls ADD COLUMN ${name} ${type}`);
+  }
   // Oude databases hadden een verplichte frame_id; historische metingen moeten bij het wissen van ruwe berichten blijven bestaan.
   const oldFrameColumn = db.prepare('PRAGMA table_info(inverter_measurements)').all().find((column) => column.name === 'frame_id');
   if (oldFrameColumn?.notnull) {

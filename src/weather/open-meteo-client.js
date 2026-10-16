@@ -3,8 +3,17 @@ import { localDay } from './local-day.js';
 /** Bouwt Forecast API-verzoek voor één locatie; input: lat, lon, aantal dagen; output: URL. */
 export function forecastUrl(latitude, longitude, days) {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.search = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), hourly: 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation', daily: 'sunrise,sunset', timezone: 'Europe/Amsterdam', timeformat: 'unixtime', forecast_days: String(days), models: 'auto' }).toString();
+  url.search = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), hourly: 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation', daily: 'sunrise,sunset', timezone: 'Europe/Amsterdam', timeformat: 'unixtime', forecast_days: String(days) }).toString();
   return url;
+}
+
+/** Leest de foutreden van Open-Meteo; input: HTTP-response; output: tekst tot 600 tekens. */
+async function responseReason(response) {
+  const body = (await response.text()).slice(0, 2000);
+  try {
+    const json = JSON.parse(body);
+    return String(json.reason ?? json.error ?? body).slice(0, 600);
+  } catch { return body.trim().slice(0, 600); }
 }
 
 /** Normaliseert Open-Meteo-uur- en dagwaarden; input: API JSON en ophaaltijd ms; output: {rows, sun}. */
@@ -28,9 +37,23 @@ export function normalizeOpenMeteo(json, fetchedMs) {
   return { rows, sun };
 }
 
-/** Haalt uitsluitend Open-Meteo-voorspellingen op; input: locatie, dagen, optionele fetch-functie; output: genormaliseerde rijen. */
+/** Haalt uitsluitend Open-Meteo-voorspellingen op; input: locatie, dagen, optionele fetch-functie; output: genormaliseerde rijen en HTTP-metadata of fout met metadata. */
 export async function fetchOpenMeteo({ latitude, longitude, days, fetcher = fetch }) {
-  const response = await fetcher(forecastUrl(latitude, longitude, days), { signal: AbortSignal.timeout(12000) });
-  if (!response.ok) throw new Error(`Open-Meteo HTTP ${response.status}`);
-  return normalizeOpenMeteo(await response.json(), Date.now());
+  const url = forecastUrl(latitude, longitude, days);
+  const started = Date.now();
+  let response;
+  try {
+    response = await fetcher(url, { signal: AbortSignal.timeout(12000) });
+    if (!response.ok) {
+      const reason = await responseReason(response);
+      throw new Error(`Open-Meteo HTTP ${response.status}${reason ? `: ${reason}` : ''}`);
+    }
+    const result = normalizeOpenMeteo(await response.json(), Date.now());
+    return { ...result, request: { url: url.toString(), http_status: response.status, duration_ms: Date.now() - started } };
+  } catch (error) {
+    error.request_url = url.toString();
+    error.http_status = response?.status ?? null;
+    error.duration_ms = Date.now() - started;
+    throw error;
+  }
 }

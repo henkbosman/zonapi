@@ -6,6 +6,7 @@ import { forecastResponse, irradianceResponse } from './forecast.js';
 import { productionResponse, metersResponse } from './measurements.js';
 import { productionSeries } from './production-series.js';
 import { growattLimitParam, growattOverview, growattFrameDetail, growattTimelineParams, growattTimeline } from './growatt-diagnostics.js';
+import { weatherCallParams, weatherOverview } from './weather-diagnostics.js';
 import { growattListenerStatus } from '../growatt/listener-status.js';
 import { getBaseload } from '../appliances/baseload.js';
 import { loadProfiles } from '../appliances/load-profiles.js';
@@ -15,11 +16,15 @@ const staticFiles = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/dashboard', ['index.html', 'text/html; charset=utf-8']],
   ['/growatt', ['growatt.html', 'text/html; charset=utf-8']],
+  ['/weather', ['weather.html', 'text/html; charset=utf-8']],
   ['/dashboard.css', ['dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard.js', ['dashboard.js', 'text/javascript; charset=utf-8']],
   ['/dashboard-production-chart.js', ['dashboard-production-chart.js', 'text/javascript; charset=utf-8']],
   ['/growatt.css', ['growatt.css', 'text/css; charset=utf-8']],
-  ['/growatt.js', ['growatt.js', 'text/javascript; charset=utf-8']]
+  ['/growatt.js', ['growatt.js', 'text/javascript; charset=utf-8']],
+  ['/weather.css', ['weather.css', 'text/css; charset=utf-8']],
+  ['/weather.js', ['weather.js', 'text/javascript; charset=utf-8']],
+  ['/weather-chart.js', ['weather-chart.js', 'text/javascript; charset=utf-8']]
 ]);
 
 /** Schrijft JSON met vaste beveiligingsheaders; input: HTTP-response, statuscode, object; output: void. */
@@ -50,6 +55,11 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
     try {
       const url = new URL(request.url, 'http://localhost');
       if (request.method === 'DELETE' && url.pathname === '/api/v1/growatt/diagnostics') return sendJson(response, 200, repository.clearGrowattDiagnostics());
+      if (request.method === 'POST' && url.pathname === '/api/v1/weather/refresh') {
+        if (typeof weather.refresh !== 'function') return sendJson(response, 503, { error: 'Weerscheduler niet beschikbaar' });
+        void weather.refresh().then((result) => sendJson(response, 200, result)).catch((error) => sendJson(response, 500, { error: error.message }));
+        return;
+      }
       if (request.method !== 'GET') return sendJson(response, 405, { error: 'Methode niet beschikbaar' });
       if (staticFiles.has(url.pathname)) {
         const [file, type] = staticFiles.get(url.pathname);
@@ -61,6 +71,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       if (url.pathname === '/api/v1/forecast') return sendJson(response, 200, forecastResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location, now, settings.weather.stale_after_hours));
       if (url.pathname === '/api/v1/irradiance') return sendJson(response, 200, irradianceResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location));
       if (url.pathname === '/api/v1/growatt') return sendJson(response, 200, growattOverview(repository, settings, panels, now, growattLimitParam(url.searchParams.get('limit')), growattRuntime));
+      if (url.pathname === '/api/v1/weather') return sendJson(response, 200, weatherOverview(repository, settings, weather, now, weatherCallParams(url.searchParams)));
       if (url.pathname === '/api/v1/growatt/timeline') return sendJson(response, 200, growattTimeline(repository, growattTimelineParams(url.searchParams)));
       if (/^\/api\/v1\/growatt\/frames\/[1-9]\d*$/.test(url.pathname)) {
         const id = Number(url.pathname.split('/')[5]);

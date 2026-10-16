@@ -1,0 +1,15 @@
+.weather-layout .weather-kv { display:grid; grid-template-columns:190px minmax(0,1fr); gap:16px; padding:10px 0; border-bottom:1px solid var(--line); align-items:start; font-size:13px }
+.weather-layout .weather-kv:last-child { border-bottom:0 }
+.weather-kv > :first-child { color:var(--muted); font-weight:700 }
+.weather-kv code { overflow-wrap:anywhere; white-space:normal; line-height:1.65; color:var(--teal); font-size:12px }
+.weather-error { overflow-wrap:anywhere; line-height:1.5 }
+.weather-ghi { background:#daa21c }
+.weather-dni { background:#137771 }
+.weather-dhi { background:#738ebd }
+.weather-chart { min-height:230px; margin-top:19px }
+.weather-chart svg { display:block; width:100%; height:auto; max-height:260px }
+.weather-chart .axis-label { fill:var(--muted); font:12px system-ui,sans-serif }
+.weather-layout .tile .time-value { font-size:18px }
+.weather-layout .timeline-error td:first-child { border-left:3px solid #c35e42 }
+.weather-layout .refresh-button:disabled { opacity:.5; cursor:default }
+@media (max-width:790px) { .weather-layout .weather-kv { grid-template-columns:1fr; gap:5px } .weather-chart { min-height:175px } }
