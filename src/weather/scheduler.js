@@ -2,6 +2,8 @@ import { localDay } from './local-day.js';
 import { offlineSunTimes } from './solar-position.js';
 import { getIrradianceSource } from './irradiance-source.js';
 import { estimatePv } from '../pv/model.js';
+import { getCalibrationFactor } from '../pv/calibration.js';
+import { getWeatherResolution } from './resolution.js';
 
 /** Maakt een daglichtgestuurde weerscheduler; input: instellingen, panelen, fouten, repository, optionele klok/bron; output: {tick,status,start,stop}. */
 export function createWeatherScheduler({ settings, panels, panelErrors, repository, clock = () => Date.now(), source = getIrradianceSource(settings.weather.source) }) {
@@ -9,6 +11,8 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
   let inFlight = false;
   let lastError = null;
   let nextAt = null;
+  const calibrationFactor = getCalibrationFactor(settings);
+  const resolutionMinutes = getWeatherResolution(settings);
   const latitude = settings.location?.latitude;
   const longitude = settings.location?.longitude;
   const locationOk = Number.isFinite(latitude) && Number.isFinite(longitude) && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
@@ -47,7 +51,7 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
     inFlight = true;
     const id = repository.beginCall(day, now, settings.weather.source);
     try {
-      const result = await source({ latitude, longitude, days: settings.weather.forecast_days });
+      const result = await source({ latitude, longitude, days: settings.weather.forecast_days, resolutionMinutes });
       const db = repository.database();
       db.exec('BEGIN');
       try {
@@ -55,14 +59,14 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
         for (const row of result.rows) {
           repository.saveForecast(row);
           if (!panelErrors.length) {
-            const pv = estimatePv(row, panels, latitude, longitude);
+            const pv = estimatePv(row, panels, latitude, longitude, calibrationFactor);
             for (const group of pv.groups) repository.savePv({ ...row, ...group, source: row.source });
           }
         }
         db.exec('COMMIT');
       } catch (error) { db.exec('ROLLBACK'); throw error; }
       repository.finishCall(id, 'ok', {
-        detail: `${result.rows.length} uurpunten · ${result.sun.length} zonnedagen`,
+        detail: `${result.rows.length} punten · ${result.sun.length} zonnedagen`,
         request_url: result.request?.url ?? null, http_status: result.request?.http_status ?? null,
         duration_ms: result.request?.duration_ms ?? null,
         forecast_rows: result.rows.length, sun_days: result.sun.length
@@ -84,7 +88,7 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
     const day = localDay(now);
     const sun = times(day);
     const lastCall = repository.lastCall() ?? null;
-    return { source: settings.weather.source, location_configured: locationOk, fetching: inFlight, used_requests: repository.countCalls(day), max_requests: settings.weather.max_requests_per_local_day, sunrise: sun ? new Date(sun.sunrise_ms).toISOString() : null, sunset: sun ? new Date(sun.sunset_ms).toISOString() : null, next_fetch: nextAt ? new Date(nextAt).toISOString() : null, last_call: lastCall, last_error: lastError ?? (lastCall?.status === 'error' ? lastCall.detail : null) };
+    return { source: settings.weather.source, preferred_resolution_minutes: resolutionMinutes, location_configured: locationOk, fetching: inFlight, used_requests: repository.countCalls(day), max_requests: settings.weather.max_requests_per_local_day, sunrise: sun ? new Date(sun.sunrise_ms).toISOString() : null, sunset: sun ? new Date(sun.sunset_ms).toISOString() : null, next_fetch: nextAt ? new Date(nextAt).toISOString() : null, last_call: lastCall, last_error: lastError ?? (lastCall?.status === 'error' ? lastCall.detail : null) };
   }
 
   /** Probeert op verzoek eenmaal op te halen binnen daglicht en quotum; input: geen; output: Promise met ophaalresultaat. */

@@ -1,5 +1,5 @@
 import { attachTimeCursor } from './chart-cursor.js';
-import { forecastLinePoints, lineValueAt } from './production-chart-series.js';
+import { forecastLinePoints, lineValueAt, canConnectPoints } from './production-chart-series.js';
 
 const timeLabel = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit' });
 
@@ -23,7 +23,7 @@ function drawLine(svg, points, x, y, color, maxGapMs) {
   let path = '';
   for (let i = 0; i < points.length; i++) {
     const point = points[i];
-    path += `${!i || point.ms - points[i - 1].ms > maxGapMs ? 'M' : 'L'}${x(point.ms).toFixed(1)},${y(point.value).toFixed(1)} `;
+    path += `${canConnectPoints(points[i - 1], point, maxGapMs) ? 'L' : 'M'}${x(point.ms).toFixed(1)},${y(point.value).toFixed(1)} `;
   }
   svg.append(node('path', { d: path.trim(), fill: 'none', stroke: color, 'stroke-width': 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
   for (const point of points) {

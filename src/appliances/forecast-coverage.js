@@ -1,4 +1,4 @@
-/** Controleert of uurvakken een heel zoekvenster dekken; input: gesorteerde weerrijen en begin/eind-ms; output: boolean. */
+/** Controleert of voorspeltijdvakken een heel zoekvenster dekken; input: gesorteerde weerrijen en begin/eind-ms; output: boolean. */
 export function coversForecastWindow(weather, from, to) {
   let cursor = from;
   for (const row of weather) {

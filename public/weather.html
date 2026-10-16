@@ -26,7 +26,7 @@
       <div class="tile"><div class="label">Laatste poging</div><strong class="time-value" id="last-attempt">—</strong></div>
       <div class="tile"><div class="label">Laatste succes</div><strong class="time-value" id="last-success">—</strong></div>
       <div class="tile"><div class="label">Volgend verzoek</div><strong class="time-value" id="next-fetch">—</strong></div>
-      <div class="tile"><div class="label">Uurpunten vandaag</div><strong id="forecast-count">—</strong></div>
+      <div class="tile"><div class="label">Punten vandaag</div><strong id="forecast-count">—</strong></div>
     </section>
 
     <section class="full-card">
@@ -34,6 +34,7 @@
       <div class="weather-kv"><span>URL</span><code id="request-url">—</code></div>
       <div class="weather-kv"><span>Laatste fout</span><span class="weather-error" id="last-error">—</span></div>
       <div class="weather-kv"><span>Zonsopkomst / zonsondergang</span><span id="sun-times">—</span></div>
+      <div class="weather-kv"><span>Resolutie vandaag</span><span id="forecast-resolution">—</span></div>
     </section>
 
     <section class="full-card">
@@ -45,7 +46,7 @@
     <section class="full-card">
       <div class="timeline-heading"><h2>Weerverzoeken</h2><div class="log-actions"><button type="button" id="toggle-logging" class="refresh-button" aria-pressed="true" disabled>Logging —</button><button type="button" id="clear-logs" class="clear-button">Logs verwijderen</button></div></div>
       <div class="timeline-filters"><label>Status <select id="status-filter"><option value="all">Alles</option><option value="error">Fouten</option><option value="ok">Gelukt</option><option value="pending">Bezig</option></select></label></div>
-      <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Bron</th><th>Resultaat</th><th>HTTP</th><th>Duur</th><th>Uurpunten</th><th>Details</th><th></th></tr></thead><tbody id="weather-calls"></tbody></table></div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Bron</th><th>Resultaat</th><th>HTTP</th><th>Duur</th><th>Punten</th><th>Details</th><th></th></tr></thead><tbody id="weather-calls"></tbody></table></div>
       <div class="timeline-pager"><button type="button" id="newer" disabled>Nieuwer</button><span id="page-info">—</span><button type="button" id="older" disabled>Ouder</button></div>
     </section>
 

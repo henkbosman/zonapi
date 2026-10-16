@@ -1,11 +1,11 @@
 import { tiltedIrradiance } from './plane-irradiance.js';
 
-/** Berekent per omvormer geknipte AC-opbrengst; input: weeruur, paneelconfig, locatie; output: {power_w,groups} of fout. */
-export function estimatePv(row, panels, latitude, longitude) {
+/** Berekent gekalibreerde AC-opbrengst begrensd per omvormer; input: weeruur, paneelconfig, locatie en optionele positieve kalibratiefactor; output: {power_w,groups} of fout. */
+export function estimatePv(row, panels, latitude, longitude, calibrationFactor = 1) {
   const byInverter = new Map(panels.inverters.map((inverter) => [inverter.id, { inverter, groups: [], dc: 0 }]));
   for (const group of panels.groups) {
     const gti = tiltedIrradiance(row, group, latitude, longitude);
-    const dc = group.count * group.wp_per_panel * gti / 1000 * group.loss_factor;
+    const dc = group.count * group.wp_per_panel * gti / 1000 * group.loss_factor * calibrationFactor;
     const inv = byInverter.get(group.inverter_id);
     if (!inv || !Number.isFinite(dc)) throw new Error('Paneelgroep ongeldig; vul paneelconfiguratie in');
     inv.dc += dc;

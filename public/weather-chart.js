@@ -9,7 +9,7 @@ function svgNode(name, attributes, parent) {
   return node;
 }
 
-/** Tekent een instralingsreeks uit opgeslagen uurpunten; input: forecast uit /api/v1/weather, huidige ms en container; output: void. */
+/** Tekent een instralingsreeks uit opgeslagen tijdvakken; input: forecast uit /api/v1/weather, huidige ms en container; output: void. */
 export function drawRadiationChart(forecast, now, container) {
   container.replaceChildren();
   const sunrise = Date.parse(forecast.sunrise);
@@ -38,9 +38,11 @@ export function drawRadiationChart(forecast, now, container) {
     label.textContent = hour.format(time);
   }
   for (const [field, color] of [['ghi_w_m2', '#daa21c'], ['dni_w_m2', '#137771'], ['dhi_w_m2', '#738ebd']]) {
-    const points = rows.map((row) => ({ time: Date.parse(row.end), value: row[field] })).filter((row) => Number.isFinite(row.time) && Number.isFinite(row.value) && row.time >= sunrise && row.time <= sunset);
+    const points = forecastLinePoints(rows.map((row) => ({ ...row, power_w: row[field] })), sunrise, sunset);
     if (!points.length) continue;
-    svgNode('path', { d: points.map((point, index) => `${index ? 'L' : 'M'}${x(point.time).toFixed(1)},${y(point.value).toFixed(1)}`).join(' '), fill: 'none', stroke: color, 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, chart);
+    svgNode('path', { d: points.map((point, index) => `${canConnectPoints(points[index - 1], point, 75 * 60000) ? 'L' : 'M'}${x(point.ms).toFixed(1)},${y(point.value).toFixed(1)}`).join(' '), fill: 'none', stroke: color, 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, chart);
   }
   if (now >= sunrise && now <= sunset) svgNode('line', { x1: x(now), x2: x(now), y1: top, y2: bottom, stroke: '#273737', 'stroke-width': 1.5, 'stroke-dasharray': '4 4' }, chart);
 }
+import { forecastLinePoints, canConnectPoints } from './production-chart-series.js';
+

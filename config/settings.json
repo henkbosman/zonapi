@@ -10,6 +10,9 @@
     "retry_minutes": 60,
     "stale_after_hours": 4
   },
+  "pv": {
+  "calibration_factor": 1.5
+  },
   "homewizard": {
     "poll_seconds": 30,
     "connection_phases": 1,

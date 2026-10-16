@@ -1,8 +1,8 @@
 import { solarPosition } from '../weather/solar-position.js';
 
-/** Rekent horizontale instraling om naar paneelvlak (isotrope diffuse hemel); input: weeruur, paneelgroep, locatie; output: GTI W/m². */
+/** Rekent horizontale instraling om naar paneelvlak (isotrope diffuse hemel); input: weertijdvak, paneelgroep, locatie; output: GTI W/m². */
 export function tiltedIrradiance(row, group, latitude, longitude) {
-  const midpoint = (row.start_ms + row.end_ms) / 2;
+  const midpoint = ((row.sample_start_ms ?? row.start_ms) + (row.sample_end_ms ?? row.end_ms)) / 2;
   const sun = solarPosition(midpoint, latitude, longitude);
   const rad = Math.PI / 180;
   const beta = group.tilt_deg * rad;

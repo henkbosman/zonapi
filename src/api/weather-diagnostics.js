@@ -1,5 +1,7 @@
 import { localDay } from '../weather/local-day.js';
 import { irradianceRequestUrl } from '../weather/irradiance-source.js';
+import { forecastResolution, getWeatherResolution } from '../weather/resolution.js';
+import { slotMetadata } from './forecast.js';
 
 /** Leest statusfilter en paginering voor weerpogingen; input: URLSearchParams; output: {status,limit,offset} of fout. */
 export function weatherCallParams(params) {
@@ -21,17 +23,17 @@ export function weatherOverview(repository, settings, scheduler, now, filters) {
   const page = repository.recentWeatherCalls(filters.status, filters.limit, filters.offset);
   const location = settings.location ?? {};
   const validLocation = state.location_configured === true;
+  const resolutionMinutes = getWeatherResolution(settings);
   return {
     server_time: new Date(now).toISOString(),
     logging: repository.loggingStatus('weather'),
     status: state,
     location: { latitude: location.latitude ?? null, longitude: location.longitude ?? null },
     forecast_days: settings.weather.forecast_days,
-    request_url: validLocation ? irradianceRequestUrl(settings.weather.source, { ...location, days: settings.weather.forecast_days }) : null,
+    request_url: validLocation ? irradianceRequestUrl(settings.weather.source, { ...location, days: settings.weather.forecast_days, resolutionMinutes }) : null,
     last_success: repository.lastSuccessfulWeatherCall() ?? null,
-    forecast: { day, ...sunshine, rows: rows.map((row) => ({
-      start: new Date(row.start_ms).toISOString(), end: new Date(row.end_ms).toISOString(),
-      ghi_w_m2: row.ghi, dni_w_m2: row.dni, dhi_w_m2: row.dhi, fetched_at: new Date(row.fetched_ms).toISOString()
+    forecast: { day, ...sunshine, ...forecastResolution(rows), rows: rows.map((row) => ({
+      ...slotMetadata(row), ghi_w_m2: row.ghi, dni_w_m2: row.dni, dhi_w_m2: row.dhi
     })) },
     calls: { ...filters, has_more: page.has_more, rows: page.rows.map((row) => ({ ...row, attempted_at: new Date(row.attempted_ms).toISOString() })) }
   };

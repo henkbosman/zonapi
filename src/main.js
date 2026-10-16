@@ -3,6 +3,7 @@ import { loadConfiguration, root } from './config/load.js';
 import { openDatabase } from './storage/database.js';
 import { createRepository } from './storage/repository.js';
 import { createBackupJob } from './storage/backup.js';
+import { refreshPvForecast } from './pv/refresh-forecast.js';
 import { createWeatherScheduler } from './weather/scheduler.js';
 import { createHomeWizardPoller } from './homewizard/poller.js';
 import { startGrowattServer, stopGrowattServer } from './growatt/tcp-listener.js';
@@ -13,6 +14,7 @@ function main() {
   const { settings, panels, panel_errors: panelErrors } = loadConfiguration();
   const db = openDatabase(join(root, 'data/zonapi.sqlite'));
   const repository = createRepository(db, settings.logging);
+  refreshPvForecast(repository, settings, panels, panelErrors, Date.now());
   const weather = createWeatherScheduler({ settings, panels, panelErrors, repository });
   const homewizard = createHomeWizardPoller(settings, repository);
   const backups = createBackupJob(db, join(root, 'data'));

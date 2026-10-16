@@ -63,6 +63,9 @@ export function openDatabase(path) {
   for (const [name, type] of Object.entries({ source: 'TEXT', request_url: 'TEXT', http_status: 'INTEGER', duration_ms: 'INTEGER', forecast_rows: 'INTEGER', sun_days: 'INTEGER' })) {
     if (!weatherColumns.has(name)) db.exec(`ALTER TABLE weather_calls ADD COLUMN ${name} ${type}`);
   }
+  for (const table of ['forecast', 'pv_forecast']) {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((column) => column.name === 'model')) db.exec(`ALTER TABLE ${table} ADD COLUMN model TEXT`);
+  }
   // Oude databases hadden een verplichte frame_id; historische metingen moeten bij het wissen van ruwe berichten blijven bestaan.
   const oldFrameColumn = db.prepare('PRAGMA table_info(inverter_measurements)').all().find((column) => column.name === 'frame_id');
   if (oldFrameColumn?.notnull) {

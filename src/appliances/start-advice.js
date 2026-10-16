@@ -1,6 +1,7 @@
 import { estimatePv } from '../pv/model.js';
+import { getCalibrationFactor } from '../pv/calibration.js';
 
-/** Simuleert een volledig stroomprofiel tegen uurwaarden; input: apparaat, start-ms, weeruren, modelcontext; output: energie/fractie of null bij een gat. */
+/** Simuleert een volledig stroomprofiel tegen voorspeltijdvakken; input: apparaat, start-ms, weertijdvakken, modelcontext; output: energie/fractie of null bij een gat. */
 export function evaluateStart(profile, startMs, weather, context) {
   let cursor = startMs;
   let totalWh = 0;
@@ -8,13 +9,14 @@ export function evaluateStart(profile, startMs, weather, context) {
   let recordAgeMs = 0;
   const reserve = profile.reserve_w ?? context.settings.advice.reserve_w;
   const predictions = context.predictions ?? new Map();
+  const calibrationFactor = getCalibrationFactor(context.settings);
   for (const step of profile.steps) {
     const finish = cursor + step.duration_minutes * 60000;
     while (cursor < finish) {
       const row = weather.find((item) => item.start_ms <= cursor && item.end_ms > cursor);
       if (!row) return null;
       const end = Math.min(row.end_ms, finish);
-      if (!predictions.has(row.start_ms)) predictions.set(row.start_ms, estimatePv(row, context.panels, context.latitude, context.longitude).power_w);
+      if (!predictions.has(row.start_ms)) predictions.set(row.start_ms, estimatePv(row, context.panels, context.latitude, context.longitude, calibrationFactor).power_w);
       const available = Math.max(0, predictions.get(row.start_ms) - context.baseload.power_w - reserve);
       const hours = (end - cursor) / 3600000;
       totalWh += step.power_w * hours;

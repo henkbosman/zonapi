@@ -1,13 +1,14 @@
 import { createDiagnosticStore } from './diagnostics.js';
 import { createWeatherCallStore } from './weather-calls.js';
 import { createHomeWizardCallStore } from './homewizard-calls.js';
+import { forecastTimeline, pvForecastTimeline } from '../weather/forecast-timeline.js';
 
 /** Maakt beperkte databasebewerkingen; input: open SQLite DB en optionele logconfiguratie; output: repositorymethoden. */
 export function createRepository(db, logging = {}) {
   const diagnostics = createDiagnosticStore(db, logging);
   const q = {
-    forecast: db.prepare('INSERT INTO forecast VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(start_ms,end_ms) DO UPDATE SET source=excluded.source,ghi=excluded.ghi,dni=excluded.dni,dhi=excluded.dhi,fetched_ms=excluded.fetched_ms WHERE excluded.fetched_ms > forecast.fetched_ms'),
-    pv: db.prepare('INSERT INTO pv_forecast VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(group_id,start_ms,end_ms) DO UPDATE SET source=excluded.source,power_w=excluded.power_w,gti_w_m2=excluded.gti_w_m2,fetched_ms=excluded.fetched_ms WHERE excluded.fetched_ms > pv_forecast.fetched_ms'),
+    forecast: db.prepare('INSERT INTO forecast(source,start_ms,end_ms,ghi,dni,dhi,fetched_ms,model) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(start_ms,end_ms) DO UPDATE SET source=excluded.source,ghi=excluded.ghi,dni=excluded.dni,dhi=excluded.dhi,fetched_ms=excluded.fetched_ms,model=excluded.model WHERE excluded.fetched_ms > forecast.fetched_ms'),
+    pv: db.prepare('INSERT INTO pv_forecast(group_id,start_ms,end_ms,source,power_w,gti_w_m2,fetched_ms,model) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(group_id,start_ms,end_ms) DO UPDATE SET source=excluded.source,power_w=excluded.power_w,gti_w_m2=excluded.gti_w_m2,fetched_ms=excluded.fetched_ms,model=excluded.model WHERE excluded.fetched_ms >= pv_forecast.fetched_ms'),
     sun: db.prepare('INSERT INTO sun_times VALUES (?, ?, ?, ?, ?) ON CONFLICT(local_date) DO UPDATE SET sunrise_ms=excluded.sunrise_ms,sunset_ms=excluded.sunset_ms,source=excluded.source,fetched_ms=excluded.fetched_ms WHERE excluded.fetched_ms > sun_times.fetched_ms'),
     frame: db.prepare('INSERT INTO growatt_frames(received_ms,peer,protocol,record_type,status,raw) VALUES(?,?,?,?,?,?)'),
     frameUpdate: db.prepare('UPDATE growatt_frames SET status=? WHERE id=?'),
@@ -21,9 +22,9 @@ export function createRepository(db, logging = {}) {
     ...createWeatherCallStore(db, diagnostics),
     ...createHomeWizardCallStore(db, diagnostics),
     /** Slaat één nieuwer weertijdvak op; input: {source,start_ms,end_ms,ghi,dni,dhi,fetched_ms}; output: SQLite-resultaat. */
-    saveForecast(row) { return q.forecast.run(row.source, row.start_ms, row.end_ms, row.ghi, row.dni, row.dhi, row.fetched_ms); },
-    /** Slaat berekende paneelgroepuitkomst op; input: PV-rij; output: SQLite-resultaat. */
-    savePv(row) { return q.pv.run(row.group_id, row.start_ms, row.end_ms, row.source, row.power_w, row.gti_w_m2, row.fetched_ms); },
+    saveForecast(row) { return q.forecast.run(row.source, row.start_ms, row.end_ms, row.ghi, row.dni, row.dhi, row.fetched_ms, row.model ?? null); },
+    /** Slaat een paneelgroepberekening op en staat herberekenen van dezelfde weerdata toe; input: PV-rij; output: SQLite-resultaat, oudere brondata overschrijft niets. */
+    savePv(row) { return q.pv.run(row.group_id, row.start_ms, row.end_ms, row.source, row.power_w, row.gti_w_m2, row.fetched_ms, row.model ?? null); },
     /** Slaat daglichtgrenzen op; input: dag, zontijden, bron, ophaaltijd; output: SQLite-resultaat. */
     saveSun(day, sunrise, sunset, source, fetched) { return q.sun.run(day, sunrise, sunset, source, fetched); },
     /** Geeft zontijden terug; input: lokale datum; output: rij of undefined. */
@@ -118,9 +119,11 @@ export function createRepository(db, logging = {}) {
     /** Bewaart lokale HomeWizard-meting; input: meetobject; output: SQLite-resultaat. */
     saveMeter(v) { return q.meter.run(v.device, v.measured_ms, v.received_ms, v.net_power_w, v.import_kwh, v.export_kwh); },
     /** Leest voorspellingen uit een tijdvenster; input: begin en einde in ms; output: geordende rijen. */
-    forecast(from, to) { return db.prepare('SELECT * FROM forecast WHERE end_ms>? AND start_ms<? ORDER BY start_ms').all(from, to); },
+    forecast(from, to) { return forecastTimeline(db.prepare('SELECT * FROM forecast WHERE end_ms>? AND start_ms<? ORDER BY start_ms').all(from, to), from, to); },
+    /** Leest oorspronkelijke bronvakken voor herberekening van de PV-cache; input: begin/einde in ms; output: alle resoluties zonder herschikking. */
+    forecastCandidates(from, to) { return db.prepare('SELECT * FROM forecast WHERE end_ms>? AND start_ms<? ORDER BY start_ms').all(from, to); },
     /** Leest opgeslagen berekende PV-opbrengst; input: begin en einde in ms; output: rijen. */
-    pv(from, to) { return db.prepare('SELECT * FROM pv_forecast WHERE end_ms>? AND start_ms<? ORDER BY start_ms,group_id').all(from, to); },
+    pv(from, to) { return pvForecastTimeline(db.prepare('SELECT * FROM pv_forecast WHERE end_ms>? AND start_ms<? ORDER BY start_ms,group_id').all(from, to), from, to); },
     /** Leest laatste meting per omvormer; input: geen; output: rijen per serienummer. */
     currentInverters() { return db.prepare('SELECT m.* FROM inverter_measurements m WHERE NOT EXISTS (SELECT 1 FROM inverter_measurements x WHERE x.serial=m.serial AND (x.measured_ms>m.measured_ms OR (x.measured_ms=m.measured_ms AND x.received_ms>m.received_ms)))').all(); },
     /** Leest laatste meting van elk HomeWizard-apparaat; input: geen; output: rijen per apparaat. */
@@ -134,6 +137,8 @@ export function createRepository(db, logging = {}) {
       const tables = { inverter: ['inverter_measurements', 'measured_ms'], p1: ['meter_measurements', 'measured_ms'], kwh: ['meter_measurements', 'measured_ms'], irradiance: ['forecast', 'start_ms'], pv_forecast: ['pv_forecast', 'start_ms'] };
       const entry = tables[metric];
       if (!entry) throw new Error('Onbekende historie-metric');
+      if (metric === 'irradiance') return forecastTimeline(db.prepare('SELECT * FROM forecast WHERE end_ms>? AND start_ms<? ORDER BY start_ms').all(from, to), from, to).slice(0, limit);
+      if (metric === 'pv_forecast') return pvForecastTimeline(db.prepare('SELECT * FROM pv_forecast WHERE end_ms>? AND start_ms<? ORDER BY start_ms,group_id').all(from, to), from, to).slice(0, limit);
       const deviceClause = metric === 'p1' || metric === 'kwh' ? ' AND device=?' : '';
       const sql = `SELECT * FROM ${entry[0]} WHERE ${entry[1]}>=? AND ${entry[1]}<?${deviceClause} ORDER BY ${entry[1]} LIMIT ?`;
       return db.prepare(sql).all(...(deviceClause ? [from, to, metric, limit] : [from, to, limit]));

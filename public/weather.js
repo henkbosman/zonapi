@@ -33,6 +33,7 @@ function renderStatus(data) {
   element('#last-success').textContent = time(data.last_success?.attempted_ms);
   element('#next-fetch').textContent = time(state.next_fetch);
   element('#forecast-count').textContent = String(data.forecast.rows.length);
+  element('#forecast-resolution').textContent = data.forecast.resolutions_minutes?.length ? `${data.forecast.resolutions_minutes.join(' / ')} min` : '—';
   element('#request-url').textContent = data.request_url ?? '—';
   element('#last-error').textContent = state.last_error ?? '—';
   element('#sun-times').textContent = state.sunrise && state.sunset ? `${shortTime.format(new Date(state.sunrise))} / ${shortTime.format(new Date(state.sunset))}` : '—';
