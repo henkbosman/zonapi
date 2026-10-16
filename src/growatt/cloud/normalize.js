@@ -12,13 +12,23 @@ function measurementNumber(value, name, optional = false) {
   return number;
 }
 
+/** Kiest de expliciete meetklok vóór de kalenderwaarde; input: Growatt-rij en tijdzone; output: UTC-ms of null, een aanwezige ongeldige klok wordt niet door calendar vervangen. */
+function measurementTime(item, timezone) {
+  for (const field of ['time', 'last_update_time']) {
+    const value = item[field];
+    if (value === undefined || value === null || (typeof value === 'string' && !value.trim())) continue;
+    return growattTimestamp(typeof value === 'string' ? value.trim() : value, timezone);
+  }
+  return growattTimestamp(item.calendar, timezone);
+}
+
 /** Normaliseert de laatste v4-meting van één omvormer; input: API-data, opgevraagde serial/type, ontvangsttijd en tijdzone; output: omvormermeting met echte meettijd of fout. */
 export function normalizeGrowattCloud(data, device, receivedMs, timezone) {
   const rows = Array.isArray(data) ? data : data?.[device.device_type];
   if (!Array.isArray(rows)) throw new Error('Growatt: meetreeks ontbreekt in queryLastData');
   const matching = rows.filter((item) => String(item?.serialNum ?? item?.device_sn ?? '').toUpperCase() === device.serial);
   if (!matching.length) throw new Error(`Growatt: geen meting voor ${device.serial}`);
-  const dated = matching.map((item) => ({ item, ms: growattTimestamp(item.calendar, timezone) ?? growattTimestamp(item.time ?? item.last_update_time, timezone) }))
+  const dated = matching.map((item) => ({ item, ms: measurementTime(item, timezone) }))
     .filter((row) => row.ms !== null).sort((a, b) => b.ms - a.ms);
   if (!dated.length) throw new Error(`Growatt: meettijd ontbreekt of is ongeldig voor ${device.serial}`);
   const { item, ms } = dated[0];

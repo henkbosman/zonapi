@@ -9,11 +9,16 @@ import { createHomeWizardPoller } from './homewizard/poller.js';
 import { startGrowattServer, stopGrowattServer } from './growatt/tcp-listener.js';
 import { startHttpServer } from './api/http-server.js';
 import { createGrowattCloudPoller } from './growatt/cloud/poller.js';
+import { growattCloudConfig } from './growatt/cloud/config.js';
+import { repairGrowattCloudTime } from './storage/repair-growatt-cloud-time.js';
 
 /** Verbindt afzonderlijke modules tot één lokale dienst; input: geen; output: gestart proces of fout. */
 function main() {
   const { settings, panels, panel_errors: panelErrors } = loadConfiguration();
   const db = openDatabase(join(root, 'data/zonapi.sqlite'));
+  const cloudConfig = growattCloudConfig(settings);
+  const corrected = repairGrowattCloudTime(db, cloudConfig.timezone, cloudConfig.device_type);
+  if (corrected) console.log(`Growatt: meettijd van ${corrected} cloudmetingen hersteld`);
   const repository = createRepository(db, settings.logging);
   refreshPvForecast(repository, settings, panels, panelErrors, Date.now());
   const weather = createWeatherScheduler({ settings, panels, panelErrors, repository });
