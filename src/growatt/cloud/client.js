@@ -37,7 +37,7 @@ export function createGrowattCloudClient(config, token, { fetcher = fetch, clock
       result = transform(json.data);
     } catch (error) {
       failure = Object.assign(new Error(redactCloud(String(error.message ?? error), token)), { http_status: response?.status ?? null, api_code: error.api_code ?? null,
-        retry_after_ms: Math.max(retryAfter(response?.headers.get('retry-after'), clock()), Number(error.api_code) === 501 ? 300000 : 0) });
+        retry_after_ms: Math.max(retryAfter(response?.headers.get('retry-after'), clock()), [102, 501].includes(Number(error.api_code)) ? 300000 : 0) });
     }
     onCall({ attempted_ms: started, method, request_url: url.toString(), device_serial: body?.deviceSn ?? null, http_status: response?.status ?? null,
       duration_ms: Math.max(0, clock() - started), status: failure ? 'error' : 'ok', detail: failure?.message ?? null,

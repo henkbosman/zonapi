@@ -67,7 +67,7 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
           if (stopping) break;
           errors.push(`${device.serial}: ${redactCloud(error.message, token)}`);
           retryMs = Math.max(retryMs, error.retry_after_ms ?? 0);
-          if (error.http_status === 429 || [401, 403].includes(error.http_status) || Number(error.api_code) === 501) break;
+          if (error.http_status === 429 || [401, 403].includes(error.http_status) || [102, 501].includes(Number(error.api_code))) break;
         }
       }
     } catch (error) {
