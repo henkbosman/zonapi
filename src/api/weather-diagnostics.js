@@ -29,8 +29,8 @@ export function weatherOverview(repository, settings, scheduler, now, filters) {
     logging: repository.loggingStatus('weather'),
     status: state,
     location: { latitude: location.latitude ?? null, longitude: location.longitude ?? null },
-    forecast_days: settings.weather.forecast_days,
-    request_url: validLocation ? irradianceRequestUrl(settings.weather.source, { ...location, days: settings.weather.forecast_days, resolutionMinutes }) : null,
+    forecast_days: Math.max(3, settings.weather.forecast_days),
+    request_url: validLocation ? irradianceRequestUrl(settings.weather.source, { ...location, days: Math.max(3, settings.weather.forecast_days), resolutionMinutes }) : null,
     last_success: repository.lastSuccessfulWeatherCall() ?? null,
     forecast: { day, ...sunshine, ...forecastResolution(rows), rows: rows.map((row) => ({
       ...slotMetadata(row), ghi_w_m2: row.ghi, dni_w_m2: row.dni, dhi_w_m2: row.dhi

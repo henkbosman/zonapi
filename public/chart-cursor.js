@@ -15,7 +15,7 @@ export function attachTimeCursor(svg, { start, end, left, right, top, bottom, wi
   const text = node('text', { y: bottom + 18, fill: '#fff', 'font-size': 12, 'text-anchor': 'middle' });
   cursor.append(line, background, text);
   const values = node('g', { 'data-chart-values': '' });
-  const boxWidth = 204;
+  const boxWidth = Math.min(204, right - left - 10);
   const box = node('rect', { width: boxWidth, height: 14 + series.length * 23, rx: 8, fill: '#fff', stroke: '#dce8e3', 'stroke-width': 1.2 });
   values.append(box);
   const rows = series.map((item) => {

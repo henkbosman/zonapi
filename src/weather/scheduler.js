@@ -4,13 +4,13 @@ import { getIrradianceSource } from './irradiance-source.js';
 import { createPvForecastModel } from '../pv/forecast-model.js';
 import { forecastTimeline } from './forecast-timeline.js';
 import { getWeatherResolution } from './resolution.js';
+import { localDayRange } from './local-calendar.js';
 
-/** Maakt een daglichtgestuurde weerscheduler; input: instellingen, panelen, fouten, repository, optionele klok/bron; output: {tick,status,start,stop}. */
+/** Maakt een weerscheduler voor alle uren met een lokaal dagquotum; input: instellingen, panelen, fouten, repository, optionele klok/bron; output: {tick,refresh,status,start,stop}. */
 export function createWeatherScheduler({ settings, panels, panelErrors, repository, clock = () => Date.now(), source = getIrradianceSource(settings.weather.source) }) {
   let interval = null;
   let inFlight = false;
   let lastError = null;
-  let nextAt = null;
   const resolutionMinutes = getWeatherResolution(settings);
   const latitude = settings.location?.latitude;
   const longitude = settings.location?.longitude;
@@ -21,36 +21,30 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
     return repository.getSun(day) ?? (locationOk ? offlineSunTimes(day, latitude, longitude) : null);
   }
 
-  /** Leest de zonsopkomst van morgen zonder internet; input: lokale dag; output: epoch-ms of null. */
-  function tomorrowSunrise(day) {
-    const tomorrow = new Date(Date.parse(`${day}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
-    return times(tomorrow)?.sunrise_ms ?? null;
+  /** Verdeelt verzoeken over de volledige lokale dag en respecteert foutterugval; input: huidige ms; output: {reason,next_ms} zonder netwerkverzoek. */
+  function plan(now) {
+    if (!locationOk) return { reason: 'location', next_ms: null };
+    const max = settings.weather.max_requests_per_local_day;
+    if (!max) return { reason: 'paused', next_ms: null };
+    const day = localDay(now), range = localDayRange(day), last = repository.lastCall();
+    const spacing = (range.end_ms - range.start_ms) / max;
+    const wait = Math.max(spacing, last?.status === 'error' ? settings.weather.retry_minutes * 60000 : 0);
+    const next = last ? last.attempted_ms + wait : now;
+    if (repository.countCalls(day) >= max) return { reason: 'quota', next_ms: Math.max(range.end_ms, next) };
+    return { reason: now < next ? 'interval' : 'ready', next_ms: Math.max(now, next) };
   }
 
-  /** Plant ophaalpoging binnen daglicht en quotum; input: force om alleen het tijdsinterval over te slaan; output: Promise<{attempted,reason,status}>. */
+  /** Haalt instraling overdag en 's nachts op binnen interval en quotum; input: force om alleen het interval over te slaan; output: Promise<{attempted,reason,status}>. */
   async function tick(force = false) {
     const now = clock();
     const day = localDay(now);
-    const sun = times(day);
-    nextAt = sun?.sunrise_ms ?? null;
-    if (!locationOk) return { attempted: false, reason: 'location', status: status() };
-    if (!sun) return { attempted: false, reason: 'sun_times', status: status() };
-    if (!settings.weather.max_requests_per_local_day) { nextAt = null; return { attempted: false, reason: 'paused', status: status() }; }
     if (inFlight) return { attempted: false, reason: 'busy', status: status() };
-    if (now < sun.sunrise_ms) return { attempted: false, reason: 'before_sunrise', status: status() };
-    if (now >= sun.sunset_ms) { nextAt = tomorrowSunrise(day); return { attempted: false, reason: 'after_sunset', status: status() }; }
-    const max = settings.weather.max_requests_per_local_day;
-    const used = repository.countCalls(day);
-    if (used >= max) { nextAt = tomorrowSunrise(day); return { attempted: false, reason: 'quota', status: status() }; }
-    const last = repository.lastCall();
-    const spacing = Math.max(3600000, (sun.sunset_ms - sun.sunrise_ms) / Math.max(1, max - 1));
-    const minimum = last?.local_date === day && last.status === 'error' ? Math.max(spacing, settings.weather.retry_minutes * 60000) : spacing;
-    nextAt = last?.local_date === day ? last.attempted_ms + minimum : sun.sunrise_ms;
-    if (!force && now < nextAt) return { attempted: false, reason: 'interval', status: status() };
+    const scheduled = plan(now);
+    if (scheduled.reason !== 'ready' && !(force && scheduled.reason === 'interval')) return { attempted: false, reason: scheduled.reason, status: status() };
     inFlight = true;
     const id = repository.beginCall(day, now, settings.weather.source);
     try {
-      const result = await source({ latitude, longitude, days: settings.weather.forecast_days, resolutionMinutes });
+      const result = await source({ latitude, longitude, days: Math.max(3, settings.weather.forecast_days), resolutionMinutes });
       const db = repository.database();
       db.exec('BEGIN');
       try {
@@ -81,7 +75,7 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
         http_status: error.http_status ?? null, duration_ms: error.duration_ms ?? null
       });
       lastError = String(error.message ?? error);
-    } finally { inFlight = false; nextAt = now + spacing; }
+    } finally { inFlight = false; }
     return { attempted: true, reason: repository.lastCall()?.status ?? 'error', status: status() };
   }
 
@@ -91,10 +85,11 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
     const day = localDay(now);
     const sun = times(day);
     const lastCall = repository.lastCall() ?? null;
-    return { source: settings.weather.source, preferred_resolution_minutes: resolutionMinutes, location_configured: locationOk, fetching: inFlight, used_requests: repository.countCalls(day), max_requests: settings.weather.max_requests_per_local_day, sunrise: sun ? new Date(sun.sunrise_ms).toISOString() : null, sunset: sun ? new Date(sun.sunset_ms).toISOString() : null, next_fetch: nextAt ? new Date(nextAt).toISOString() : null, last_call: lastCall, last_error: lastError ?? (lastCall?.status === 'error' ? lastCall.detail : null) };
+    const next = plan(now).next_ms;
+    return { source: settings.weather.source, preferred_resolution_minutes: resolutionMinutes, location_configured: locationOk, fetching: inFlight, used_requests: repository.countCalls(day), max_requests: settings.weather.max_requests_per_local_day, sunrise: sun ? new Date(sun.sunrise_ms).toISOString() : null, sunset: sun ? new Date(sun.sunset_ms).toISOString() : null, next_fetch: next === null ? null : new Date(next).toISOString(), last_call: lastCall, last_error: lastError ?? (lastCall?.status === 'error' ? lastCall.detail : null) };
   }
 
-  /** Probeert op verzoek eenmaal op te halen binnen daglicht en quotum; input: geen; output: Promise met ophaalresultaat. */
+  /** Probeert op verzoek eenmaal op te halen binnen het dagquotum; input: geen; output: Promise met ophaalresultaat. */
   function refresh() { return tick(true); }
 
   /** Start periodieke achtergrondupdates; input: geen; output: void. */

@@ -21,21 +21,36 @@ Herstart na wijzigingen van `settings.json`, `panels.json` en `layouts/*.json`. 
 
 ### Bestaande installatie bijwerken
 
-Stop de Node-dienst en kopieer `src/` en `public/` uit het archief naar de bestaande installatie. Behoud de eigen `config/settings.json`, `config/panels.json` en `config/appliances/`. Voor de gevraagde schone start verwijder je, terwijl Node gestopt is, `data/zonapi.sqlite` en eventueel `data/zonapi.sqlite-wal` en `data/zonapi.sqlite-shm`. Laat de map `data/` bestaan; bij herstart wordt automatisch schemaversie 3 aangemaakt. De dienst kan een behouden bestaande database ook uitbreiden zonder die automatisch te wissen.
+Stop de Node-dienst en kopieer `src/` en `public/` uit het archief naar de bestaande installatie. Behoud de eigen `config/settings.json`, `config/debug.json`, `config/panels.json`, `config/appliances/` en database in `data/`. Start daarna Node opnieuw. Ontbreekt `config/debug.json`, dan wordt het automatisch aangemaakt met alle logboeken uitgeschakeld. De bestaande database en kwartiercorrecties blijven in gebruik.
 
 Het losse dashboardupdatearchief bevat uitsluitend `src/`, `public/`, `test/` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
 
-Deze update voegt kwartierpatronen en aparte basis-/correctiewaarden voor de PV-prognose toe. Automatische correctie staat standaard aan, ook als `pv.automatic_correction` nog ontbreekt. Bestaande instellingen blijven geldig: zonder `growatt.production_source` wordt uitsluitend de lokale ShineLink-bron gebruikt. Zonder `weather.resolution_minutes` worden kwartierwaarden opgehaald. Open na herstart `/dashboard` en `/api/v1/pv/corrections` voor de huidige correctie en het leerpatroon.
+Deze update voegt `debug.json`, weerophaling gedurende alle uren en ruime Zonopbrengst-grafieken voor vandaag, morgen en overmorgen toe. Automatische kwartiercorrecties blijven actief. Bestaande instellingen blijven geldig: zonder `growatt.production_source` wordt uitsluitend de lokale ShineLink-bron gebruikt. Zonder `weather.resolution_minutes` worden kwartierwaarden opgehaald. Een oude `weather.forecast_days` van `2` wordt bij het laden verhoogd tot `3`.
 
 ### Logging en dashboard
 
-Op `/growatt`, `/weather` en `/homewizard` schakelt **Logging aan / Logging uit** het bijbehorende logboek om. Elke bron heeft een eigen instelling die herstarts overleeft. De verwijderknop wist het bijbehorende logboek. Omvormer- en HomeWizard-metingen, instralingshistorie, voorspellingen en het gebruikte weerquotum blijven bewaard. De actuele bronstatus blijft ook met logging uit beschikbaar.
+Alle loginstellingen staan in **`config/debug.json`**:
 
-Logs staan aanvankelijk aan. Automatische opschoning houdt standaard de nieuwste 5000 regels per bron over; Growatt-pakketten, verbindingslogs en webverzoeken delen deze limiet. Opschoning vindt plaats bij starten en na elke 100 nieuwe logregels. SQLite hergebruikt de vrijgekomen pagina's. Stel optioneel `"logging": { "max_entries_per_source": 5000 }` in `settings.json` in; toegestaan is 100–100000. Deze limiet geldt uitsluitend voor diagnosegegevens.
+```json
+{
+  "logging": {
+    "growatt": false,
+    "weather": false,
+    "homewizard": false,
+    "max_entries_per_source": 5000
+  }
+}
+```
 
-De Zonopbrengst-grafiek toont de voorspelling van zonsopkomst tot zonsondergang, ook voor het verstreken deel van de dag. De voorspellingen worden met rechte, schuine lijnen tussen de middelpunten van hun tijdvakken verbonden. De gemeten lijn toont uitsluitend de totale opbrengst van alle ingestelde omvormers en verbindt de totaalpunten, ook bij langere meetintervallen. Gelijktijdig binnenkomende omvormermetingen worden samengevoegd tot één punt per meetronde; losse tussenstanden worden niet getekend. Alleen recente waarden binnen `growatt.fresh_minutes` tellen in een totaal mee. De kaart **Zonnepanelen nu** en de grafiek **Gemeten opwek** gebruiken eveneens totalen.
+Zet per bron `true` om te loggen en `false` om logging uit te zetten. Bestandswijzigingen worden direct gelezen, zonder herstart. Op `/growatt`, `/weather` en `/homewizard` schrijft **Logging aan / Logging uit** dezelfde instelling naar `debug.json`. Het bestand bepaalt ook na een databasevervanging de actieve logschakelaars. De vroegere `logging`-instelling in `settings.json` wordt niet meer gebruikt. Bij een onleesbaar of ongeldig debugbestand tijdens bedrijf stopt de diagnoseopslag; de logstatus geeft de configuratiefout terug.
 
-De groepeertijd is standaard 60 seconden voor ShineLink en gelijk aan `growatt.cloud.poll_seconds` voor de cloudbron of automatische bronkeuze. Met het optionele `growatt.overview_group_seconds` kun je deze tijd aanpassen (1–86400 seconden). Dit verandert uitsluitend de groepering in het overzicht; alle oorspronkelijke omvormermetingen blijven bewaard. Beweeg de muis over de grafiek voor een verticale lijn met tijd, gemeten totaalvermogen en voorspeld vermogen in watt; de waarden volgen de getekende lijnen. De toetsen Home, End en de pijlen werken na focus op de grafiek. De lijn voor de huidige tijd blijft zichtbaar. De dagvoorspelling komt uit de bestaande database en doet geen extra weerverzoeken.
+De verwijderknop wist het bijbehorende logboek. Omvormer- en HomeWizard-metingen, instralingshistorie, voorspellingen, kwartiercorrecties en het gebruikte weerquotum blijven bewaard. De actuele bronstatus blijft ook met logging uit beschikbaar.
+
+Logs staan aanvankelijk uit. Bij ingeschakelde logging houdt automatische opschoning standaard de nieuwste 5000 regels per bron over; Growatt-pakketten, verbindingslogs en webverzoeken delen deze limiet. Opschoning vindt plaats bij starten en na elke 100 nieuwe logregels. SQLite hergebruikt de vrijgekomen pagina's. `logging.max_entries_per_source` in `debug.json` is instelbaar van 100 tot 100000.
+
+Het dashboard toont drie Zonopbrengst-grafieken: **Vandaag**, **Morgen** en **Overmorgen**. Elke grafiek is 360 pixels hoog, past zich aan de beschikbare breedte aan en gebruikt de eigen zonsopkomst en zonsondergang. Vandaag blijft ook de voorspelling voor het verstreken deel van de dag zichtbaar. De voorspellingen worden met rechte, schuine lijnen tussen de middelpunten van hun tijdvakken verbonden. De gemeten lijn van vandaag toont uitsluitend de totale opbrengst van alle ingestelde omvormers en verbindt de totaalpunten, ook bij langere meetintervallen. Gelijktijdig binnenkomende omvormermetingen worden samengevoegd tot één punt per meetronde; losse tussenstanden worden niet getekend. Alleen recente waarden binnen `growatt.fresh_minutes` tellen in een totaal mee. De kaart **Zonnepanelen nu** en de grafiek **Gemeten opwek** gebruiken eveneens totalen.
+
+De groepeertijd is standaard 60 seconden voor ShineLink en gelijk aan `growatt.cloud.poll_seconds` voor de cloudbron of automatische bronkeuze. Met het optionele `growatt.overview_group_seconds` kun je deze tijd aanpassen (1–86400 seconden). Dit verandert uitsluitend de groepering in het overzicht; alle oorspronkelijke omvormermetingen blijven bewaard. Beweeg de muis over een grafiek voor een verticale lijn met tijd en voorspeld vermogen in watt; vandaag wordt ook het gemeten totaalvermogen getoond. De waarden volgen de getekende lijnen. De toetsen Home, End en de pijlen werken na focus op de grafiek. Binnen de zonuren van vandaag blijft de lijn voor de huidige tijd zichtbaar. De drie dagvoorspellingen komen uit één cache-aanvraag en veroorzaken geen extra weerverzoeken. Handmatige kalibratie en geleerde kwartiercorrecties gelden voor alle drie de grafieken.
 
 Het dashboard geeft per apparaat een starttijd op iedere dag van `weather.forecast_days`. De volledige cyclus moet binnen de zonuren van die dag passen. Vandaag worden alleen toekomstige starttijden gezocht. Dezelfde apparaatprofielen, basislast, reserve en minimale zonnefractie gelden als voor het bestaande ESP32-advies. Ontbrekende of verouderde gegevens worden afzonderlijk weergegeven. Het bestaande `/advice`-endpoint blijft `advice.search_hours` gebruiken; het nieuwe `/appliances/daily` gebruikt alle ingestelde voorspeldagen.
 
@@ -87,7 +102,9 @@ Bij systemd kun je optioneel `/etc/zonapi/growatt.env` met `GROWATT_API_TOKEN=..
 
 ### Weerdiagnose
 
-Open `/weather` voor de ingestelde locatie, het werkelijk opgebouwde Open-Meteo-adres, zontijden, resolutie, aanvraaggeschiedenis, HTTP-status, fouttekst en opgeslagen instraling. `Nu ophalen` slaat het normale tijdsinterval over voor één poging; daglichtgrenzen en `max_requests_per_local_day` blijven gelden. Een eerdere HTTP 400 kan als oude fout zichtbaar blijven in de geschiedenis; een nieuw verzoek slaat de volledige foutreden van Open-Meteo op.
+Open `/weather` voor de ingestelde locatie, het werkelijk opgebouwde Open-Meteo-adres, zontijden, resolutie, aanvraaggeschiedenis, HTTP-status, fouttekst en opgeslagen instraling. `Nu ophalen` slaat het normale tijdsinterval over voor één poging; `max_requests_per_local_day` blijft gelden. Een eerdere HTTP 400 kan als oude fout zichtbaar blijven in de geschiedenis; een nieuw verzoek slaat de volledige foutreden van Open-Meteo op.
+
+De weerscheduler haalt gedurende de hele dag op, ook 's avonds en 's nachts. Normale verzoeken worden over de volledige Nederlandse kalenderdag verdeeld: bij 12 verzoeken per dag ongeveer iedere twee uur. De verdeling houdt rekening met dagen van 23 of 25 uur bij de overgang naar zomer- of wintertijd. Het dagquotum, de laatste poging en de foutwachttijd blijven na een herstart behouden. Wissen of uitschakelen van logs reset deze planning niet. Zonsopkomst en zonsondergang bepalen de grafiekgrenzen en apparaatadviezen.
 
 ### Kwartierprognose
 
@@ -95,7 +112,7 @@ ZonAPI vraagt standaard GHI, DNI en DHI per 15 minuten op via Open-Meteo. Eén g
 
 De bronwaarden zijn gemiddelden over het voorafgaande kwartier of uur. De API zet ze om naar UTC-intervallen en rekent daarna zelf de paneelopbrengst uit. Opslag, grafieken, historie en apparaatadviezen gebruiken dezelfde selectie: nieuwere ophaaltijd gaat voor, bij gelijke ophaaltijd gaat de fijnste resolutie voor. Uur- en kwartierwaarden worden niet dubbel geteld. De oorspronkelijke intervallen en modelnamen blijven opgeslagen, ook als slechts een deel van een uur als terugval wordt gebruikt.
 
-De bestaande daglichtplanning, daglimiet en kalibratiefactor blijven gelden; de kwartierresolutie verhoogt de ophaalfrequentie niet. Nieuwe kwartierdata komt bij de eerstvolgende geplande ophaalpoging beschikbaar, of via **Nu ophalen** op `/weather`. Daar staat onder **Resolutie vandaag** bijvoorbeeld `15 min` of `15 / 60 min`.
+De daglimiet en kalibratiefactor blijven gelden; de kwartierresolutie verhoogt de ophaalfrequentie niet. Nieuwe kwartierdata komt bij de eerstvolgende geplande ophaalpoging beschikbaar, of via **Nu ophalen** op `/weather`. Daar staat onder **Resolutie vandaag** bijvoorbeeld `15 min` of `15 / 60 min`.
 
 Optioneel kun je in de bestaande `weather`-sectie `"resolution_minutes": 15` opnemen. Met `60` wordt uitsluitend de oorspronkelijke uurvoorspelling aangevraagd, met automatische modelkeuze. Herstart Node na wijzigen. De voorspelling- en instralingendpoints geven `resolution_minutes` (fijnste bronresolutie), `resolutions_minutes` en `mixed_resolution` terug. Ieder slot bevat ook `model`, de effectieve `resolution_minutes` en de oorspronkelijke `source_resolution_minutes`.
 
@@ -117,13 +134,13 @@ Vergelijk `database_path` met het databasebestand van de bestaande installatie. 
 | --- | --- |
 | `settings.json > location` | Breedte- en lengtegraad van je locatie. Er wordt vóór dit is ingevuld geen extern weerverzoek gedaan. |
 | `settings.json > pv.calibration_factor` | Optioneel; standaard `1.0`. Vermenigvuldigt de berekende paneelopbrengst vóór begrenzing per omvormer. Een getal >0 en <=10; bijvoorbeeld `1.78` voor 78% meer opbrengst. |
-| `settings.json > logging.max_entries_per_source` | Optioneel; standaard 5000 diagnostische regels per bron. Logschakelaars worden via het dashboard in de database bewaard. |
+| `debug.json > logging` | `growatt`, `weather` en `homewizard`: booleans, standaard `false`. `max_entries_per_source`: standaard 5000, instelbaar 100–100000. Bestandswijzigingen gelden direct; dashboardknoppen schrijven hetzelfde bestand. |
 | `settings.json > http` | LAN-IP en HTTP-poort voor ESP32's/dashboard. Begint uit voorzorg op `127.0.0.1`. |
 | `settings.json > growatt` | LAN-IP/poort voor ShineLanBox; standaard 5279, verwacht vier omvormers. `idle_timeout_minutes` is standaard 30 (instelbaar 1–120). `time_sync_on_announcement` is standaard `true`, ook in bestaande configuraties zonder dit veld. `time_sync_retry_minutes` is standaard 10 (instelbaar 1–120). |
 | `settings.json > growatt.production_source` | Optioneel; `shinelink` (standaard), `cloud` of `auto`. |
 | `settings.json > growatt.cloud` | Token of `token_env`, HTTPS-serveradres, optionele installatie-ID, interval en daglichtkeuze voor de Growatt-webbron. Zie de web-API-instructies hierboven. |
-| `settings.json > weather.max_requests_per_local_day` | Standaard 12, instelbaar 0–48; `0` pauzeert de externe bron. Een mislukte poging telt mee; teller overleeft herstart. Alleen tussen zonsopkomst en zonsondergang, met minimaal ongeveer één uur tussen normale pogingen. |
-| `settings.json > weather.forecast_days` | Standaard 3, instelbaar 2–16; verleng als het adviesvenster veel langer dan 24 uur wordt. Buiten de native kwartierhorizon worden uurwaarden gebruikt. |
+| `settings.json > weather.max_requests_per_local_day` | Standaard 12, instelbaar 0–48; `0` pauzeert de externe bron. Verdeeld over alle uren, ook 's nachts. Een mislukte poging telt mee; de teller overleeft herstart. |
+| `settings.json > weather.forecast_days` | Standaard 3, instelbaar 3–16; een oude waarde `2` wordt als `3` geladen. Buiten de native kwartierhorizon worden uurwaarden gebruikt. |
 | `settings.json > weather.resolution_minutes` | Optioneel; standaard `15`. Vraagt kwartierwaarden met uurterugval op; `60` vraagt uitsluitend uurwaarden op. |
 | `settings.json > advice.search_hours` | Standaard 24; advies controleert ook de **volledige** cyclus voorbij dat laatste starttijdstip. |
 | `settings.json > advice.min_solar_share` | Standaard `0.7` (70% van de voorspelde apparaatenergie uit eigen opwek). Apparaten mogen een eigen `min_solar_share` hebben; netafname blijft mogelijk. |
@@ -203,7 +220,8 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | Pad | Resultaat |
 | --- | --- |
 | `GET /api/v1/forecast?hours=3` | GHI/DNI/DHI en eigen PV-berekening voor komende uren; `power_w:null` met ontbrekende configuratie als panelen nog niet ingesteld zijn. |
-| `GET /api/v1/forecast/day` | Voorspelling voor de volledige dag uit de cache, met zonsopkomst/-ondergang en aangrenzende tijdvakken voor het aansluiten van de grafieklijn op de daggrenzen. |
+| `GET /api/v1/forecast/day` | Voorspelling voor vandaag uit de cache met zonsopkomst/-ondergang en aangrenzende tijdvakken; optioneel `?date=YYYY-MM-DD` voor een andere kalenderdag. |
+| `GET /api/v1/forecast/days` | Vandaag, morgen en overmorgen met eigen datums, zonuren en gecorrigeerde voorspelslots; leest uitsluitend de cache. |
 | `GET /api/v1/pv/corrections` | Actieve correctie-instellingen, laatste factor en alle 96 klokkwartieren met basis-/meetvermogen en tijden. |
 | `GET /api/v1/irradiance?hours=3` | Instraling per kwartier met uurterugval en berekende GTI per paneelgroep. |
 | `GET /api/v1/production/current` | Afzonderlijke omvormers plus uitsluitend bij vier verse metingen een betrouwbare som. |
@@ -213,9 +231,9 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | `POST /api/v1/growatt/cloud/poll` | Eén ophaalpoging als het ingestelde interval en eventuele foutwachttijd verstreken zijn. |
 | `GET /api/v1/growatt/cloud/calls/:id` | HTTP-metadata en geschoond JSON-antwoord van één opgeslagen webverzoek. |
 | `GET /api/v1/weather?status=all&limit=50&offset=0` | Weerstatus, aangemaakte aanvraag-URL, zoninstraling van vandaag en gefilterde, pagineerbare aanvragen met HTTP-status en foutreden. Statusfilter: `all`, `ok`, `error`, `pending`. |
-| `POST /api/v1/weather/refresh` | Probeert direct eenmaal het weer op te halen als er daglicht en dagelijks quotum beschikbaar is; resultaat bevat `attempted`, `reason` en bijgewerkte status. |
+| `POST /api/v1/weather/refresh` | Probeert direct eenmaal het weer op te halen binnen het dagelijkse quotum, ook 's nachts; resultaat bevat `attempted`, `reason` en bijgewerkte status. |
 | `GET /api/v1/:source/logging` | Logstatus voor `growatt`, `weather` of `homewizard`. |
-| `PUT /api/v1/:source/logging?enabled=false` | Logging uitzetten; `enabled=true` zet logging aan. |
+| `PUT /api/v1/:source/logging?enabled=false` | Logging uitzetten in `debug.json`; `enabled=true` zet logging aan. |
 | `DELETE /api/v1/weather/diagnostics` | Wist weerlogs met behoud van dagquotum, planning, instraling en actuele status. |
 | `GET /api/v1/homewizard?device=all&status=all&limit=50&offset=0` | Lokale meterinformatie, actuele bronstatus en gefilterde verzoeken. `device`: `all`, `p1`, `kwh`; `status`: `all`, `ok`, `error`. |
 | `POST /api/v1/homewizard/poll` | Leest eenmaal de ingestelde lokale meters. |
@@ -229,7 +247,7 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | `GET /api/v1/appliances/daily` | Per voorspelde lokale dag zontijden en startadviezen voor alle apparaatprofielen. |
 | `GET /api/v1/appliances/wasmachine/advice` | `can_start_now`, `earliest_start`, `best_start`, volledige zonnefractie en status (`ok`, `stale`, `forecast_incomplete`, enzovoort). Ook `droger` en `vaatwasser`. |
 | `GET /api/v1/status` | Bronnen, configuratiefouten, historisch aantal ontvangen frames, zontijden, gebruikt/dagmaximum en volgende weersophaling. |
-| `GET /dashboard` | Gemeten opbrengst en de volledige dagvoorspelling tussen zonsopkomst en zonsondergang, verbonden totaalpunten en voorspeltijdvakken, huidige-tijdlijn en tijd-/waardecursor. |
+| `GET /dashboard` | Ruime daggrafieken voor vandaag, morgen en overmorgen, elk tussen eigen zonuren, met verbonden voorspeltijdvakken en tijd-/waardecursor; vandaag ook gemeten totaalpunten en huidige-tijdlijn. |
 | `GET /growatt` | Growatt-pagina met omvormermetingen, tijdlijn voor pakketten, antwoorden, tijdsynchronisatie en verbindingen, filters, verwijderknop en verversing iedere 15 seconden. |
 | `GET /weather` | Weerpagina met zontijden, bronverzoeken, fouten, instralingsgrafiek en handmatige ophaalknop, verversing iedere 15 seconden. |
 | `GET /homewizard` | Lokale meterinformatie, poll-logs, filters, logbeheer en handmatig ophalen; verversing iedere 15 seconden. |
@@ -249,4 +267,4 @@ Een ontvangen `5004` verschijnt als omvormermeting onder het serienummer van adr
 
 ## Testen
 
-`npm test` voert de offline integratietests uit voor automatische kwartiercorrecties zonder stapeling, toekomst versus bevroren historie, patronen voor overmorgen met uurterugval, atomair bijwerken en opslagfouten, behoud van patronen na logbeheer/herstart, uniforme API-/apparaatadviezen, de Growatt-webadapter en tokenafscherming, meettijdvoorkeur en tijdzoneconversie van bron tot tabel, herstel van bewaarde cloudhistorie, bronkeuze zonder dubbeltelling, cloudhistorie/basislast, foutterugval en herstart, kwartiernormalisatie, modelkeuze, gemengde resoluties, database-migratie en overschrijven, daglichtquota, meerdere TCP-fragmenten/CRC/ACK/tijdcommando, meerdere verbindingen, totalen van vier omvormers met ongelijke meettijden, onafhankelijke webmetingverversing op de Growatt-pagina bij logfouten, vaste daglichtgrenzen en verbonden meetpunten met grafiekcursor, begrensde logs en uitschakelen met behoud van metingen/quota, HomeWizard-diagnose en dagadviezen rond wintertijd. De tests versturen niets naar externe diensten; de webadapter gebruikt gedocumenteerde antwoordfixtures, geen live Growatt-account.
+`npm test` controleert debugbestandbeheer en dashboard-logschakelaars, behoud van metingen en quota met logging uit, nachtelijke weerplanning en daglimieten rond zomer-/wintertijd, drie daggrafieken met eigen zonuren en cursors bij verschillende schermbreedtes, geleerde kwartiercorrecties voor toekomstige dagen, Growatt-frequentiebeperking en meettijden, bronkeuze zonder dubbeltelling, TCP-verwerking, database-migraties, kwartier-/uurselectie, HomeWizard en apparaatadviezen. De tests gebruiken lokale fixtures en simulaties van de externe bronnen.

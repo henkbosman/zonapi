@@ -11,6 +11,7 @@ export function setupDiagnosticControls(source, refresh, afterClear = () => {}) 
     toggle.textContent = enabled ? 'Logging aan' : 'Logging uit';
     toggle.setAttribute('aria-pressed', String(enabled));
     toggle.dataset.enabled = String(enabled);
+    toggle.title = logging.error ?? '';
     if (!busy) toggle.disabled = false;
   }
 

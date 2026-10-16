@@ -104,7 +104,7 @@ async function fetchNow() {
     const result = await request('/api/v1/weather/refresh', { method: 'POST' });
     await refresh();
     if (!result.attempted) {
-      const reasons = { quota: 'Daglimiet bereikt', paused: 'Weerbron gepauzeerd', before_sunrise: 'Voor zonsopkomst', after_sunset: 'Na zonsondergang', busy: 'Verzoek loopt al', interval: 'Nog niet gepland', location: 'Locatie ontbreekt', sun_times: 'Zontijden ontbreken' };
+      const reasons = { quota: 'Daglimiet bereikt', paused: 'Weerbron gepauzeerd', busy: 'Verzoek loopt al', interval: 'Nog niet gepland', location: 'Locatie ontbreekt' };
       element('#connection').textContent = reasons[result.reason] ?? result.reason;
     }
   } catch (error) { element('#connection').textContent = `Fout: ${error.message}`; }

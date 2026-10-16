@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { loadConfiguration, root } from './config/load.js';
+import { createDebugConfiguration } from './config/debug.js';
 import { openDatabase } from './storage/database.js';
 import { createRepository } from './storage/repository.js';
 import { createBackupJob } from './storage/backup.js';
@@ -17,11 +18,12 @@ import { currentProductionRows } from './production/source.js';
 /** Verbindt afzonderlijke modules tot één lokale dienst; input: geen; output: gestart proces of fout. */
 function main() {
   const { settings, panels, panel_errors: panelErrors } = loadConfiguration();
+  const debug = createDebugConfiguration(join(root, 'config/debug.json'));
   const db = openDatabase(join(root, 'data/zonapi.sqlite'));
   const cloudConfig = growattCloudConfig(settings);
   const corrected = repairGrowattCloudTime(db, cloudConfig.timezone, cloudConfig.device_type);
   if (corrected) console.log(`Growatt: meettijd van ${corrected} cloudmetingen hersteld`);
-  const repository = createRepository(db, settings.logging);
+  const repository = createRepository(db, debug);
   refreshPvForecast(repository, settings, panels, panelErrors, Date.now());
   const weather = createWeatherScheduler({ settings, panels, panelErrors, repository });
   const homewizard = createHomeWizardPoller(settings, repository);

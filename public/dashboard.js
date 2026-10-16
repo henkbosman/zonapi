@@ -1,10 +1,11 @@
-import { drawProductionChart } from './dashboard-production-chart.js';
+import { setupProductionDayCharts } from './dashboard-production-days.js';
 import { renderDailyAdvice } from './dashboard-daily-advice.js';
 
 /** Zoekt één dashboardelement; input: CSS-selector; output: Element of null. */
 const $ = (selector) => document.querySelector(selector);
 const dutchTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit' });
 const dutchDay = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const renderProductionDays = setupProductionDayCharts();
 
 /** Leest één endpoint met expliciete foutstatus; input: pad; output: Promise<JSON> of fout. */
 async function json(path) {
@@ -84,11 +85,12 @@ function renderStatus(status) {
 /** Haalt huidige gegevens, grafieken en apparaatadviezen op; input: geen; output: Promise<void>. */
 async function refresh() {
   try {
-    const [status, forecast, profiles, production, daily] = await Promise.all([
-      json('/api/v1/status'), json('/api/v1/forecast/day'), json('/api/v1/appliances'), json('/api/v1/production/day'), json('/api/v1/appliances/daily')
+    const [status, forecasts, profiles, production, daily] = await Promise.all([
+      json('/api/v1/status'), json('/api/v1/forecast/days'), json('/api/v1/appliances'), json('/api/v1/production/day'), json('/api/v1/appliances/daily')
     ]);
+    const forecast = forecasts.days[0];
     renderStatus(status);
-    drawProductionChart($('#pv-chart'), production, forecast.slots);
+    renderProductionDays(forecasts.days, production);
     const correction = forecast.automatic_correction;
     $('#pv-correction').textContent = correction?.status === 'active'
       ? `Correctie ${correction.latest.correction_percent > 0 ? '+' : ''}${correction.latest.correction_percent.toLocaleString('nl-NL')}% · Patroon ${correction.learned_quarters}/96` : '';

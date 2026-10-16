@@ -1,8 +1,7 @@
 const sources = ['growatt', 'weather', 'homewizard'];
 
-/** Beheert loginstellingen en begrensde diagnoseopslag; input: SQLite en optionele logconfiguratie; output: opslagmethoden. */
+/** Beheert begrensde diagnoseopslag; input: SQLite en optionele debugbestandbeheerder of losse logconfiguratie; output: opslagmethoden. */
 export function createDiagnosticStore(db, config = {}) {
-  const maxEntries = config.max_entries_per_source ?? 5000;
   const writes = new Map();
   const read = db.prepare('SELECT enabled FROM diagnostic_settings WHERE source=?');
   const state = db.prepare('INSERT INTO diagnostic_state(source,name,value) VALUES(?,?,?) ON CONFLICT(source,name) DO UPDATE SET value=excluded.value');
@@ -10,14 +9,22 @@ export function createDiagnosticStore(db, config = {}) {
   /** Controleert een logbron; input: bronnaam; output: void of fout. */
   function check(source) { if (!sources.includes(source)) throw new Error('Onbekende logbron'); }
 
-  /** Leest de bewaarde logschakelaar; input: bronnaam; output: {enabled,max_entries}. */
-  function loggingStatus(source) { check(source); return { enabled: read.get(source)?.enabled !== 0, max_entries: maxEntries }; }
+  /** Leest de actuele logschakelaar uit debug.json of een zelfstandige opslag; input: bronnaam; output: enabled, bewaarlimiet en eventuele configuratiefout. */
+  function loggingStatus(source) {
+    check(source);
+    if (typeof config.readLogging === 'function') {
+      const current = config.readLogging();
+      return { enabled: current[source], max_entries: current.max_entries_per_source, error: current.error };
+    }
+    return { enabled: read.get(source)?.enabled !== 0, max_entries: config.max_entries_per_source ?? 5000 };
+  }
 
-  /** Bewaart een logschakelaar voor volgende herstarts; input: bron en boolean; output: loginstelling. */
+  /** Bewaart een logschakelaar in debug.json of zelfstandige opslag; input: bron en boolean; output: actuele loginstelling. */
   function setLogging(source, enabled) {
     check(source);
     if (typeof enabled !== 'boolean') throw new Error('enabled moet true of false zijn');
-    db.prepare('INSERT INTO diagnostic_settings VALUES(?,?) ON CONFLICT(source) DO UPDATE SET enabled=excluded.enabled').run(source, Number(enabled));
+    if (typeof config.setLogging === 'function') config.setLogging(source, enabled);
+    else db.prepare('INSERT INTO diagnostic_settings VALUES(?,?) ON CONFLICT(source) DO UPDATE SET enabled=excluded.enabled').run(source, Number(enabled));
     return loggingStatus(source);
   }
 
@@ -39,6 +46,7 @@ export function createDiagnosticStore(db, config = {}) {
       writes.set(source, count);
       if (count % 100 !== 0) return;
     }
+    const maxEntries = loggingStatus(source).max_entries;
     if (source === 'growatt') {
       const kept = db.prepare(`SELECT kind,MIN(id) AS first_id FROM (
         SELECT * FROM (SELECT id,received_ms AS at_ms,'frame' AS kind FROM growatt_frames

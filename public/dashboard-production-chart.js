@@ -35,8 +35,8 @@ function drawLine(svg, points, x, y, color, maxGapMs) {
   }
 }
 
-/** Tekent verbonden totaalmomenten en de volledige dagvoorspelling binnen de zonuren; input: container, dagdata en voorspelslots; output: void. */
-export function drawProductionChart(container, day, slots) {
+/** Tekent een ruime daggrafiek binnen de zonuren; input: container, dagdata, voorspelslots en optioneel forecastOnly; output: void met tijd-/waardecursor. */
+export function drawProductionChart(container, day, slots, { forecastOnly = false } = {}) {
   container.replaceChildren();
   const now = Date.parse(day.now);
   const sunrise = Date.parse(day.sunrise), sunset = Date.parse(day.sunset);
@@ -46,12 +46,14 @@ export function drawProductionChart(container, day, slots) {
     container.append(empty); return;
   }
   const start = sunrise, end = sunset;
-  const measured = day.points.filter((point) => point.active_inverters === point.expected_inverters && Number.isFinite(point.power_w) && Date.parse(point.time) >= start && Date.parse(point.time) <= end)
+  const measured = (forecastOnly ? [] : day.points).filter((point) => point.active_inverters === point.expected_inverters && Number.isFinite(point.power_w) && Date.parse(point.time) >= start && Date.parse(point.time) <= end)
     .map((point) => ({ ms: Date.parse(point.time), value: point.power_w, count: point.active_inverters, expected: point.expected_inverters }))
     .sort((a, b) => a.ms - b.ms);
   const forecast = forecastLinePoints(slots, start, end);
-  const svg = node('svg', { viewBox: '0 0 780 255', preserveAspectRatio: 'none', role: 'group', 'aria-label': 'Gemeten en voorspelde zonopbrengst tussen zonsopkomst en zonsondergang' });
-  const left = 52, right = 762, top = 20, bottom = 207;
+  const width = Math.max(280, container.clientWidth || 780), height = 360;
+  const svg = node('svg', { viewBox: `0 0 ${width} ${height}`, width, height, preserveAspectRatio: 'xMinYMin meet', role: 'group',
+    'aria-label': forecastOnly ? 'Voorspelde zonopbrengst tussen zonsopkomst en zonsondergang' : 'Gemeten en voorspelde zonopbrengst tussen zonsopkomst en zonsondergang' });
+  const left = 52, right = width - 18, top = 24, bottom = height - 48;
   const maxPower = Math.max(500, Math.ceil(Math.max(0, ...measured.map((point) => point.value), ...forecast.map((point) => point.value)) / 500) * 500);
   const x = (ms) => left + (right - left) * (ms - start) / (end - start);
   const y = (value) => bottom - (bottom - top) * value / maxPower;
@@ -62,18 +64,18 @@ export function drawProductionChart(container, day, slots) {
   }
   for (const fraction of [0, .25, .5, .75, 1]) {
     const ms = start + (end - start) * fraction;
-    label(svg, timeLabel.format(new Date(ms)), x(ms), 243, fraction === 0 ? 'start' : fraction === 1 ? 'end' : 'middle');
+    label(svg, timeLabel.format(new Date(ms)), x(ms), height - 12, fraction === 0 ? 'start' : fraction === 1 ? 'end' : 'middle');
   }
   drawLine(svg, measured, x, y, '#137771', Infinity);
   drawLine(svg, forecast, x, y, '#e6a321', 75 * 60000);
-  if (!measured.length && !forecast.length) label(svg, 'Geen meetpunten', (left + right) / 2, (top + bottom) / 2);
+  if (!measured.length && !forecast.length) label(svg, forecastOnly ? 'Geen voorspelling' : 'Geen meetpunten', (left + right) / 2, (top + bottom) / 2);
   if (now >= start && now <= end) {
     const nowX = x(now);
     svg.append(node('line', { x1: nowX, x2: nowX, y1: top, y2: bottom, stroke: '#172629', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }));
     label(svg, 'Nu', Math.min(right - 12, Math.max(left + 12, nowX)), 14);
   }
-  attachTimeCursor(svg, { start, end, left, right, top, bottom, width: 780 }, [
-    { label: 'Gemeten', color: '#137771', valueAt: (ms) => lineValueAt(measured, ms, Infinity) },
+  attachTimeCursor(svg, { start, end, left, right, top, bottom, width }, [
+    ...(forecastOnly ? [] : [{ label: 'Gemeten', color: '#137771', valueAt: (ms) => lineValueAt(measured, ms, Infinity) }]),
     { label: 'Voorspelling', color: '#996200', valueAt: (ms) => lineValueAt(forecast, ms, 75 * 60000) }
   ]);
   container.append(svg);

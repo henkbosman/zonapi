@@ -20,7 +20,6 @@ export function validateSettings(config) {
   try { getWeatherResolution(config); } catch (error) { errors.push(error.message); }
   try { growattCloudConfig(config); } catch (error) { errors.push(error.message); }
   if (config.timezone !== 'Europe/Amsterdam') errors.push('timezone moet Europe/Amsterdam zijn');
-  if (!Number.isInteger(config.logging?.max_entries_per_source ?? 5000) || (config.logging?.max_entries_per_source ?? 5000) < 100 || (config.logging?.max_entries_per_source ?? 5000) > 100000) errors.push('logging.max_entries_per_source moet 100..100000 zijn');
   for (const [name, item] of [['http', config.http], ['growatt', config.growatt]]) {
     if (!item || typeof item.host !== 'string' || !Number.isInteger(item.port) || item.port < 0 || item.port > 65535) errors.push(`${name}.host/port ongeldig`);
   }
@@ -83,6 +82,7 @@ export function loadConfiguration() {
   const panels = readConfig('config/panels.json');
   const errors = validateSettings(settings);
   if (errors.length) throw new Error(`Configuratie ongeldig: ${errors.join('; ')}`);
+  settings.weather.forecast_days = Math.max(3, settings.weather.forecast_days);
   const panel_errors = validatePanels(panels);
   if (panels.inverters.length !== settings.growatt.expected_inverters) panel_errors.push(`configureer precies ${settings.growatt.expected_inverters} omvormers`);
   return { settings, panels, panel_errors };

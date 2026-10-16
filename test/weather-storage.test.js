@@ -41,7 +41,7 @@ test('Open-Meteo geeft voorafgaand uur in UTC en recentere prognose overschrijft
   db.close();
 });
 
-test('scheduler gebruikt daglicht, één verzoek per tijdvak en persistente quota', async () => {
+test('scheduler haalt ook na zonsondergang op en voorkomt dubbele verzoeken binnen één tijdvak', async () => {
   const db = openDatabase(':memory:');
   const repository = createRepository(db);
   const day = '2026-10-14';
@@ -57,7 +57,7 @@ test('scheduler gebruikt daglicht, één verzoek per tijdvak en persistente quot
   assert.equal(repository.countCalls(day), 1);
   now += 12 * 3600000;
   await scheduler.tick();
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
   assert.equal(repository.getSun(day).sunrise_ms, sun.sunrise_ms);
   db.close();
 });
@@ -86,7 +86,7 @@ test('handmatig weer ophalen bewaart fouten en successen en respecteert de dagli
   assert.deepEqual(await scheduler.refresh(), { attempted: false, reason: 'quota', status: scheduler.status() });
   assert.equal(attempts, 2);
   now = sun.sunset_ms + 1000;
-  assert.equal((await scheduler.refresh()).reason, 'after_sunset');
+  assert.equal((await scheduler.refresh()).reason, 'quota');
   db.close();
 });
 
