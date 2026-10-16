@@ -46,9 +46,14 @@ export async function requestV2(config, transport = https) {
 
 /** Leest HomeWizard v1 rechtstreeks via LAN-HTTP; input: apparaatconfig en fetch-functie; output: Promise<JSON>. */
 export async function requestV1(config, fetcher = fetch) {
-  const response = await fetcher(`http://${checkHost(config.host)}/api/v1/data`, { signal: AbortSignal.timeout(5000) });
+  const response = await fetcher(meterRequestUrl(config), { signal: AbortSignal.timeout(5000) });
   if (!response.ok) throw new Error(`HomeWizard v1 HTTP ${response.status}`);
   return response.json();
+}
+
+/** Geeft de lokale meet-URL zonder autorisatiegegevens; input: apparaatconfiguratie; output: URL-string of fout. */
+export function meterRequestUrl(config) {
+  return config.api === 'v2' ? `https://${checkHost(config.host)}/api/measurement` : `http://${checkHost(config.host)}/api/v1/data`;
 }
 
 /** Zet v1/v2-velden om naar netto vermogen en tellers; input: apparaat-id, API-versie, JSON, tijd-ms; output: meetobject of fout. */

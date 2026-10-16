@@ -23,6 +23,7 @@ export function weatherOverview(repository, settings, scheduler, now, filters) {
   const validLocation = state.location_configured === true;
   return {
     server_time: new Date(now).toISOString(),
+    logging: repository.loggingStatus('weather'),
     status: state,
     location: { latitude: location.latitude ?? null, longitude: location.longitude ?? null },
     forecast_days: settings.weather.forecast_days,

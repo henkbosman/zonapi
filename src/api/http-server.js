@@ -7,16 +7,24 @@ import { productionResponse, metersResponse } from './measurements.js';
 import { productionSeries } from './production-series.js';
 import { growattLimitParam, growattOverview, growattFrameDetail, growattTimelineParams, growattTimeline } from './growatt-diagnostics.js';
 import { weatherCallParams, weatherOverview } from './weather-diagnostics.js';
+import { homeWizardCallParams, homeWizardOverview } from './homewizard-diagnostics.js';
+import { diagnosticAction } from './diagnostic-actions.js';
 import { growattListenerStatus } from '../growatt/listener-status.js';
 import { getBaseload } from '../appliances/baseload.js';
 import { loadProfiles } from '../appliances/load-profiles.js';
 import { advise } from '../appliances/start-advice.js';
+import { dailyAdvice } from '../appliances/daily-advice.js';
 
 const staticFiles = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/dashboard', ['index.html', 'text/html; charset=utf-8']],
   ['/growatt', ['growatt.html', 'text/html; charset=utf-8']],
   ['/weather', ['weather.html', 'text/html; charset=utf-8']],
+  ['/homewizard', ['homewizard.html', 'text/html; charset=utf-8']],
+  ['/homewizard.js', ['homewizard.js', 'text/javascript; charset=utf-8']],
+  ['/diagnostic-controls.js', ['diagnostic-controls.js', 'text/javascript; charset=utf-8']],
+  ['/chart-cursor.js', ['chart-cursor.js', 'text/javascript; charset=utf-8']],
+  ['/dashboard-daily-advice.js', ['dashboard-daily-advice.js', 'text/javascript; charset=utf-8']],
   ['/dashboard.css', ['dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard.js', ['dashboard.js', 'text/javascript; charset=utf-8']],
   ['/dashboard-production-chart.js', ['dashboard-production-chart.js', 'text/javascript; charset=utf-8']],
@@ -54,10 +62,16 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
   const server = http.createServer((request, response) => {
     try {
       const url = new URL(request.url, 'http://localhost');
-      if (request.method === 'DELETE' && url.pathname === '/api/v1/growatt/diagnostics') return sendJson(response, 200, repository.clearGrowattDiagnostics());
+      const action = diagnosticAction(request.method, url, repository);
+      if (action !== null) return sendJson(response, 200, action);
       if (request.method === 'POST' && url.pathname === '/api/v1/weather/refresh') {
         if (typeof weather.refresh !== 'function') return sendJson(response, 503, { error: 'Weerscheduler niet beschikbaar' });
         void weather.refresh().then((result) => sendJson(response, 200, result)).catch((error) => sendJson(response, 500, { error: error.message }));
+        return;
+      }
+      if (request.method === 'POST' && url.pathname === '/api/v1/homewizard/poll') {
+        if (typeof homewizard.poll !== 'function') return sendJson(response, 503, { error: 'Meterpoller niet beschikbaar' });
+        void homewizard.poll().then((result) => sendJson(response, 200, result)).catch((error) => sendJson(response, 500, { error: error.message }));
         return;
       }
       if (request.method !== 'GET') return sendJson(response, 405, { error: 'Methode niet beschikbaar' });
@@ -72,6 +86,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       if (url.pathname === '/api/v1/irradiance') return sendJson(response, 200, irradianceResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location));
       if (url.pathname === '/api/v1/growatt') return sendJson(response, 200, growattOverview(repository, settings, panels, now, growattLimitParam(url.searchParams.get('limit')), growattRuntime));
       if (url.pathname === '/api/v1/weather') return sendJson(response, 200, weatherOverview(repository, settings, weather, now, weatherCallParams(url.searchParams)));
+      if (url.pathname === '/api/v1/homewizard') return sendJson(response, 200, homeWizardOverview(repository, settings, homewizard, now, homeWizardCallParams(url.searchParams)));
       if (url.pathname === '/api/v1/growatt/timeline') return sendJson(response, 200, growattTimeline(repository, growattTimelineParams(url.searchParams)));
       if (/^\/api\/v1\/growatt\/frames\/[1-9]\d*$/.test(url.pathname)) {
         const id = Number(url.pathname.split('/')[5]);
@@ -94,6 +109,13 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       if (url.pathname === '/api/v1/appliances') {
         const { profiles, errors } = loadProfiles(join(root, 'config/appliances'));
         return sendJson(response, 200, { profiles: [...profiles.values()], errors });
+      }
+      if (url.pathname === '/api/v1/appliances/daily') {
+        const { profiles, errors } = loadProfiles(join(root, 'config/appliances'));
+        const rows = forecastRows((settings.weather.forecast_days + 1) * 24);
+        return sendJson(response, 200, { ...dailyAdvice([...profiles.values()], rows,
+          { settings, panels, panelErrors, latitude: settings.location.latitude, longitude: settings.location.longitude,
+            baseload: getBaseload(settings, repository, now), now }, repository), errors });
       }
       if (/^\/api\/v1\/appliances\/[a-z0-9_-]+\/advice$/.test(url.pathname)) {
         const id = url.pathname.split('/')[4];

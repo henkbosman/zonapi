@@ -12,7 +12,7 @@ import { startHttpServer } from './api/http-server.js';
 function main() {
   const { settings, panels, panel_errors: panelErrors } = loadConfiguration();
   const db = openDatabase(join(root, 'data/zonapi.sqlite'));
-  const repository = createRepository(db);
+  const repository = createRepository(db, settings.logging);
   const weather = createWeatherScheduler({ settings, panels, panelErrors, repository });
   const homewizard = createHomeWizardPoller(settings, repository);
   const backups = createBackupJob(db, join(root, 'data'));

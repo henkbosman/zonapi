@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ZonAPI · HomeWizard</title>
+  <link rel="stylesheet" href="/dashboard.css">
+  <link rel="stylesheet" href="/growatt.css">
+  <link rel="stylesheet" href="/weather.css">
+  <script src="/homewizard.js" type="module"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="mark">☀</span><span>ZonAPI</span></div>
+    <nav class="navigation" aria-label="Pagina's"><a href="/dashboard">Overzicht</a><a href="/growatt">Growatt</a><a href="/weather">Weer</a><a href="/homewizard" aria-current="page">HomeWizard</a></nav>
+    <span class="connection" id="connection" aria-live="polite">Gegevens ophalen…</span>
+  </header>
+  <main class="layout growatt-layout weather-layout">
+    <section class="intro">
+      <h1>HomeWizard</h1>
+      <div class="meta"><span id="poll-interval">Interval: —</span><span id="meter-priority">Actieve netmeter: —</span><button type="button" id="refresh-now" class="refresh-button">Vernieuwen</button><button type="button" id="poll-now" class="refresh-button">Nu ophalen</button></div>
+    </section>
+    <section class="highlights" aria-label="Netmeting">
+      <div class="tile"><div class="label">Netvermogen</div><strong id="net-power">—</strong><small id="net-direction">—</small></div>
+      <div class="tile"><div class="label">P1</div><strong class="time-value" id="p1-state">—</strong><small id="p1-time">—</small></div>
+      <div class="tile"><div class="label">kWh-meter</div><strong class="time-value" id="kwh-state">—</strong><small id="kwh-time">—</small></div>
+    </section>
+    <section class="full-card">
+      <h2>Apparaten</h2>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>Apparaat</th><th>Host</th><th>API</th><th>Status</th><th>Vermogen</th><th>Import</th><th>Export</th><th>Laatste meting</th><th>Duur</th><th>Fout</th></tr></thead><tbody id="devices"></tbody></table></div>
+    </section>
+    <section class="full-card">
+      <div class="timeline-heading"><h2>Verzoeken en fouten</h2><div class="log-actions"><button type="button" id="toggle-logging" class="refresh-button" aria-pressed="true" disabled>Logging —</button><button type="button" id="clear-logs" class="clear-button">Logs verwijderen</button></div></div>
+      <div class="timeline-filters">
+        <label>Status <select id="status-filter"><option value="all">Alles</option><option value="error">Fouten</option><option value="ok">Gelukt</option></select></label>
+        <label>Apparaat <select id="device-filter"><option value="all">Alles</option><option value="p1">P1</option><option value="kwh">kWh-meter</option></select></label>
+      </div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Apparaat</th><th>Resultaat</th><th>Duur</th><th>Vermogen</th><th>Details</th><th></th></tr></thead><tbody id="meter-calls"></tbody></table></div>
+      <div class="timeline-pager"><button type="button" id="newer" disabled>Nieuwer</button><span id="page-info">—</span><button type="button" id="older" disabled>Ouder</button></div>
+    </section>
+    <section class="full-card" id="call-detail" hidden>
+      <h2>Verzoekdetails</h2>
+      <div class="weather-kv"><span>URL</span><code id="call-url">—</code></div>
+      <div class="weather-kv"><span>Resultaat</span><span id="call-result">—</span></div>
+      <pre class="raw-hex" id="call-measurement"></pre>
+    </section>
+  </main>
+</body>
+</html>

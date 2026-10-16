@@ -23,7 +23,21 @@ Herstart na wijzigingen van `settings.json`, `panels.json` en `layouts/*.json`. 
 
 Stop de Node-dienst en bewaar een kopie van `data/zonapi.sqlite`. Kopieer voor deze versie de mappen `src/` en `public/` uit het archief naar de bestaande installatie en start de dienst opnieuw. Behoud de eigen `config/settings.json`, `config/panels.json`, `config/appliances/` en de hele `data/`-map. Pak de voorbeeldmap `data/` niet over de installatie heen uit. De bestaande database krijgt bij de eerste start extra weerdiagnosekolommen; eerdere weerpogingen, historische instraling en opbrengst blijven behouden. Als `growatt.time_sync_on_announcement` ontbreekt, staat de lokale tijdsynchronisatie standaard aan; zonder `growatt.time_sync_retry_minutes` is het herhaalinterval 10 minuten. Na een nieuwe `xx03`-aanmelding staan `reply_sent` en `time_sync_sent` in `/growatt`. De dienst verstuurt opnieuw een tijdopdracht als de vier `xx04`-adressen op die verbinding uitblijven.
 
-Het losse updatearchief bevat uitsluitend `src/`, `public/` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
+Het losse dashboardupdatearchief bevat uitsluitend `src/`, `public/`, `test/` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
+
+Deze dashboardupdate maakt automatisch aparte opslag voor loginstellingen, weerquota en HomeWizard-diagnose. Je bestaande instellingen blijven geldig. Open na het herstarten `/dashboard`, `/growatt`, `/weather` en `/homewizard`.
+
+### Logging en dashboard
+
+Op `/growatt`, `/weather` en `/homewizard` schakelt **Logging aan / Logging uit** het bijbehorende logboek om. Elke bron heeft een eigen instelling die herstarts overleeft. De verwijderknop wist het bijbehorende logboek. Omvormer- en HomeWizard-metingen, instralingshistorie, voorspellingen en het gebruikte weerquotum blijven bewaard. De actuele bronstatus blijft ook met logging uit beschikbaar.
+
+Logs staan aanvankelijk aan. Automatische opschoning houdt standaard de nieuwste 5000 regels per bron over; Growatt-berichten en verbindingslogs delen deze limiet. Opschoning vindt plaats bij starten en na elke 100 nieuwe logregels. SQLite hergebruikt de vrijgekomen pagina's. Stel optioneel `"logging": { "max_entries_per_source": 5000 }` in `settings.json` in; toegestaan is 100–100000. Deze limiet geldt uitsluitend voor diagnosegegevens.
+
+De Zonopbrengst-grafiek houdt de volledige daglichtas aan, ook zonder meetpunten of buiten de zonuren. Beweeg de muis over de grafiek voor een verticale lijn met tijd; de toetsen Home, End en de pijlen werken na focus op de grafiek. De gemeten opbrengst, huidige tijd en voorspelling voor maximaal drie uur blijven samen zichtbaar.
+
+Het dashboard geeft per apparaat een starttijd op iedere dag van `weather.forecast_days`. De volledige cyclus moet binnen de zonuren van die dag passen. Vandaag worden alleen toekomstige starttijden gezocht. Dezelfde apparaatprofielen, basislast, reserve en minimale zonnefractie gelden als voor het bestaande ESP32-advies. Ontbrekende of verouderde gegevens worden afzonderlijk weergegeven. Het bestaande `/advice`-endpoint blijft `advice.search_hours` gebruiken; het nieuwe `/appliances/daily` gebruikt alle ingestelde voorspeldagen.
+
+Op `/homewizard` staan host, lokale API-versie, laatste meetwaarden, import-/exporttellers, responstijd en fout per meter. De verzoekentijdlijn kan op apparaat en resultaat worden gefilterd. **Nu ophalen** leest de ingestelde lokale meters. Autorisatieheaders en tokens worden niet gelogd.
 
 ### Weerdiagnose
 
@@ -46,6 +60,7 @@ Vergelijk `database_path` met het databasebestand van de bestaande installatie. 
 | Bestand/veld | Vul in / werking |
 | --- | --- |
 | `settings.json > location` | Breedte- en lengtegraad van je locatie. Er wordt vóór dit is ingevuld geen extern weerverzoek gedaan. |
+| `settings.json > logging.max_entries_per_source` | Optioneel; standaard 5000 diagnostische regels per bron. Logschakelaars worden via het dashboard in de database bewaard. |
 | `settings.json > http` | LAN-IP en HTTP-poort voor ESP32's/dashboard. Begint uit voorzorg op `127.0.0.1`. |
 | `settings.json > growatt` | LAN-IP/poort voor ShineLanBox; standaard 5279, verwacht vier omvormers. `idle_timeout_minutes` is standaard 30 (instelbaar 1–120). `time_sync_on_announcement` is standaard `true`, ook in bestaande configuraties zonder dit veld. `time_sync_retry_minutes` is standaard 10 (instelbaar 1–120). |
 | `settings.json > weather.max_requests_per_local_day` | Standaard 12, instelbaar 0–48; `0` pauzeert de externe bron. Een mislukte poging telt mee; teller overleeft herstart. Alleen tussen zonsopkomst en zonsondergang, met minimaal ongeveer één uur tussen normale pogingen. |
@@ -85,17 +100,25 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | `GET /api/v1/growatt?limit=50` | Feitelijke TCP-luisterstatus/fout, actieve databasepad, ontvangen pakkettypen/statussen, omvormers en recente fouten; maximaal 100 pakketten per aanvraag. |
 | `GET /api/v1/weather?status=all&limit=50&offset=0` | Weerstatus, aangemaakte aanvraag-URL, zoninstraling van vandaag en gefilterde, pagineerbare aanvragen met HTTP-status en foutreden. Statusfilter: `all`, `ok`, `error`, `pending`. |
 | `POST /api/v1/weather/refresh` | Probeert direct eenmaal het weer op te halen als er daglicht en dagelijks quotum beschikbaar is; resultaat bevat `attempted`, `reason` en bijgewerkte status. |
+| `GET /api/v1/:source/logging` | Logstatus voor `growatt`, `weather` of `homewizard`. |
+| `PUT /api/v1/:source/logging?enabled=false` | Logging uitzetten; `enabled=true` zet logging aan. |
+| `DELETE /api/v1/weather/diagnostics` | Wist weerlogs met behoud van dagquotum, planning, instraling en actuele status. |
+| `GET /api/v1/homewizard?device=all&status=all&limit=50&offset=0` | Lokale meterinformatie, actuele bronstatus en gefilterde verzoeken. `device`: `all`, `p1`, `kwh`; `status`: `all`, `ok`, `error`. |
+| `POST /api/v1/homewizard/poll` | Leest eenmaal de ingestelde lokale meters. |
+| `DELETE /api/v1/homewizard/diagnostics` | Wist meterlogs met behoud van meetgeschiedenis en actuele status. |
 | `GET /api/v1/growatt/timeline?type=xx04&limit=100` | Gecombineerde chronologische lijst van ontvangen pakketten en TCP-gebeurtenissen, met filters `type` (`xx04` of `5004`), `address` (`50`–`53`), `view` (`all`, `packets`, `errors`, `events`) en paginering via `offset`. `has_more` geeft aan of er meer regels zijn. |
 | `GET /api/v1/growatt/frames/:id` | Eén ontvangen pakket inclusief de oorspronkelijke hex-inhoud en eventuele gedecodeerde meting. |
 | `DELETE /api/v1/growatt/diagnostics` | Verwijdert Growatt-pakketten en verbindings-/antwoordlogs, behoudt opgeslagen opbrengstmetingen; geeft verwijderde aantallen terug. De Growatt-pagina biedt hiervoor een knop met bevestiging. |
 | `GET /api/v1/meters/current` | P1 en kWh afzonderlijk, plus precies **één** gekozen netto netvermogen. Positief = import, negatief = export. |
 | `GET /api/v1/history?metric=irradiance&from=...&to=...` | Bestaande time series. `metric`: `irradiance`, `pv_forecast`, `inverter`, `p1` of `kwh`; `limit` max. 5000. Bij voorspellingen overschrijft een nieuwere bronwaarde hetzelfde tijdvak. |
 | `GET /api/v1/appliances` | Geldige JSON-profielen en eventuele laad-/validatiefouten. |
+| `GET /api/v1/appliances/daily` | Per voorspelde lokale dag zontijden en startadviezen voor alle apparaatprofielen. |
 | `GET /api/v1/appliances/wasmachine/advice` | `can_start_now`, `earliest_start`, `best_start`, volledige zonnefractie en status (`ok`, `stale`, `forecast_incomplete`, enzovoort). Ook `droger` en `vaatwasser`. |
 | `GET /api/v1/status` | Bronnen, configuratiefouten, historisch aantal ontvangen frames, zontijden, gebruikt/dagmaximum en volgende weersophaling. |
 | `GET /dashboard` | Gemeten opbrengst en drie uur voorspelling op één as tussen zonsopgang en zonsondergang met lijn voor de huidige tijd; toont ook de beschikbare metingen bij minder dan vier omvormers. |
 | `GET /growatt` | Growatt-pagina met omvormermetingen, tijdlijn voor pakketten, antwoorden, tijdsynchronisatie en verbindingen, filters, verwijderknop en verversing iedere 15 seconden. |
 | `GET /weather` | Weerpagina met zontijden, bronverzoeken, fouten, instralingsgrafiek en handmatige ophaalknop, verversing iedere 15 seconden. |
+| `GET /homewizard` | Lokale meterinformatie, poll-logs, filters, logbeheer en handmatig ophalen; verversing iedere 15 seconden. |
 
 Bijvoorbeeld voor een ESP32: lees `can_start_now` alleen als `status === "ok"`; bij `null`, `stale` of ontbrekende instellingen toon je "onbekend" in plaats van "nee". `earliest_start` kan na drie uur liggen. `best_start` laat de beste optie zien als de drempel nergens wordt gehaald.
 
@@ -112,4 +135,4 @@ Een ontvangen `5004` verschijnt als omvormermeting onder het serienummer van adr
 
 ## Testen
 
-`npm test` voert de offline integratietests uit voor opslag/overschrijven, daglichtquota, meerdere TCP-fragmenten/CRC/ACK/tijdcommando, meerdere verbindingen, grafiekpunten met minder dan vier omvormers, diagnostiek wissen met behoud van historie, HomeWizard-netmeting zonder dubbeltelling en een startadvies verder dan drie uur. De tests versturen niets naar externe diensten.
+`npm test` voert de offline integratietests uit voor opslag/overschrijven, daglichtquota, meerdere TCP-fragmenten/CRC/ACK/tijdcommando, meerdere verbindingen, grafiekpunten met minder dan vier omvormers, vaste daglichtgrenzen en grafiekcursor, begrensde logs en uitschakelen met behoud van metingen/quota na herstart, HomeWizard-diagnose zonder dubbeltelling, en dagadviezen rond wintertijd. De tests versturen niets naar externe diensten.

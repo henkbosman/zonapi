@@ -1,4 +1,5 @@
 import { drawRadiationChart } from './weather-chart.js';
+import { setupDiagnosticControls } from './diagnostic-controls.js';
 
 const fullTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const dayTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'long' });
@@ -87,6 +88,7 @@ async function refresh() {
     const data = await request(`/api/v1/weather?${query}`);
     if (id !== refreshId) return;
     current = data;
+    renderLogging(data.logging);
     renderStatus(data);
     renderCalls(data);
     drawRadiationChart(data.forecast, Date.parse(data.server_time), element('#radiation-chart'));
@@ -109,6 +111,12 @@ async function fetchNow() {
 }
 
 element('#refresh-now').addEventListener('click', () => { void refresh(); });
+const renderLogging = setupDiagnosticControls('weather', refresh, () => {
+  refreshId++;
+  offset = 0;
+  current = null;
+  element('#call-detail').hidden = true;
+});
 element('#fetch-now').addEventListener('click', () => { void fetchNow(); });
 element('#status-filter').addEventListener('change', () => { offset = 0; void refresh(); });
 element('#newer').addEventListener('click', () => { offset = Math.max(0, offset - 50); void refresh(); });

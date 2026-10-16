@@ -20,6 +20,9 @@ test('API en dashboard geven ontbrekende configuratie expliciet terug', async ()
   assert.ok(advice.missing.some((item) => item.includes('wp_per_panel')));
   const meters = await (await fetch(`${base}/api/v1/meters/current`)).json();
   assert.equal(meters.net_power_w, null);
+  const daily = await (await fetch(`${base}/api/v1/appliances/daily`)).json();
+  assert.equal(daily.days.length, settings.weather.forecast_days);
+  assert.equal(daily.days[0].appliances.length, 3);
   const dashboard = await fetch(`${base}/dashboard`);
   assert.equal(dashboard.status, 200);
   assert.match(await dashboard.text(), /Zonopbrengst/);

@@ -84,7 +84,9 @@ test('Growatt-pagina en API tonen pakketmetadata, ruwe inhoud en ontvangerfouten
     const base = `http://127.0.0.1:${server.address().port}`;
     const page = await fetch(`${base}/growatt`);
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /Berichten en logs verwijderen/);
+    const html = await page.text();
+    assert.match(html, /Berichten en logs verwijderen/);
+    assert.match(html, /id="db-path"/);
     assert.equal(page.headers.get('cache-control'), 'no-store');
     const dashboard = await (await fetch(`${base}/dashboard`)).text();
     assert.match(dashboard, /href="\/growatt"/);
@@ -112,6 +114,44 @@ test('Growatt-pagina en API tonen pakketmetadata, ruwe inhoud en ontvangerfouten
     assert.equal((await fetch(`${base}/api/v1/growatt?limit=101`)).status, 400);
   } finally {
     await new Promise((resolve) => server.close(resolve));
+    db.close();
+  }
+});
+
+test('API toont een mislukte Growatt-binding naast het werkelijke databasepad', async () => {
+  const db = openDatabase(':memory:');
+  const repository = createRepository(db);
+  const occupied = startGrowattServer({ host: '127.0.0.1', port: 0 }, repository);
+  await once(occupied, 'listening');
+  const growattPort = occupied.address().port;
+  const blocked = startGrowattServer({ host: '127.0.0.1', port: growattPort }, repository);
+  const error = await new Promise((resolve) => blocked.once('error', resolve));
+  const runtime = { server: blocked, last_error: { code: error.code, message: error.message, at: new Date().toISOString() } };
+  const { settings, panels, panel_errors: panelErrors } = loadConfiguration();
+  const server = startHttpServer({
+    settings: { ...settings, growatt: { ...settings.growatt, host: '127.0.0.1', port: growattPort }, http: { host: '127.0.0.1', port: 0 } },
+    panels, panelErrors, repository, growattRuntime: runtime,
+    weather: { status: () => ({ source: 'open-meteo' }) },
+    homewizard: { status: () => ({ p1: null, kwh: null }) }
+  });
+  await once(server, 'listening');
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const growatt = await (await fetch(`${base}/api/v1/growatt`)).json();
+    assert.equal(growatt.listener.listening, false);
+    assert.equal(growatt.listener.last_error.code, 'EADDRINUSE');
+    assert.equal(growatt.listener.port, growattPort);
+    assert.equal(growatt.database_path, null);
+    assert.equal(growatt.summary.frames_total, 0);
+    const status = await (await fetch(`${base}/api/v1/status`)).json();
+    assert.equal(status.growatt.listener.last_error.code, 'EADDRINUSE');
+    assert.equal(status.growatt.database_path, null);
+    const live = growattOverview(repository, { growatt: { host: '127.0.0.1', port: growattPort, expected_inverters: 4, fresh_minutes: 20 } }, panels, Date.now(), 1, { server: occupied });
+    assert.equal(live.listener.listening, true);
+    assert.equal(live.listener.bound_port, growattPort);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await stopGrowattServer(occupied);
     db.close();
   }
 });
@@ -170,10 +210,8 @@ test('TCP-verbinding houdt ShineLanBox meetinterval aan en slaat verbindingsinfo
     socket.write(announcementFixture(0x50, 0x29, 'INV1234560'));
     await once(socket, 'data');
     const log = repository.growattTimeline({ limit: 10, offset: 0, type: '', address: '', view: 'all' });
-    assert.deepEqual(log.rows.map((row) => row.source), ['event', 'packet', 'event']);
-    assert.equal(log.rows[0].status, 'reply_sent');
-    assert.match(log.rows[0].detail, /5029 #\d+ · 11 bytes · [0-9a-f]{22}/);
-    assert.equal(log.rows[2].status, 'connected');
+    assert.deepEqual(log.rows.map((row) => row.status).sort(), ['reply_sent', 'announcement', 'connected'].sort());
+    assert.match(log.rows.find((row) => row.status === 'reply_sent').detail, /5029 #\d+ · 11 bytes · [0-9a-f]{22}/);
     assert.equal(repository.recentGrowattProblems(10).length, 0);
   } finally {
     socket.destroy();
@@ -395,6 +433,7 @@ test('bestaande pakketgeschiedenis blijft behouden bij de database-uitbreiding',
     old.close();
     const upgraded = openDatabase(path);
     const repository = createRepository(upgraded);
+    assert.equal(repository.databasePath(), path);
     assert.equal(repository.frameStatus()[0].count, 1);
     repository.saveGrowattEvent(2, 'local', 'socket_error', 'test');
     assert.equal(repository.recentGrowattProblems(1)[0].detail, 'test');

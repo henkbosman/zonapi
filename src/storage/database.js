@@ -50,6 +50,13 @@ export function openDatabase(path) {
       PRIMARY KEY(device, measured_ms)
     );
     CREATE INDEX IF NOT EXISTS meter_received ON meter_measurements(device, received_ms);
+    CREATE TABLE IF NOT EXISTS diagnostic_settings (source TEXT PRIMARY KEY, enabled INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS diagnostic_state (source TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(source,name));
+    CREATE TABLE IF NOT EXISTS weather_usage (local_date TEXT PRIMARY KEY, attempts INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS homewizard_calls (
+      id INTEGER PRIMARY KEY, attempted_ms INTEGER NOT NULL, device TEXT NOT NULL, status TEXT NOT NULL,
+      request_url TEXT NOT NULL, duration_ms INTEGER NOT NULL, detail TEXT, measurement TEXT
+    );
   `);
   // Bestaande weerhistorie behouden en nieuwe diagnosevelden toevoegen.
   const weatherColumns = new Set(db.prepare('PRAGMA table_info(weather_calls)').all().map((column) => column.name));
@@ -73,6 +80,13 @@ export function openDatabase(path) {
       CREATE INDEX inverter_received ON inverter_measurements(serial, received_ms);`);
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS inverter_frame ON inverter_measurements(frame_id);
+    INSERT OR IGNORE INTO weather_usage SELECT local_date,COUNT(*) FROM weather_calls GROUP BY local_date;`);
+  // Eenmalige overdracht van huidige status uit bestaande weerlogs.
+  for (const [key, condition] of [['last_call', ''], ['last_success', "WHERE status='ok'"]]) {
+    const previous = db.prepare(`SELECT * FROM weather_calls ${condition} ORDER BY attempted_ms DESC,id DESC LIMIT 1`).get();
+    if (previous) db.prepare("INSERT OR IGNORE INTO diagnostic_state VALUES('weather',?,?)").run(key, JSON.stringify(previous));
   }
   return db;
 }

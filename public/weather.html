@@ -12,7 +12,7 @@
 <body>
   <header class="masthead">
     <div class="brand"><span class="mark">☀</span><span>ZonAPI</span></div>
-    <nav class="navigation" aria-label="Pagina's"><a href="/dashboard">Overzicht</a><a href="/growatt">Growatt</a><a href="/weather" aria-current="page">Weer</a></nav>
+    <nav class="navigation" aria-label="Pagina's"><a href="/dashboard">Overzicht</a><a href="/growatt">Growatt</a><a href="/weather" aria-current="page">Weer</a><a href="/homewizard">HomeWizard</a></nav>
     <span class="connection" id="connection" aria-live="polite">Gegevens ophalen…</span>
   </header>
   <main class="layout growatt-layout weather-layout">
@@ -43,7 +43,7 @@
     </section>
 
     <section class="full-card">
-      <h2>Weerverzoeken</h2>
+      <div class="timeline-heading"><h2>Weerverzoeken</h2><div class="log-actions"><button type="button" id="toggle-logging" class="refresh-button" aria-pressed="true" disabled>Logging —</button><button type="button" id="clear-logs" class="clear-button">Logs verwijderen</button></div></div>
       <div class="timeline-filters"><label>Status <select id="status-filter"><option value="all">Alles</option><option value="error">Fouten</option><option value="ok">Gelukt</option><option value="pending">Bezig</option></select></label></div>
       <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Bron</th><th>Resultaat</th><th>HTTP</th><th>Duur</th><th>Uurpunten</th><th>Details</th><th></th></tr></thead><tbody id="weather-calls"></tbody></table></div>
       <div class="timeline-pager"><button type="button" id="newer" disabled>Nieuwer</button><span id="page-info">—</span><button type="button" id="older" disabled>Ouder</button></div>

@@ -12,6 +12,7 @@ export function readConfig(relativePath) {
 export function validateSettings(config) {
   const errors = [];
   if (config.timezone !== 'Europe/Amsterdam') errors.push('timezone moet Europe/Amsterdam zijn');
+  if (!Number.isInteger(config.logging?.max_entries_per_source ?? 5000) || (config.logging?.max_entries_per_source ?? 5000) < 100 || (config.logging?.max_entries_per_source ?? 5000) > 100000) errors.push('logging.max_entries_per_source moet 100..100000 zijn');
   for (const [name, item] of [['http', config.http], ['growatt', config.growatt]]) {
     if (!item || typeof item.host !== 'string' || !Number.isInteger(item.port) || item.port < 0 || item.port > 65535) errors.push(`${name}.host/port ongeldig`);
   }

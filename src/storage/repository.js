@@ -1,11 +1,14 @@
-/** Maakt beperkte databasebewerkingen; input: open SQLite DB; output: repositorymethoden. */
-export function createRepository(db) {
+import { createDiagnosticStore } from './diagnostics.js';
+import { createWeatherCallStore } from './weather-calls.js';
+import { createHomeWizardCallStore } from './homewizard-calls.js';
+
+/** Maakt beperkte databasebewerkingen; input: open SQLite DB en optionele logconfiguratie; output: repositorymethoden. */
+export function createRepository(db, logging = {}) {
+  const diagnostics = createDiagnosticStore(db, logging);
   const q = {
     forecast: db.prepare('INSERT INTO forecast VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(start_ms,end_ms) DO UPDATE SET source=excluded.source,ghi=excluded.ghi,dni=excluded.dni,dhi=excluded.dhi,fetched_ms=excluded.fetched_ms WHERE excluded.fetched_ms > forecast.fetched_ms'),
     pv: db.prepare('INSERT INTO pv_forecast VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(group_id,start_ms,end_ms) DO UPDATE SET source=excluded.source,power_w=excluded.power_w,gti_w_m2=excluded.gti_w_m2,fetched_ms=excluded.fetched_ms WHERE excluded.fetched_ms > pv_forecast.fetched_ms'),
     sun: db.prepare('INSERT INTO sun_times VALUES (?, ?, ?, ?, ?) ON CONFLICT(local_date) DO UPDATE SET sunrise_ms=excluded.sunrise_ms,sunset_ms=excluded.sunset_ms,source=excluded.source,fetched_ms=excluded.fetched_ms WHERE excluded.fetched_ms > sun_times.fetched_ms'),
-    call: db.prepare('INSERT INTO weather_calls(local_date,attempted_ms,status,source) VALUES(?,?,?,?)'),
-    callUpdate: db.prepare('UPDATE weather_calls SET status=?,detail=?,request_url=?,http_status=?,duration_ms=?,forecast_rows=?,sun_days=? WHERE id=?'),
     frame: db.prepare('INSERT INTO growatt_frames(received_ms,peer,protocol,record_type,status,raw) VALUES(?,?,?,?,?,?)'),
     frameUpdate: db.prepare('UPDATE growatt_frames SET status=? WHERE id=?'),
     growattEvent: db.prepare('INSERT INTO growatt_events(at_ms,peer,kind,detail) VALUES(?,?,?,?)'),
@@ -14,6 +17,9 @@ export function createRepository(db) {
   };
 
   return {
+    ...diagnostics,
+    ...createWeatherCallStore(db, diagnostics),
+    ...createHomeWizardCallStore(db, diagnostics),
     /** Slaat één nieuwer weertijdvak op; input: {source,start_ms,end_ms,ghi,dni,dhi,fetched_ms}; output: SQLite-resultaat. */
     saveForecast(row) { return q.forecast.run(row.source, row.start_ms, row.end_ms, row.ghi, row.dni, row.dhi, row.fetched_ms); },
     /** Slaat berekende paneelgroepuitkomst op; input: PV-rij; output: SQLite-resultaat. */
@@ -22,30 +28,30 @@ export function createRepository(db) {
     saveSun(day, sunrise, sunset, source, fetched) { return q.sun.run(day, sunrise, sunset, source, fetched); },
     /** Geeft zontijden terug; input: lokale datum; output: rij of undefined. */
     getSun(day) { return db.prepare('SELECT * FROM sun_times WHERE local_date=?').get(day); },
-    /** Reserveert een quotapoging voor het HTTP-verzoek; input: dag, tijd en bron; output: poging-id. */
-    beginCall(day, now, source = null) { return Number(q.call.run(day, now, 'pending', source).lastInsertRowid); },
-    /** Rondt een poging af met brongegevens; input: id, status en optionele metadata; output: SQLite-resultaat. */
-    finishCall(id, status, { detail = null, request_url = null, http_status = null, duration_ms = null, forecast_rows = null, sun_days = null } = {}) {
-      return q.callUpdate.run(status, detail === null ? null : String(detail).slice(0, 600), request_url, http_status, duration_ms, forecast_rows, sun_days, id);
-    },
-    /** Telt alle pogingen van de lokale dag; input: lokale datum; output: aantal. */
-    countCalls(day) { return db.prepare('SELECT COUNT(*) AS n FROM weather_calls WHERE local_date=?').get(day).n; },
-    /** Leest meest recente poging; input: geen; output: rij of undefined. */
-    lastCall() { return db.prepare('SELECT * FROM weather_calls ORDER BY attempted_ms DESC,id DESC LIMIT 1').get(); },
-    /** Leest laatste geslaagde weeraanvraag; input: geen; output: rij of undefined. */
-    lastSuccessfulWeatherCall() { return db.prepare("SELECT * FROM weather_calls WHERE status='ok' ORDER BY attempted_ms DESC,id DESC LIMIT 1").get(); },
     /** Leest weerpogingen voor de tijdlijn; input: status, limiet en offset; output: rijen en has_more. */
     recentWeatherCalls(status, limit, offset) {
       const where = status === 'all' ? '' : 'WHERE status=?';
       const rows = db.prepare(`SELECT * FROM weather_calls ${where} ORDER BY attempted_ms DESC,id DESC LIMIT ? OFFSET ?`).all(...(status === 'all' ? [] : [status]), limit + 1, offset);
       return { rows: rows.slice(0, limit), has_more: rows.length > limit };
     },
-    /** Bewaart ontvangen TCP-pakket voor diagnose; input: tijd, peer, versie, type, status, Buffer; output: rij-id. */
-    saveFrame(at, peer, version, type, status, raw) { return Number(q.frame.run(at, peer, version, type, status, raw).lastInsertRowid); },
+    /** Bewaart ontvangen TCP-pakket voor diagnose; input: tijd, peer, versie, type, status, Buffer; output: rij-id of null bij logging uit. */
+    saveFrame(at, peer, version, type, status, raw) {
+      diagnostics.saveDiagnosticState('growatt', 'last_received', { received_ms: at, peer, protocol: version, record_type: type });
+      if (!diagnostics.loggingStatus('growatt').enabled) return null;
+      // Schoon vóór de insert zodat een nieuwe meetkoppeling altijd een bestaand pakket vindt.
+      diagnostics.trimDiagnostics('growatt');
+      const id = Number(q.frame.run(at, peer, version, type, status, raw).lastInsertRowid);
+      return id;
+    },
     /** Corrigeert de parse-status van een pakket; input: rij-id, status; output: SQLite-resultaat. */
-    markFrame(id, status) { return q.frameUpdate.run(status, id); },
+    markFrame(id, status) { return id === null ? null : q.frameUpdate.run(status, id); },
     /** Bewaart een fout van de TCP-ontvanger; input: tijd, peer, soort, detail; output: SQLite-resultaat. */
-    saveGrowattEvent(at, peer, kind, detail) { return q.growattEvent.run(at, peer, kind, String(detail).slice(0, 300)); },
+    saveGrowattEvent(at, peer, kind, detail) {
+      if (!diagnostics.loggingStatus('growatt').enabled) return null;
+      const result = q.growattEvent.run(at, peer, kind, String(detail).slice(0, 300));
+      diagnostics.trimDiagnostics('growatt');
+      return result;
+    },
     /** Verwijdert alleen ruwe Growatt-berichten en logs; input: geen; output: aantallen verwijderde rijen (metingen blijven staan). */
     clearGrowattDiagnostics() {
       db.exec('BEGIN');

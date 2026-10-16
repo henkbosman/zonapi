@@ -11,7 +11,7 @@
 <body>
   <header class="masthead">
     <div class="brand"><span class="mark">☀</span><span>ZonAPI</span></div>
-    <nav class="navigation" aria-label="Pagina's"><a href="/dashboard">Overzicht</a><a href="/growatt" aria-current="page">Growatt</a><a href="/weather">Weer</a></nav>
+    <nav class="navigation" aria-label="Pagina's"><a href="/dashboard">Overzicht</a><a href="/growatt" aria-current="page">Growatt</a><a href="/weather">Weer</a><a href="/homewizard">HomeWizard</a></nav>
     <span class="connection" id="connection" aria-live="polite">Gegevens ophalen…</span>
   </header>
   <main class="layout growatt-layout">
@@ -44,7 +44,7 @@
     </section>
 
     <section class="full-card">
-      <div class="timeline-heading"><h2>Berichten en verbindingen</h2><button type="button" id="clear-logs" class="clear-button">Berichten en logs verwijderen</button></div>
+      <div class="timeline-heading"><h2>Berichten en verbindingen</h2><div class="log-actions"><button type="button" id="toggle-logging" class="refresh-button" aria-pressed="true" disabled>Logging —</button><button type="button" id="clear-logs" class="clear-button">Berichten en logs verwijderen</button></div></div>
       <div class="timeline-filters">
         <label>Toon <select id="view-filter"><option value="all">Alles</option><option value="packets">Pakketten</option><option value="errors">Fouten</option><option value="events">Verbindingen</option></select></label>
         <label>Type <select id="type-filter"><option value="">Alle typen</option><option value="xx04">xx04 meting</option><option value="xx50">xx50 archief</option><option value="xx03">xx03 aanmelding</option><option value="xx29">xx29 RF-configuratie</option><option value="xx18">xx18 tijdantwoord</option><option value="xx16">xx16 ping</option></select></label>

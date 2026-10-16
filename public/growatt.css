@@ -19,6 +19,9 @@
 .growatt-layout .timeline-heading h2 { margin:0 }
 .clear-button { border:1px solid #b65c42; border-radius:8px; background:#fff7f2; color:#9a422e; padding:7px 11px; cursor:pointer; font:inherit }
 .clear-button:disabled { opacity:.5; cursor:default }
+.log-actions { display:flex; flex-wrap:wrap; gap:8px }
+#toggle-logging[data-enabled="true"] { background:var(--mint); font-weight:700 }
+.refresh-button:disabled { opacity:.5; cursor:default }
 .timeline-filters label { display:grid; gap:5px; color:var(--muted); font-size:12px; font-weight:700 }
 .timeline-filters select { min-width:160px; border:1px solid var(--line); border-radius:8px; background:var(--paper); padding:8px 10px; color:var(--teal); font:inherit; font-size:14px }
 .timeline-filters select:disabled { opacity:.55 }

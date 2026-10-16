@@ -1,4 +1,5 @@
 import { drawProductionChart } from './dashboard-production-chart.js';
+import { renderDailyAdvice } from './dashboard-daily-advice.js';
 
 /** Zoekt één dashboardelement; input: CSS-selector; output: Element of null. */
 const $ = (selector) => document.querySelector(selector);
@@ -57,33 +58,6 @@ function drawChart(container, points, color) {
   container.append(view);
 }
 
-/** Toont één machine en zijn volledige-cyclusadvies; input: profiel en adviesobject; output: void. */
-function showAppliance(profile, advice) {
-  const card = document.createElement('article'); card.className = 'appliance';
-  const title = document.createElement('h3'); title.textContent = profile.name;
-  const sub = document.createElement('p'); sub.textContent = `Cyclus: ${profile.duration_minutes} min`;
-  const time = document.createElement('div'); time.className = 'time';
-  const details = document.createElement('p');
-  const badge = document.createElement('span'); badge.className = 'badge';
-  if (advice.status === 'ok' && advice.earliest_start) {
-    time.textContent = dutchDay.format(new Date(advice.earliest_start));
-    details.textContent = `Eigen zon: ${advice.earliest.solar_share_percent}% · minimum: ${advice.minimum_solar_share_percent}%`;
-    badge.textContent = advice.can_start_now ? 'Nu starten kan' : 'Eerstvolgend startmoment';
-  } else if (advice.status === 'ok' && advice.best) {
-    time.textContent = 'Geen passend moment';
-    details.textContent = `Beste optie: ${dutchDay.format(new Date(advice.best_start))} · eigen zon: ${advice.best.solar_share_percent}%`;
-    badge.textContent = 'Onder jouw drempel';
-  } else {
-    time.textContent = advice.status === 'stale' ? 'Voorspelling verouderd' : 'Nog geen advies';
-    details.textContent = (advice.missing ?? []).join('; ');
-    badge.textContent = advice.status === 'stale' ? 'Weerdata verouderd' : advice.status === 'insufficient_baseload' ? 'Basislast ontbreekt' : 'Onvoldoende data';
-  }
-  card.append(title, sub, time);
-  if (details.textContent) card.append(details);
-  card.append(badge);
-  $('#appliance-list').append(card);
-}
-
 /** Vult kaarten en status in; input: statusobject; output: void. */
 function renderStatus(status) {
   $('#now').textContent = dutchDay.format(new Date(status.time));
@@ -110,8 +84,8 @@ function renderStatus(status) {
 /** Haalt huidige gegevens, grafieken en apparaatadviezen op; input: geen; output: Promise<void>. */
 async function refresh() {
   try {
-    const [status, forecast, profiles, production] = await Promise.all([
-      json('/api/v1/status'), json('/api/v1/forecast?hours=3'), json('/api/v1/appliances'), json('/api/v1/production/day')
+    const [status, forecast, profiles, production, daily] = await Promise.all([
+      json('/api/v1/status'), json('/api/v1/forecast?hours=3'), json('/api/v1/appliances'), json('/api/v1/production/day'), json('/api/v1/appliances/daily')
     ]);
     renderStatus(status);
     drawProductionChart($('#pv-chart'), production, forecast.slots);
@@ -121,9 +95,7 @@ async function refresh() {
     $('#forecast-note').hidden = forecast.status === 'ok';
     $('#forecast-note').textContent = forecast.status === 'ok' ? '' : `Voorspelling: ${forecast.status}`;
     drawChart($('#history-chart'), production.points.map((point) => ({ time:point.time, value:point.power_w })), '#137771');
-    $('#appliance-list').replaceChildren();
-    const advice = await Promise.all(profiles.profiles.map((profile) => json(`/api/v1/appliances/${profile.id}/advice`).then((result) => ({ profile, result }))));
-    for (const item of advice) showAppliance(item.profile, item.result);
+    renderDailyAdvice($('#appliance-list'), profiles.profiles, daily);
     $('#connection').textContent = 'Online';
   } catch (error) {
     $('#connection').textContent = `Kon gegevens niet ophalen: ${error.message}`;

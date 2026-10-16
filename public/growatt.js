@@ -1,3 +1,5 @@
+import { setupDiagnosticControls } from './diagnostic-controls.js';
+
 const dateTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const pageSize = 100;
 let offset = 0;
@@ -173,6 +175,7 @@ async function refresh() {
   try {
     const [data, timeline] = await Promise.all([request('/api/v1/growatt?limit=1'), request(`/api/v1/growatt/timeline?${query}`)]);
     if (current !== refreshNumber) return;
+    renderLogging(data.logging);
     renderSummary(data);
     renderAnnouncements(data);
     renderInverters(data);
@@ -181,23 +184,6 @@ async function refresh() {
   } catch (error) {
     if (current === refreshNumber) element('#connection').textContent = `Fout: ${error.message}`;
   }
-}
-
-/** Wist de ruwe pakketten en verbindingslogs na bevestiging; input: geen; output: Promise<void>. */
-async function clearLogs() {
-  if (!window.confirm('Alle Growatt-berichten en logs verwijderen?')) return;
-  const button = element('#clear-logs');
-  button.disabled = true;
-  refreshNumber++;
-  try {
-    const response = await fetch('/api/v1/growatt/diagnostics', { method: 'DELETE', cache: 'no-store' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    offset = 0;
-    element('#frame-detail').hidden = true;
-    await refresh();
-  } catch (error) {
-    element('#connection').textContent = `Fout: ${error.message}`;
-  } finally { button.disabled = false; }
 }
 
 /** Wijzigt de tijdlijnfilters en start op de nieuwste pagina; input: geen (leest selectievelden); output: void. */
@@ -223,7 +209,11 @@ function changePage(direction) {
 document.addEventListener('click', handleFrameClick);
 for (const id of ['#view-filter', '#type-filter', '#address-filter']) element(id).addEventListener('change', changeFilter);
 element('#refresh-now').addEventListener('click', () => { void refresh(); });
-element('#clear-logs').addEventListener('click', () => { void clearLogs(); });
+const renderLogging = setupDiagnosticControls('growatt', refresh, () => {
+  refreshNumber++;
+  offset = 0;
+  element('#frame-detail').hidden = true;
+});
 element('#newer').addEventListener('click', () => changePage(-1));
 element('#older').addEventListener('click', () => changePage(1));
 void refresh();

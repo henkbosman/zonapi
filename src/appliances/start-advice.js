@@ -7,7 +7,7 @@ export function evaluateStart(profile, startMs, weather, context) {
   let solarWh = 0;
   let recordAgeMs = 0;
   const reserve = profile.reserve_w ?? context.settings.advice.reserve_w;
-  const predictions = new Map();
+  const predictions = context.predictions ?? new Map();
   for (const step of profile.steps) {
     const finish = cursor + step.duration_minutes * 60000;
     while (cursor < finish) {
@@ -32,13 +32,14 @@ export function advise(profile, weather, context) {
   if (!context.baseload) return { status: 'insufficient_baseload', can_start_now: null, earliest_start: null, best_start: null };
   if (!weather.length) return { status: 'forecast_unavailable', can_start_now: null, earliest_start: null, best_start: null };
   const threshold = profile.min_solar_share ?? context.settings.advice.min_solar_share;
-  const nowStart = evaluateStart(profile, context.now, weather, context);
-  const end = context.now + context.settings.advice.search_hours * 3600000;
+  const start = context.window?.from ?? context.now;
+  const end = context.window?.until ?? context.now + context.settings.advice.search_hours * 3600000;
+  const nowStart = context.now >= start && context.now <= end ? evaluateStart(profile, context.now, weather, context) : null;
   const stepMs = context.settings.advice.start_step_minutes * 60000;
-  let first = null;
-  let best = null;
+  let first = nowStart && nowStart.solar_share_percent / 100 >= threshold ? nowStart : null;
+  let best = nowStart;
   let evaluated = 0;
-  for (let at = Math.ceil(context.now / stepMs) * stepMs; at <= end; at += stepMs) {
+  for (let at = Math.ceil(start / stepMs) * stepMs; at <= end; at += stepMs) {
     const result = evaluateStart(profile, at, weather, context);
     if (!result) continue;
     evaluated++;

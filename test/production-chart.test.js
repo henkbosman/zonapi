@@ -6,10 +6,12 @@ import { drawProductionChart } from '../public/dashboard-production-chart.js';
 /** Maakt een kleine SVG/DOM-testnode; input: tagnaam; output: node met kinderen en attributen. */
 function element(tagName) {
   return {
-    tagName, attributes: {}, children: [], textContent: '',
+    tagName, attributes: {}, children: [], textContent: '', listeners: {},
     setAttribute(name, value) { this.attributes[name] = value; },
     append(...nodes) { this.children.push(...nodes); },
-    replaceChildren(...nodes) { this.children = nodes; }
+    replaceChildren(...nodes) { this.children = nodes; },
+    addEventListener(name, listener) { this.listeners[name] = listener; },
+    getBoundingClientRect() { return { left: 100, width: 390 }; }
   };
 }
 
@@ -52,5 +54,34 @@ test('grafiek toont gemeten punt, daggrenzen, nu-lijn en hoogstens drie uur voor
     const marker = svg.children.find((child) => child.tagName === 'line' && child.attributes['stroke-dasharray'] === '5 4');
     assert.equal(Number(marker.attributes.x1), 407);
     assert.ok(svg.children.some((child) => child.tagName === 'text' && child.textContent === 'Nu'));
+    const target = svg.children.find((child) => child.attributes.role === 'slider');
+    const cursor = svg.children.find((child) => 'data-chart-cursor' in child.attributes);
+    target.listeners.pointermove({ clientX: 100 + 407 / 2 });
+    assert.equal(cursor.attributes.visibility, 'visible');
+    assert.equal(Number(cursor.children[0].attributes.x1), 407);
+    assert.equal(cursor.children[2].textContent, '14:00');
+    target.listeners.pointerleave();
+    assert.equal(cursor.attributes.visibility, 'hidden');
+    target.listeners.keydown({ key: 'End', preventDefault() {} });
+    assert.equal(cursor.children[2].textContent, '20:00');
+    assert.equal(Number(cursor.children[0].attributes.x1), 762);
+  } finally { globalThis.document = before; }
+});
+
+test('lege daggrafiek behoudt de zonuren, ook voor zonsopkomst en na zonsondergang', () => {
+  const before = globalThis.document;
+  globalThis.document = { createElementNS: (_, tag) => element(tag), createElement: (tag) => element(tag) };
+  try {
+    for (const hour of ['04', '22']) {
+      const container = element('div');
+      drawProductionChart(container, { sunrise: '2026-10-14T06:03:00Z', sunset: '2026-10-14T16:47:00Z', now: `2026-10-14T${hour}:00:00Z`, points: [] }, []);
+      const svg = container.children[0];
+      assert.equal(svg.tagName, 'svg');
+      const texts = svg.children.filter((child) => child.tagName === 'text').map((child) => child.textContent);
+      assert.ok(texts.includes('08:03'));
+      assert.ok(texts.includes('18:47'));
+      assert.ok(texts.includes('Geen meetpunten'));
+      assert.ok(!texts.includes('Nu'));
+    }
   } finally { globalThis.document = before; }
 });

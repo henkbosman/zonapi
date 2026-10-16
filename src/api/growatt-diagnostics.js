@@ -43,11 +43,14 @@ export function growattOverview(repository, settings, panels, now, limit, growat
   }).filter(Boolean).sort((a, b) => a.address.localeCompare(b.address));
   return {
     server_time: new Date(now).toISOString(),
+    logging: repository.loggingStatus('growatt'),
     listener: growattListenerStatus(growattRuntime, settings.growatt),
     database_path: repository.databasePath(),
     summary: {
       frames_total: statuses.reduce((total, row) => total + row.count, 0),
-      last_received_at: frames.length ? new Date(frames[0].received_ms).toISOString() : null
+      last_received_at: repository.diagnosticState('growatt', 'last_received')?.received_ms
+        ? new Date(repository.diagnosticState('growatt', 'last_received').received_ms).toISOString()
+        : frames.length ? new Date(frames[0].received_ms).toISOString() : null
     },
     statuses,
     announcements,

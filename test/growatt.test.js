@@ -9,7 +9,7 @@ import { xorPayload } from '../src/growatt/mask.js';
 import { splitFrames, validateFrame } from '../src/growatt/frame-reader.js';
 import { decodeRecord, parseDeviceTime } from '../src/growatt/decode-record.js';
 import { localReply } from '../src/growatt/protocol-replies.js';
-import { startGrowattServer } from '../src/growatt/tcp-listener.js';
+import { startGrowattServer, stopGrowattServer } from '../src/growatt/tcp-listener.js';
 
 /** Bouwt een testpakket met Grott's bekende generieke v06-offsets; input: geen; output: geldige versleutelde Buffer. */
 function fixture() {
@@ -122,4 +122,24 @@ test('TCP-ontvanger verwerkt twee frames tegelijk en twee verbindingen parallel'
     await new Promise((resolve) => server.close(resolve));
     db.close();
   }
+});
+
+test('uitgeschakelde Growatt-logging blijft antwoorden en gedecodeerde metingen opslaan', async () => {
+  const db = openDatabase(':memory:');
+  const repository = createRepository(db);
+  repository.setLogging('growatt', false);
+  const server = startGrowattServer({ host: '127.0.0.1', port: 0 }, repository);
+  await once(server, 'listening');
+  const socket = net.createConnection({ host: '127.0.0.1', port: server.address().port });
+  try {
+    await once(socket, 'connect');
+    socket.setTimeout(2000, () => socket.destroy(new Error('Geen Growatt-antwoord')));
+    const replies = receiveFrames(socket, 2);
+    socket.write(Buffer.concat([fixture(), fixture()]));
+    assert.ok((await replies).every((reply) => validateFrame(reply).ok));
+    assert.equal(repository.currentInverters()[0].power_w, 1234.5);
+    assert.equal(repository.currentInverters()[0].frame_id, null);
+    assert.deepEqual(repository.frameStatus(), []);
+    assert.deepEqual(repository.growattTimeline({ limit: 100, offset: 0, type: '', address: '', view: 'all' }).rows, []);
+  } finally { socket.destroy(); await stopGrowattServer(server); db.close(); }
 });
