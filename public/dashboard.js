@@ -63,8 +63,7 @@ function renderStatus(status) {
   $('#now').textContent = dutchDay.format(new Date(status.time));
   $('#source').textContent = `Weerbron: ${status.weather.source}`;
   $('#sun').textContent = status.weather.sunrise ? `Zon ${dutchTime.format(new Date(status.weather.sunrise))}–${dutchTime.format(new Date(status.weather.sunset))}` : 'Zonuren: locatie ontbreekt';
-  const freshInverters = status.growatt.inverters.filter((item) => item.fresh && Number.isFinite(item.power_w));
-  $('#pv-now').textContent = watts(status.growatt.power_w ?? (freshInverters.length ? freshInverters.reduce((sum, item) => sum + item.power_w, 0) : null));
+  $('#pv-now').textContent = watts(status.growatt.power_w);
   const pvSource = { shinelink: 'ShineLink', cloud: 'Web-API', mixed: 'ShineLink + web-API' }[status.growatt.source];
   $('#pv-sub').textContent = `${status.growatt.active_inverters}/${status.growatt.expected_inverters} omvormers recent${pvSource ? ` · ${pvSource}` : ''}`;
   $('#net-now').textContent = watts(status.homewizard.net_power_w);

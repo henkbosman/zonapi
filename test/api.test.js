@@ -30,7 +30,7 @@ test('API en dashboard geven ontbrekende configuratie expliciet terug', async ()
   db.close();
 });
 
-test('daggrafiek toont drie omvormers en logs wissen bewaart hun metingen', async () => {
+test('daggrafiek toont alleen totalen en logs wissen bewaart ook losse omvormermetingen', async () => {
   const { settings, panels, panel_errors: panelErrors } = loadConfiguration();
   const db = openDatabase(':memory:');
   const repository = createRepository(db);
@@ -54,7 +54,8 @@ test('daggrafiek toont drie omvormers en logs wissen bewaart hun metingen', asyn
     const day = await (await fetch(`${base}/api/v1/production/day`)).json();
     assert.equal(day.sunrise, sunrise);
     assert.equal(day.sunset, sunset);
-    assert.deepEqual(day.points.map((point) => [point.power_w, point.active_inverters]), [[600, 3]]);
+    assert.deepEqual(day.points, []);
+    assert.equal(day.overview_group_seconds, 60);
     const dashboard = await (await fetch(`${base}/dashboard`)).text();
     assert.match(dashboard, /dashboard\.js" type="module"/);
     assert.match(dashboard, /chart-coverage/);
@@ -66,6 +67,7 @@ test('daggrafiek toont drie omvormers en logs wissen bewaart hun metingen', asyn
     assert.deepEqual(await cleared.json(), { frames_deleted: 3, events_deleted: 1, cloud_calls_deleted: 0 });
     assert.deepEqual((await (await fetch(`${base}/api/v1/growatt/timeline`)).json()).rows, []);
     assert.deepEqual((await (await fetch(`${base}/api/v1/production/day`)).json()).points, day.points);
+    assert.equal(repository.history('inverter', measured - 1, now + 1, 100).length, 3);
     assert.equal((await (await fetch(`${base}/api/v1/growatt`)).json()).summary.frames_total, 0);
     assert.equal((await fetch(`${base}/api/v1/growatt/diagnostics`, { method: 'POST' })).status, 405);
   } finally {

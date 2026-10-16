@@ -34,6 +34,7 @@ export function validateSettings(config) {
   if (!Number.isInteger(config.advice?.history_days) || config.advice.history_days < 1 || config.advice.history_days > 90) errors.push('advice.history_days moet 1..90 zijn');
   if (config.advice?.baseload_w !== null && (!Number.isFinite(config.advice?.baseload_w) || config.advice.baseload_w < 0)) errors.push('advice.baseload_w moet null of >=0 zijn');
   if (!Number.isInteger(config.growatt?.expected_inverters) || config.growatt.expected_inverters < 1) errors.push('growatt.expected_inverters ongeldig');
+  if (config.growatt?.overview_group_seconds !== undefined && (!Number.isInteger(config.growatt.overview_group_seconds) || config.growatt.overview_group_seconds < 1 || config.growatt.overview_group_seconds > 86400)) errors.push('growatt.overview_group_seconds moet 1..86400 zijn');
   if (!Number.isInteger(config.growatt?.idle_timeout_minutes ?? 30) || (config.growatt?.idle_timeout_minutes ?? 30) < 1 || (config.growatt?.idle_timeout_minutes ?? 30) > 120) errors.push('growatt.idle_timeout_minutes moet 1..120 zijn');
   if (config.growatt?.time_sync_on_announcement !== undefined && typeof config.growatt.time_sync_on_announcement !== 'boolean') errors.push('growatt.time_sync_on_announcement moet true of false zijn');
   if (!Number.isInteger(config.growatt?.time_sync_retry_minutes ?? 10) || (config.growatt?.time_sync_retry_minutes ?? 10) < 1 || (config.growatt?.time_sync_retry_minutes ?? 10) > 120) errors.push('growatt.time_sync_retry_minutes moet 1..120 zijn');

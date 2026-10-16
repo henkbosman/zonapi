@@ -35,7 +35,7 @@ function drawLine(svg, points, x, y, color, maxGapMs) {
   }
 }
 
-/** Tekent werkelijke opbrengst en de volledige dagvoorspelling tussen zonsopkomst en zonsondergang; input: container, dagdata en voorspelslots; output: void. */
+/** Tekent verbonden totaalmomenten en de volledige dagvoorspelling binnen de zonuren; input: container, dagdata en voorspelslots; output: void. */
 export function drawProductionChart(container, day, slots) {
   container.replaceChildren();
   const now = Date.parse(day.now);
@@ -46,7 +46,7 @@ export function drawProductionChart(container, day, slots) {
     container.append(empty); return;
   }
   const start = sunrise, end = sunset;
-  const measured = day.points.filter((point) => Number.isFinite(point.power_w) && Date.parse(point.time) >= start && Date.parse(point.time) <= end)
+  const measured = day.points.filter((point) => point.active_inverters === point.expected_inverters && Number.isFinite(point.power_w) && Date.parse(point.time) >= start && Date.parse(point.time) <= end)
     .map((point) => ({ ms: Date.parse(point.time), value: point.power_w, count: point.active_inverters, expected: point.expected_inverters }))
     .sort((a, b) => a.ms - b.ms);
   const forecast = forecastLinePoints(slots, start, end);
@@ -64,7 +64,7 @@ export function drawProductionChart(container, day, slots) {
     const ms = start + (end - start) * fraction;
     label(svg, timeLabel.format(new Date(ms)), x(ms), 243, fraction === 0 ? 'start' : fraction === 1 ? 'end' : 'middle');
   }
-  drawLine(svg, measured, x, y, '#137771', (day.fresh_minutes ?? 12) * 60000);
+  drawLine(svg, measured, x, y, '#137771', Infinity);
   drawLine(svg, forecast, x, y, '#e6a321', 75 * 60000);
   if (!measured.length && !forecast.length) label(svg, 'Geen meetpunten', (left + right) / 2, (top + bottom) / 2);
   if (now >= start && now <= end) {
@@ -73,7 +73,7 @@ export function drawProductionChart(container, day, slots) {
     label(svg, 'Nu', Math.min(right - 12, Math.max(left + 12, nowX)), 14);
   }
   attachTimeCursor(svg, { start, end, left, right, top, bottom, width: 780 }, [
-    { label: 'Gemeten', color: '#137771', valueAt: (ms) => lineValueAt(measured, ms, (day.fresh_minutes ?? 12) * 60000) },
+    { label: 'Gemeten', color: '#137771', valueAt: (ms) => lineValueAt(measured, ms, Infinity) },
     { label: 'Voorspelling', color: '#996200', valueAt: (ms) => lineValueAt(forecast, ms, 75 * 60000) }
   ]);
   container.append(svg);

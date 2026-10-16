@@ -1,5 +1,6 @@
 import { setupDiagnosticControls } from './diagnostic-controls.js';
 import { renderGrowattCloud, setupGrowattCloud, showGrowattCloudCall } from './growatt-cloud.js';
+import { renderGrowattProduction } from './growatt-production.js';
 
 const dateTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const pageSize = 100;
@@ -55,20 +56,16 @@ function frameButton(id, cloud = false) {
   return button;
 }
 
-/** Toont luisteradres, metingen en aantallen; input: Growatt-overzicht; output: void. */
+/** Toont luisteradres, bronstatus en aantallen; input: Growatt-overzicht; output: void. */
 function renderSummary(data) {
   const listener = data.listener;
   const state = listener.listening === true ? 'luistert' : listener.listening === false ? 'luistert niet' : 'status onbekend';
   const error = listener.last_error ? ` · ${listener.last_error.code ?? listener.last_error.message}` : '';
   element('#listener').textContent = `TCP: ${listener.host}:${listener.port} · ${state}${error}`;
   element('#db-path').textContent = `Database: ${data.database_path ?? 'geheugen'}`;
-  element('#updated').textContent = `Meetstatus: ${data.production.status}`;
-  element('#production-source').textContent = `Opbrengstbron: ${{ shinelink: 'ShineLink', cloud: 'Growatt-web-API', auto: 'Automatisch' }[data.cloud.production_source] ?? '—'}`;
   renderGrowattCloud(data.cloud);
   element('#frame-count').textContent = data.summary.frames_total.toLocaleString('nl-NL');
-  element('#power').textContent = watts(data.production.power_w);
   element('#discovered').textContent = `${data.announcements.length}/${data.production.expected_inverters}`;
-  element('#active').textContent = `${data.production.active_inverters}/${data.production.expected_inverters}`;
   element('#last-frame').textContent = time(data.summary.last_received_at);
   const list = element('#frame-statuses');
   list.replaceChildren();
@@ -92,19 +89,6 @@ function renderAnnouncements(data) {
   for (const announcement of data.announcements) addRow(body, [
     announcement.address, announcement.inverter_serial, announcement.datalogger_serial,
     time(announcement.last_seen_at), announcement.record_type
-  ]);
-}
-
-/** Toont de laatste meting per omvormer; input: Growatt-overzicht; output: void. */
-function renderInverters(data) {
-  const body = element('#inverters');
-  body.replaceChildren();
-  if (!data.production.inverters.length) return showEmpty(body, 7, 'Geen metingen');
-  for (const inverter of data.production.inverters) addRow(body, [
-    inverter.serial, inverter.source === 'cloud' ? 'Web-API' : inverter.source === 'shinelink' ? 'ShineLink' : '—', watts(inverter.power_w),
-    inverter.energy_today_kwh === null ? '—' : `${inverter.energy_today_kwh} kWh`,
-    inverter.energy_total_kwh === null ? '—' : `${inverter.energy_total_kwh} kWh`,
-    time(inverter.measured_at), inverter.fresh ? 'Actueel' : 'Oud'
   ]);
 }
 
@@ -171,24 +155,36 @@ function handleFrameClick(event) {
   if (cloud) void showGrowattCloudCall(cloud.dataset.cloudCallId);
 }
 
-/** Vernieuwt de Growatt-metingen en de gefilterde tijdlijn; input: geen; output: Promise<void>. */
+/** Werkt de Growatt-diagnosepanelen bij; input: Growatt-overzicht; output: void. */
+function renderOverview(data) {
+  renderLogging(data.logging);
+  renderSummary(data);
+  renderAnnouncements(data);
+}
+
+/** Leest en tekent één zelfstandig paginadeel; input: endpoint, tekenfunctie en vernieuwnummer; output: Promise met antwoord of fout. */
+async function refreshSection(path, render, current) {
+  const data = await request(path);
+  if (current === refreshNumber) render(data);
+  return data;
+}
+
+/** Vernieuwt metingen, bronstatus en tijdlijn onafhankelijk; input: geen; output: Promise<void>, fouten blijven per onderdeel zichtbaar. */
 async function refresh() {
   const current = ++refreshNumber;
   const query = new URLSearchParams({ limit: String(pageSize), offset: String(offset), view: element('#view-filter').value });
   if (element('#type-filter').value) query.set('type', element('#type-filter').value);
   if (element('#address-filter').value) query.set('address', element('#address-filter').value);
-  try {
-    const [data, timeline] = await Promise.all([request('/api/v1/growatt?limit=1'), request(`/api/v1/growatt/timeline?${query}`)]);
-    if (current !== refreshNumber) return;
-    renderLogging(data.logging);
-    renderSummary(data);
-    renderAnnouncements(data);
-    renderInverters(data);
-    renderTimeline(timeline);
-    element('#connection').textContent = `Bijgewerkt ${time(data.server_time)}`;
-  } catch (error) {
-    if (current === refreshNumber) element('#connection').textContent = `Fout: ${error.message}`;
-  }
+  const results = await Promise.allSettled([
+    refreshSection('/api/v1/production/current', renderGrowattProduction, current),
+    refreshSection('/api/v1/growatt?limit=1', renderOverview, current),
+    refreshSection(`/api/v1/growatt/timeline?${query}`, renderTimeline, current)
+  ]);
+  if (current !== refreshNumber) return;
+  const labels = ['Metingen', 'Bronstatus', 'Berichten'];
+  const errors = results.flatMap((result, index) => result.status === 'rejected' ? [`${labels[index]}: ${result.reason.message}`] : []);
+  const serverTime = results[1].status === 'fulfilled' ? results[1].value.server_time : new Date().toISOString();
+  element('#connection').textContent = errors.length ? errors.join(' · ') : `Bijgewerkt ${time(serverTime)}`;
 }
 
 /** Wijzigt de tijdlijnfilters en start op de nieuwste pagina; input: geen (leest selectievelden); output: void. */

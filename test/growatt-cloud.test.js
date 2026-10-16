@@ -53,6 +53,8 @@ test('bestaande configuraties gebruiken alleen ShineLink; cloudvelden zijn optio
     assert.ok(validateSettings(fixture('cloud', cloud).settings).some((error) => error.startsWith('growatt.cloud')));
   }
   assert.ok(validateSettings(fixture('unknown').settings).some((error) => error.includes('production_source')));
+  assert.deepEqual(validateSettings({ ...settings, growatt: { ...settings.growatt, overview_group_seconds: 60 } }), []);
+  assert.ok(validateSettings({ ...settings, growatt: { ...settings.growatt, overview_group_seconds: 0 } }).some((error) => error.includes('overview_group_seconds')));
   const db = openDatabase(':memory:');
   try {
     const poller = createGrowattCloudPoller({ settings: legacy, panels, repository: createRepository(db), environment: {},
@@ -262,6 +264,9 @@ test('API, daggrafiek en Growatt-tijdlijn gebruiken clouddata; logbeheer behoudt
     assert.equal(day.points.at(-1).power_w, 1000);
     assert.equal(day.points.at(-1).active_inverters, 4);
     assert.equal(day.points.at(-1).source, 'cloud');
+    assert.equal(day.overview_group_seconds, 300);
+    const overview = await (await fetch(`${base}/api/v1/growatt`)).json();
+    assert.deepEqual(overview.production.inverters, current.inverters);
     const local = await (await fetch(`${base}/api/v1/history?metric=inverter&source=shinelink`)).json();
     assert.ok(local.rows.every((row) => row.power_w === 900 && row.source === 'shinelink'));
     const timeline = await (await fetch(`${base}/api/v1/growatt/timeline?view=cloud`)).json();
@@ -274,6 +279,7 @@ test('API, daggrafiek en Growatt-tijdlijn gebruiken clouddata; logbeheer behoudt
     assert.match(page, /growatt\.js" type="module"/);
     assert.match(page, /Growatt-web-API/);
     assert.equal((await fetch(`${base}/growatt-cloud.js`)).status, 200);
+    assert.equal((await fetch(`${base}/growatt-production.js`)).status, 200);
     assert.equal((await (await fetch(`${base}/api/v1/growatt/cloud/poll`, { method: 'POST' })).json()).reason, 'interval');
     assert.equal(requests, 4);
     await fetch(`${base}/api/v1/growatt/logging?enabled=false`, { method: 'PUT' });

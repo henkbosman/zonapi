@@ -16,7 +16,7 @@ function element(tagName) {
   };
 }
 
-test('dezelfde dag toont één tot vier omvormers zonder oude waarden bij te tellen', () => {
+test('de daggrafiek tekent geen individuele omvormers of onvolledige totalen', () => {
   const noon = Date.parse('2026-10-14T10:00:00Z');
   const sunrise = '2026-10-14T05:00:00Z';
   const sunset = '2026-10-14T16:00:00Z';
@@ -27,7 +27,29 @@ test('dezelfde dag toont één tot vier omvormers zonder oude waarden bij te tel
     { serial: 'A', measured_ms: noon + 13 * 60000, power_w: 110 }
   ];
   const points = productionSeries(rows, noon + 15 * 60000, sunrise, sunset, 4, 12);
-  assert.deepEqual(points.map((point) => [point.power_w, point.active_inverters]), [[600, 3], [110, 1]]);
+  assert.deepEqual(points, []);
+});
+
+test('ongelijke cloudmeettijden vormen één totaal per ronde zonder tussenstanden of dubbeltelling', () => {
+  const start = Date.parse('2026-10-14T10:00:00Z');
+  const serials = ['A', 'B', 'C', 'D'];
+  const rows = [0, 1].flatMap((round) => serials.map((serial, index) => ({ serial,
+    measured_ms: start + round * 300000 + index * 5000, power_w: (index + 1) * 100 + round * 10, source: 'cloud' })));
+  rows.push({ serial: 'onbekend', measured_ms: start, power_w: 9000 });
+  rows.push({ ...rows[0] });
+  rows.push({ serial: 'A', measured_ms: start + 3600000, power_w: 8000 });
+  const points = productionSeries(rows.reverse(), start + 600000, '2026-10-14T06:00:00Z', '2026-10-14T18:00:00Z', 4, 12, serials, 300);
+  assert.deepEqual(points.map((point) => [point.time, point.power_w, point.active_inverters, point.source]), [
+    ['2026-10-14T10:00:15.000Z', 1000, 4, 'cloud'], ['2026-10-14T10:05:15.000Z', 1040, 4, 'cloud']
+  ]);
+});
+
+test('oude omvormerwaarden worden niet in een later totaal opgenomen', () => {
+  const start = Date.parse('2026-10-14T10:00:00Z');
+  const rows = ['A', 'B', 'C', 'D'].map((serial) => ({ serial, measured_ms: start, power_w: 100 }));
+  rows.push({ serial: 'A', measured_ms: start + 13 * 60000, power_w: 200 });
+  const points = productionSeries(rows, start + 14 * 60000, null, null, 4, 12);
+  assert.deepEqual(points.map((point) => point.power_w), [400]);
 });
 
 test('daggrafiek bewaart de hele voorspelling, verbindt uurpunten schuin en toont tijd en beide vermogens bij de cursor', () => {
@@ -38,8 +60,9 @@ test('daggrafiek bewaart de hele voorspelling, verbindt uurpunten schuin en toon
     const day = {
       sunrise: '2026-10-14T06:00:00Z', sunset: '2026-10-14T18:00:00Z', now: '2026-10-14T12:00:00Z', fresh_minutes: 12,
       points: [
-        { time: '2026-10-14T11:50:00Z', power_w: 200, active_inverters: 3, expected_inverters: 4 },
-        { time: '2026-10-14T12:00:00Z', power_w: 600, active_inverters: 3, expected_inverters: 4 }
+        { time: '2026-10-14T11:30:00Z', power_w: 200, active_inverters: 4, expected_inverters: 4 },
+        { time: '2026-10-14T11:40:00Z', power_w: 100, active_inverters: 1, expected_inverters: 4 },
+        { time: '2026-10-14T12:00:00Z', power_w: 600, active_inverters: 4, expected_inverters: 4 }
       ]
     };
     const forecast = [0, 0, 200, 350, 500, 600, 500, 700, 800, 900, 1500, 700, 100, 0].map((power_w, index) => ({
@@ -52,6 +75,9 @@ test('daggrafiek bewaart de hele voorspelling, verbindt uurpunten schuin en toon
     assert.equal(svg.children.filter((child) => child.tagName === 'path').length, 2);
     const circles = svg.children.filter((child) => child.tagName === 'circle');
     assert.equal(circles.filter((child) => child.attributes.fill === '#137771').length, 2);
+    const measuredPath = svg.children.find((child) => child.tagName === 'path' && child.attributes.stroke === '#137771').attributes.d;
+    assert.equal((measuredPath.match(/M/g) ?? []).length, 1);
+    assert.equal((measuredPath.match(/L/g) ?? []).length, 1);
     const forecastXs = circles.filter((child) => child.attributes.fill === '#e6a321').map((child) => Number(child.attributes.cx));
     assert.equal(Math.min(...forecastXs), 52);
     assert.equal(Math.max(...forecastXs), 762);
@@ -71,6 +97,10 @@ test('daggrafiek bewaart de hele voorspelling, verbindt uurpunten schuin en toon
     assert.equal(cursor.children[2].textContent, '14:00');
     const values = cursor.children.find((child) => 'data-chart-values' in child.attributes);
     assert.deepEqual(values.children.filter((child) => child.tagName === 'text').map((child) => child.textContent), ['Gemeten: 600 W', 'Voorspelling: 600 W']);
+    const middleX = 52 + 710 * 5.75 / 12;
+    target.listeners.pointermove({ clientX: 100 + middleX / 2 });
+    assert.equal(cursor.children[2].textContent, '13:45');
+    assert.equal(values.children.filter((child) => child.tagName === 'text')[0].textContent, 'Gemeten: 400 W');
     const futureX = 52 + 710 * 10 / 12;
     target.listeners.pointermove({ clientX: 100 + futureX / 2 });
     assert.equal(cursor.children[2].textContent, '18:00');
