@@ -1,8 +1,8 @@
 import { localDay } from './local-day.js';
 import { offlineSunTimes } from './solar-position.js';
 import { getIrradianceSource } from './irradiance-source.js';
-import { estimatePv } from '../pv/model.js';
-import { getCalibrationFactor } from '../pv/calibration.js';
+import { createPvForecastModel } from '../pv/forecast-model.js';
+import { forecastTimeline } from './forecast-timeline.js';
 import { getWeatherResolution } from './resolution.js';
 
 /** Maakt een daglichtgestuurde weerscheduler; input: instellingen, panelen, fouten, repository, optionele klok/bron; output: {tick,status,start,stop}. */
@@ -11,7 +11,6 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
   let inFlight = false;
   let lastError = null;
   let nextAt = null;
-  const calibrationFactor = getCalibrationFactor(settings);
   const resolutionMinutes = getWeatherResolution(settings);
   const latitude = settings.location?.latitude;
   const longitude = settings.location?.longitude;
@@ -58,9 +57,13 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
         for (const item of result.sun) repository.saveSun(item.day, item.sunrise_ms, item.sunset_ms, settings.weather.source, now);
         for (const row of result.rows) {
           repository.saveForecast(row);
-          if (!panelErrors.length) {
-            const pv = estimatePv(row, panels, latitude, longitude, calibrationFactor);
-            for (const group of pv.groups) repository.savePv({ ...row, ...group, source: row.source });
+        }
+        if (!panelErrors.length) {
+          const model = createPvForecastModel(repository, settings, panels, now);
+          const rows = model.active ? forecastTimeline(result.rows, -Infinity, Infinity) : result.rows;
+          for (const row of model.prepare(rows)) {
+            const pv = model.estimate(row);
+            for (const group of pv.groups) repository.savePv({ ...row, ...group, correction_factor: pv.correction_factor, computed_ms: now, model_key: model.modelKey });
           }
         }
         db.exec('COMMIT');

@@ -3,13 +3,18 @@ import { createWeatherCallStore } from './weather-calls.js';
 import { createHomeWizardCallStore } from './homewizard-calls.js';
 import { forecastTimeline, pvForecastTimeline } from '../weather/forecast-timeline.js';
 import { createGrowattCloudStore } from './growatt-cloud.js';
+import { createPvCorrectionStore } from './pv-corrections.js';
 
 /** Maakt beperkte databasebewerkingen; input: open SQLite DB en optionele logconfiguratie; output: repositorymethoden. */
 export function createRepository(db, logging = {}) {
   const diagnostics = createDiagnosticStore(db, logging);
   const q = {
     forecast: db.prepare('INSERT INTO forecast(source,start_ms,end_ms,ghi,dni,dhi,fetched_ms,model) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(start_ms,end_ms) DO UPDATE SET source=excluded.source,ghi=excluded.ghi,dni=excluded.dni,dhi=excluded.dhi,fetched_ms=excluded.fetched_ms,model=excluded.model WHERE excluded.fetched_ms > forecast.fetched_ms'),
-    pv: db.prepare('INSERT INTO pv_forecast(group_id,start_ms,end_ms,source,power_w,gti_w_m2,fetched_ms,model) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(group_id,start_ms,end_ms) DO UPDATE SET source=excluded.source,power_w=excluded.power_w,gti_w_m2=excluded.gti_w_m2,fetched_ms=excluded.fetched_ms,model=excluded.model WHERE excluded.fetched_ms >= pv_forecast.fetched_ms'),
+    pv: db.prepare(`INSERT INTO pv_forecast(group_id,start_ms,end_ms,source,power_w,gti_w_m2,fetched_ms,model,base_power_w,correction_factor,computed_ms,model_key)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(group_id,start_ms,end_ms) DO UPDATE SET source=excluded.source,power_w=excluded.power_w,
+      gti_w_m2=excluded.gti_w_m2,fetched_ms=excluded.fetched_ms,model=excluded.model,base_power_w=excluded.base_power_w,
+      correction_factor=excluded.correction_factor,computed_ms=excluded.computed_ms,model_key=excluded.model_key
+      WHERE excluded.fetched_ms>=pv_forecast.fetched_ms AND excluded.computed_ms>=pv_forecast.computed_ms`),
     sun: db.prepare('INSERT INTO sun_times VALUES (?, ?, ?, ?, ?) ON CONFLICT(local_date) DO UPDATE SET sunrise_ms=excluded.sunrise_ms,sunset_ms=excluded.sunset_ms,source=excluded.source,fetched_ms=excluded.fetched_ms WHERE excluded.fetched_ms > sun_times.fetched_ms'),
     frame: db.prepare('INSERT INTO growatt_frames(received_ms,peer,protocol,record_type,status,raw) VALUES(?,?,?,?,?,?)'),
     frameUpdate: db.prepare('UPDATE growatt_frames SET status=? WHERE id=?'),
@@ -23,10 +28,12 @@ export function createRepository(db, logging = {}) {
     ...createWeatherCallStore(db, diagnostics),
     ...createHomeWizardCallStore(db, diagnostics),
     ...createGrowattCloudStore(db, diagnostics),
+    ...createPvCorrectionStore(db),
     /** Slaat één nieuwer weertijdvak op; input: {source,start_ms,end_ms,ghi,dni,dhi,fetched_ms}; output: SQLite-resultaat. */
     saveForecast(row) { return q.forecast.run(row.source, row.start_ms, row.end_ms, row.ghi, row.dni, row.dhi, row.fetched_ms, row.model ?? null); },
     /** Slaat een paneelgroepberekening op en staat herberekenen van dezelfde weerdata toe; input: PV-rij; output: SQLite-resultaat, oudere brondata overschrijft niets. */
-    savePv(row) { return q.pv.run(row.group_id, row.start_ms, row.end_ms, row.source, row.power_w, row.gti_w_m2, row.fetched_ms, row.model ?? null); },
+    savePv(row) { return q.pv.run(row.group_id, row.start_ms, row.end_ms, row.source, row.power_w, row.gti_w_m2, row.fetched_ms, row.model ?? null,
+      row.base_power_w ?? row.power_w, row.correction_factor ?? 1, row.computed_ms ?? 0, row.model_key ?? ''); },
     /** Slaat daglichtgrenzen op; input: dag, zontijden, bron, ophaaltijd; output: SQLite-resultaat. */
     saveSun(day, sunrise, sunset, source, fetched) { return q.sun.run(day, sunrise, sunset, source, fetched); },
     /** Geeft zontijden terug; input: lokale datum; output: rij of undefined. */

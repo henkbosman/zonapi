@@ -18,6 +18,7 @@ import { advise } from '../appliances/start-advice.js';
 import { dailyAdvice } from '../appliances/daily-advice.js';
 import { currentProductionRows, productionHistory } from '../production/source.js';
 import { growattCloudConfig } from '../growatt/cloud/config.js';
+import { createPvForecastModel } from '../pv/forecast-model.js';
 
 const staticFiles = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
@@ -96,7 +97,8 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       }
       const now = Date.now();
       const forecastRows = (hours) => repository.forecast(now, now + hours * 3600000);
-      if (url.pathname === '/api/v1/forecast') return sendJson(response, 200, forecastResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location, now, settings.weather.stale_after_hours, getCalibrationFactor(settings)));
+      if (url.pathname === '/api/v1/forecast') return sendJson(response, 200, forecastResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location, now, settings.weather.stale_after_hours, getCalibrationFactor(settings), createPvForecastModel(repository, settings, panels, now)));
+      if (url.pathname === '/api/v1/pv/corrections') return sendJson(response, 200, createPvForecastModel(repository, settings, panels, now).status());
       if (url.pathname === '/api/v1/forecast/day') return sendJson(response, 200, dayForecastResponse(repository, settings, panels, panelErrors, weather.status(), now));
       if (url.pathname === '/api/v1/irradiance') return sendJson(response, 200, irradianceResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location));
       if (url.pathname === '/api/v1/growatt') return sendJson(response, 200, growattOverview(repository, settings, panels, now, growattLimitParam(url.searchParams.get('limit')), growattRuntime, growattCloud));
@@ -135,9 +137,10 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       }
       if (url.pathname === '/api/v1/appliances/daily') {
         const { profiles, errors } = loadProfiles(join(root, 'config/appliances'));
-        const rows = forecastRows((settings.weather.forecast_days + 1) * 24);
+        const pvModel = createPvForecastModel(repository, settings, panels, now);
+        const rows = pvModel.prepare(forecastRows((settings.weather.forecast_days + 1) * 24));
         return sendJson(response, 200, { ...dailyAdvice([...profiles.values()], rows,
-          { settings, panels, panelErrors, latitude: settings.location.latitude, longitude: settings.location.longitude,
+          { settings, panels, panelErrors, pvModel, latitude: settings.location.latitude, longitude: settings.location.longitude,
             baseload: getBaseload(settings, repository, now, serials), now }, repository), errors });
       }
       if (/^\/api\/v1\/appliances\/[a-z0-9_-]+\/advice$/.test(url.pathname)) {
@@ -145,8 +148,9 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
         const profile = loadProfiles(join(root, 'config/appliances')).profiles.get(id);
         if (!profile) return sendJson(response, 404, { error: 'Onbekend of ongeldig apparaatprofiel' });
         const durationHours = profile.duration_minutes / 60;
-        const rows = forecastRows(settings.advice.search_hours + durationHours + 1);
-        const advice = advise(profile, rows, { settings, panels, panelErrors, latitude: settings.location.latitude, longitude: settings.location.longitude, baseload: getBaseload(settings, repository, now, serials), now });
+        const pvModel = createPvForecastModel(repository, settings, panels, now);
+        const rows = pvModel.prepare(forecastRows(settings.advice.search_hours + durationHours + 1));
+        const advice = advise(profile, rows, { settings, panels, panelErrors, pvModel, latitude: settings.location.latitude, longitude: settings.location.longitude, baseload: getBaseload(settings, repository, now, serials), now });
         return sendJson(response, 200, advice);
       }
       if (url.pathname === '/api/v1/history') {

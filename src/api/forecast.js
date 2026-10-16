@@ -2,15 +2,21 @@ import { estimatePv } from '../pv/model.js';
 import { tiltedIrradiance } from '../pv/plane-irradiance.js';
 import { forecastResolution } from '../weather/resolution.js';
 
-/** Vormt opgeslagen weertijdvakken om naar een forecast-API-resultaat; input: rijen, paneelconfig, fouten, locatie, tijd, versheid en optionele kalibratiefactor; output: rijen met gekalibreerde PV, resoluties en kwaliteitsstatus. */
-export function forecastResponse(rows, panels, panelErrors, location, now, staleHours, calibrationFactor = 1) {
+/** Vormt weertijdvakken om naar een voorspelling; input: rijen, panelen, fouten, locatie, tijd, versheid, kalibratie en optioneel correctiemodel; output: basis en gecorrigeerde PV met bronmetadata en kwaliteitsstatus. */
+export function forecastResponse(rows, panels, panelErrors, location, now, staleHours, calibrationFactor = 1, model = null) {
   const complete = panelErrors.length === 0 && Number.isFinite(location.latitude) && Number.isFinite(location.longitude);
   const stale = rows.some((row) => now - row.fetched_ms > staleHours * 3600000);
-  const slots = rows.map((row) => {
-    const result = complete ? estimatePv(row, panels, location.latitude, location.longitude, calibrationFactor) : null;
-    return { ...slotMetadata(row), ghi_w_m2: row.ghi, dni_w_m2: row.dni, dhi_w_m2: row.dhi, power_w: result?.power_w ?? null, groups: result?.groups ?? null };
+  const prepared = model ? model.prepare(rows) : rows;
+  const slots = prepared.map((row) => {
+    const result = complete ? model ? model.estimate(row) : estimatePv(row, panels, location.latitude, location.longitude, calibrationFactor) : null;
+    return { ...slotMetadata(row), ghi_w_m2: row.ghi, dni_w_m2: row.dni, dhi_w_m2: row.dhi, power_w: result?.power_w ?? null,
+      base_power_w: result?.base_power_w ?? result?.power_w ?? null, automatic_correction_factor: result?.correction_factor ?? 1,
+      correction_source: result?.correction_source ?? 'none', groups: result?.groups ?? null };
   });
-  return { status: rows.length ? (complete ? (stale ? 'stale' : 'ok') : 'configuration_incomplete') : 'forecast_unavailable', missing: complete ? [] : panelErrors, calibration_factor: calibrationFactor, ...forecastResolution(rows), slots };
+  const status = model?.status();
+  if (status) delete status.quarters;
+  return { status: rows.length ? (complete ? (stale ? 'stale' : 'ok') : 'configuration_incomplete') : 'forecast_unavailable', missing: complete ? [] : panelErrors,
+    calibration_factor: calibrationFactor, ...(status ? { automatic_correction: status } : {}), ...forecastResolution(prepared), slots };
 }
 
 /** Beschrijft één effectief voorspeltijdvak; input: opgeslagen rij; output: ISO-grenzen, bron, model en oorspronkelijke en effectieve resolutie. */

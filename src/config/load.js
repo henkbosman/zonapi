@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { getCalibrationFactor } from '../pv/calibration.js';
 import { getWeatherResolution } from '../weather/resolution.js';
 import { growattCloudConfig } from '../growatt/cloud/config.js';
+import { automaticCorrectionConfig } from '../pv/automatic-config.js';
 
 export const root = resolve(import.meta.dirname, '../..');
 
@@ -15,6 +16,7 @@ export function readConfig(relativePath) {
 export function validateSettings(config) {
   const errors = [];
   try { getCalibrationFactor(config); } catch (error) { errors.push(error.message); }
+  try { automaticCorrectionConfig(config); } catch (error) { errors.push(error.message); }
   try { getWeatherResolution(config); } catch (error) { errors.push(error.message); }
   try { growattCloudConfig(config); } catch (error) { errors.push(error.message); }
   if (config.timezone !== 'Europe/Amsterdam') errors.push('timezone moet Europe/Amsterdam zijn');

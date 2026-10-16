@@ -1,24 +1,25 @@
-import { estimatePv } from './model.js';
-import { getCalibrationFactor } from './calibration.js';
+import { createPvForecastModel } from './forecast-model.js';
 
-/** Herberekent lopende en toekomstige PV-cache met actuele instellingen; input: repository, instellingen, panelen, configuratiefouten en huidige ms; output: aantal opgeslagen groepswaarden. */
-export function refreshPvForecast(repository, settings, panels, panelErrors, now) {
+/** Herberekent lopende en toekomstige PV-cache met actuele correcties; input: repository, instellingen, panelen, fouten, huidige ms en optionele transactievlag; output: aantal opgeslagen groepswaarden, verstreken tijdvakken blijven behouden. */
+export function refreshPvForecast(repository, settings, panels, panelErrors, now, { transaction = true } = {}) {
   const { latitude, longitude } = settings.location;
   if (panelErrors.length || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return 0;
-  const factor = getCalibrationFactor(settings);
-  const rows = repository.forecastCandidates(now, now + (settings.weather.forecast_days + 1) * 86400000);
+  const model = createPvForecastModel(repository, settings, panels, now);
+  const until = now + (settings.weather.forecast_days + 1) * 86400000;
+  const rows = model.active ? repository.forecast(now, until) : repository.forecastCandidates(now, until);
   const db = repository.database();
   let count = 0;
-  db.exec('BEGIN');
+  if (transaction) db.exec('BEGIN');
   try {
-    for (const row of rows) {
-      const result = estimatePv(row, panels, latitude, longitude, factor);
+    for (const row of model.prepare(rows)) {
+      if (row.end_ms <= now) continue;
+      const result = model.estimate(row);
       for (const group of result.groups) {
-        repository.savePv({ ...row, ...group });
+        repository.savePv({ ...row, ...group, correction_factor: result.correction_factor, computed_ms: now, model_key: model.modelKey });
         count++;
       }
     }
-    db.exec('COMMIT');
+    if (transaction) db.exec('COMMIT');
     return count;
-  } catch (error) { db.exec('ROLLBACK'); throw error; }
+  } catch (error) { if (transaction) db.exec('ROLLBACK'); throw error; }
 }

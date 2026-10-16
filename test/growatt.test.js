@@ -143,3 +143,25 @@ test('uitgeschakelde Growatt-logging blijft antwoorden en gedecodeerde metingen 
     assert.deepEqual(repository.growattTimeline({ limit: 100, offset: 0, type: '', address: '', view: 'all' }).rows, []);
   } finally { socket.destroy(); await stopGrowattServer(server); db.close(); }
 });
+
+test('een fout tijdens automatisch corrigeren onderbreekt de lokale Growatt-ontvangst niet', async () => {
+  const db = openDatabase(':memory:'), repository = createRepository(db);
+  let calls = 0;
+  const server = startGrowattServer({ host: '127.0.0.1', port: 0 }, repository, (measurement) => {
+    assert.equal(repository.currentInverters()[0].power_w, measurement.power_w);
+    calls++;
+    throw new Error('correctie-opslagfout');
+  });
+  await once(server, 'listening');
+  const socket = net.createConnection({ host: '127.0.0.1', port: server.address().port });
+  try {
+    await once(socket, 'connect');
+    socket.setTimeout(2000, () => socket.destroy(new Error('Geen Growatt-antwoord')));
+    const replies = receiveFrames(socket, 2);
+    socket.write(Buffer.concat([fixture(), fixture()]));
+    assert.ok((await replies).every((reply) => validateFrame(reply).ok));
+    assert.equal(calls, 2);
+    assert.equal(repository.currentInverters()[0].power_w, 1234.5);
+    assert.equal(repository.recentGrowattProblems(10).filter((row) => row.status === 'forecast_correction_error').length, 2);
+  } finally { socket.destroy(); await stopGrowattServer(server); db.close(); }
+});

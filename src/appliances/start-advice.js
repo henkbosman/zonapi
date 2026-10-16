@@ -16,7 +16,7 @@ export function evaluateStart(profile, startMs, weather, context) {
       const row = weather.find((item) => item.start_ms <= cursor && item.end_ms > cursor);
       if (!row) return null;
       const end = Math.min(row.end_ms, finish);
-      if (!predictions.has(row.start_ms)) predictions.set(row.start_ms, estimatePv(row, context.panels, context.latitude, context.longitude, calibrationFactor).power_w);
+      if (!predictions.has(row.start_ms)) predictions.set(row.start_ms, context.pvModel ? context.pvModel.estimate(row).power_w : estimatePv(row, context.panels, context.latitude, context.longitude, calibrationFactor).power_w);
       const available = Math.max(0, predictions.get(row.start_ms) - context.baseload.power_w - reserve);
       const hours = (end - cursor) / 3600000;
       totalWh += step.power_w * hours;

@@ -89,6 +89,9 @@ async function refresh() {
     ]);
     renderStatus(status);
     drawProductionChart($('#pv-chart'), production, forecast.slots);
+    const correction = forecast.automatic_correction;
+    $('#pv-correction').textContent = correction?.status === 'active'
+      ? `Correctie ${correction.latest.correction_percent > 0 ? '+' : ''}${correction.latest.correction_percent.toLocaleString('nl-NL')}% · Patroon ${correction.learned_quarters}/96` : '';
     const recent = production.points.at(-1);
     $('#chart-coverage').textContent = recent ? `${recent.active_inverters}/${recent.expected_inverters} omvormers` : '';
     const now = Date.parse(production.now);

@@ -5,8 +5,8 @@ import { redactCloud } from './redact.js';
 import { localDay } from '../../weather/local-day.js';
 import { offlineSunTimes } from '../../weather/solar-position.js';
 
-/** Maakt de periodieke Growatt-webbron; input: instellingen, paneelconfig, repository en optionele klok/omgeving/client; output: {poll,start,stop,status} met persistent interval en foutterugval. */
-export function createGrowattCloudPoller({ settings, panels, repository, clock = () => Date.now(), environment = process.env, client }) {
+/** Maakt de periodieke Growatt-webbron; input: instellingen, panelen, opslag en optionele klok/omgeving/client/callback na complete meetcyclus; output: {poll,start,stop,status} met persistent interval en foutterugval. */
+export function createGrowattCloudPoller({ settings, panels, repository, clock = () => Date.now(), environment = process.env, client, onMeasurements }) {
   const config = growattCloudConfig(settings);
   const token = growattCloudToken(config, environment);
   const configured = panels.inverters.map((item) => item.serial).filter(Boolean).map((serial) => ({ serial, device_type: config.device_type }));
@@ -52,6 +52,7 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
     state.next_ms = started + config.poll_seconds * 1000;
     persist();
     const errors = [];
+    const observations = [];
     let measurements = 0, retryMs = 0;
     try {
       const targets = await devices(controller.signal);
@@ -60,6 +61,7 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
         try {
           const measurement = await api.read(device, controller.signal);
           repository.saveCloudInverter(measurement);
+          observations.push(measurement);
           measurements++;
         } catch (error) {
           if (stopping) break;
@@ -73,6 +75,16 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
       retryMs = Math.max(retryMs, error.retry_after_ms ?? 0);
     }
     if (stopping) return { attempted: true, reason: 'stopped' };
+    if (onMeasurements) {
+      if (errors.length) state.forecast_correction = { status: 'incomplete' };
+      else {
+        try { state.forecast_correction = onMeasurements(observations, clock()); }
+        catch (error) {
+          state.forecast_correction = { status: 'error', message: redactCloud(error.message, token) };
+          repository.saveGrowattEvent(clock(), config.base_url, 'forecast_correction_error', state.forecast_correction.message);
+        }
+      }
+    }
     state.failures = errors.length ? (state.failures ?? 0) + 1 : 0;
     const wait = errors.length ? Math.max(Math.min(3600000, config.poll_seconds * 1000 * 2 ** Math.min(5, state.failures - 1)), retryMs) : config.poll_seconds * 1000;
     state.next_ms = clock() + wait;
@@ -82,7 +94,7 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
     if (measurements) state.last_success_ms = clock();
     persist();
     if (errors.length) repository.saveGrowattEvent(clock(), config.base_url, 'cloud_poll_error', state.last_error);
-    return { attempted: true, reason: state.status, measurements, status: status() };
+    return { attempted: true, reason: state.status, measurements, forecast_correction: state.forecast_correction ?? null, status: status() };
   }
 
   /** Probeert één geplande cloudcyclus; input: geen; output: Promise met poging of reden disabled/configuration/interval/daylight/busy. */
@@ -122,7 +134,8 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
       last_error: config.source === 'shinelink' ? null : !token ? 'API-token ontbreekt' : state.last_error ?? null,
       last_attempt: iso(state.last_attempt_ms), last_success: iso(state.last_success_ms), next_fetch: iso(state.next_ms),
       plant_id: config.plant_id || state.plant_id || null, plants: state.plants ?? [], devices: configured.length ? configured : state.devices ?? [],
-      last_measurement_count: state.last_measurement_count ?? 0, last_request: repository.diagnosticState('growatt', 'cloud_last_request') };
+      last_measurement_count: state.last_measurement_count ?? 0, forecast_correction: state.forecast_correction ?? null,
+      last_request: repository.diagnosticState('growatt', 'cloud_last_request') };
   }
 
   /** Start achtergrondcontrole zonder het Growatt-interval te verkorten; input: geen; output: void. */

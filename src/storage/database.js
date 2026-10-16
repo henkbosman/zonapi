@@ -1,11 +1,13 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { createPvCorrectionSchema } from './pv-correction-schema.js';
 
 /** Opent SQLite en maakt het lokale schema; input: databasepad; output: open DatabaseSync. */
 export function openDatabase(path) {
   mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
+  if (db.prepare('PRAGMA user_version').get().user_version > 3) { db.close(); throw new Error('Database heeft een nieuwere schemaversie'); }
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;
     CREATE TABLE IF NOT EXISTS forecast (
       source TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
@@ -15,8 +17,12 @@ export function openDatabase(path) {
     CREATE INDEX IF NOT EXISTS forecast_end ON forecast(end_ms);
     CREATE TABLE IF NOT EXISTS pv_forecast (
       group_id TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
-      source TEXT NOT NULL, power_w REAL NOT NULL, gti_w_m2 REAL NOT NULL, fetched_ms INTEGER NOT NULL,
-      PRIMARY KEY(group_id, start_ms, end_ms)
+      source TEXT NOT NULL, power_w REAL NOT NULL CHECK(power_w>=0), gti_w_m2 REAL NOT NULL, fetched_ms INTEGER NOT NULL,
+      model TEXT, base_power_w REAL CHECK(base_power_w IS NULL OR base_power_w>=0),
+      correction_factor REAL NOT NULL DEFAULT 1 CHECK(correction_factor>=0 AND correction_factor<=10),
+      computed_ms INTEGER NOT NULL DEFAULT 0 CHECK(computed_ms>=0),
+      model_key TEXT NOT NULL DEFAULT '',
+      PRIMARY KEY(group_id, start_ms, end_ms), CHECK(end_ms>start_ms)
     );
     CREATE TABLE IF NOT EXISTS sun_times (
       local_date TEXT PRIMARY KEY, sunrise_ms INTEGER NOT NULL, sunset_ms INTEGER NOT NULL,
@@ -102,5 +108,6 @@ export function openDatabase(path) {
     const previous = db.prepare(`SELECT * FROM weather_calls ${condition} ORDER BY attempted_ms DESC,id DESC LIMIT 1`).get();
     if (previous) db.prepare("INSERT OR IGNORE INTO diagnostic_state VALUES('weather',?,?)").run(key, JSON.stringify(previous));
   }
+  createPvCorrectionSchema(db);
   return db;
 }

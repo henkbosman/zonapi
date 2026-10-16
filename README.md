@@ -21,11 +21,11 @@ Herstart na wijzigingen van `settings.json`, `panels.json` en `layouts/*.json`. 
 
 ### Bestaande installatie bijwerken
 
-Stop de Node-dienst en bewaar een kopie van `data/zonapi.sqlite`. Kopieer voor deze versie de mappen `src/` en `public/` uit het archief naar de bestaande installatie en start de dienst opnieuw. Behoud de eigen `config/settings.json`, `config/panels.json`, `config/appliances/` en de hele `data/`-map. Pak de voorbeeldmap `data/` niet over de installatie heen uit. De bestaande database krijgt bij de eerste start extra weerdiagnosekolommen; eerdere weerpogingen, historische instraling en opbrengst blijven behouden. Als `growatt.time_sync_on_announcement` ontbreekt, staat de lokale tijdsynchronisatie standaard aan; zonder `growatt.time_sync_retry_minutes` is het herhaalinterval 10 minuten. Na een nieuwe `xx03`-aanmelding staan `reply_sent` en `time_sync_sent` in `/growatt`. De dienst verstuurt opnieuw een tijdopdracht als de vier `xx04`-adressen op die verbinding uitblijven.
+Stop de Node-dienst en kopieer `src/` en `public/` uit het archief naar de bestaande installatie. Behoud de eigen `config/settings.json`, `config/panels.json` en `config/appliances/`. Voor de gevraagde schone start verwijder je, terwijl Node gestopt is, `data/zonapi.sqlite` en eventueel `data/zonapi.sqlite-wal` en `data/zonapi.sqlite-shm`. Laat de map `data/` bestaan; bij herstart wordt automatisch schemaversie 3 aangemaakt. De dienst kan een behouden bestaande database ook uitbreiden zonder die automatisch te wissen.
 
 Het losse dashboardupdatearchief bevat uitsluitend `src/`, `public/`, `test/` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
 
-Deze update voegt automatisch aparte tabellen voor Growatt-cloudmetingen en webverzoeken toe en behoudt de bestaande meet-, pakket- en weerhistorie. Bestaande instellingen blijven geldig: zonder `growatt.production_source` wordt uitsluitend de lokale ShineLink-bron gebruikt. Zonder `weather.resolution_minutes` worden kwartierwaarden opgehaald. Open na het herstarten `/dashboard`, `/growatt`, `/weather` en `/homewizard`.
+Deze update voegt kwartierpatronen en aparte basis-/correctiewaarden voor de PV-prognose toe. Automatische correctie staat standaard aan, ook als `pv.automatic_correction` nog ontbreekt. Bestaande instellingen blijven geldig: zonder `growatt.production_source` wordt uitsluitend de lokale ShineLink-bron gebruikt. Zonder `weather.resolution_minutes` worden kwartierwaarden opgehaald. Open na herstart `/dashboard` en `/api/v1/pv/corrections` voor de huidige correctie en het leerpatroon.
 
 ### Logging en dashboard
 
@@ -140,6 +140,49 @@ Voeg op hoofdniveau aan je bestaande `config/settings.json` de sectie `"pv": { "
 
 Dezelfde factor geldt voor de daggrafiek, de drie-uurs-API, de opgeslagen PV-voorspellingen en alle apparaatadviezen. De AC-limiet blijft per omvormer gelden. Instraling, GTI en ontvangen Growatt- en HomeWizard-metingen worden niet vermenigvuldigd. Na herstart worden lopende en toekomstige PV-cachewaarden opnieuw berekend uit de opgeslagen instraling, zonder extra weerverzoek en met behoud van de oorspronkelijke ophaaltijd. De voorspellingendpoints vermelden de toegepaste `calibration_factor`.
 
+### Automatisch corrigeren met Growatt
+
+Na elke volledig geslaagde Growatt-webcyclus vergelijkt ZonAPI het gemeten totaal met de oorspronkelijke, handmatig gekalibreerde PV-berekening op de meettijd. De factor is `gemeten_w / basisvoorspelling_w`. Bijvoorbeeld: 1000 W voorspeld en 800 W gemeten levert factor `0.8` en een correctie van -20%. Een volgende meting van 600 W bij dezelfde basis levert `0.6`; er wordt niet opnieuw met `0.8` vermenigvuldigd. De oorspronkelijke basis volgt de middelpuntinterpolatie van de bronreeks, onafhankelijk van eerder geleerde correcties. Bij lokale ShineLink-metingen wordt dezelfde vergelijking na meetopslag gemaakt met de geselecteerde actuele installatie.
+
+Iedere correctie overschrijft één klokkwartier: `xx:00`, `xx:15`, `xx:30` of `xx:45`. De gemiddelde meettijd van de vier omvormers bepaalt het kwartier in `Europe/Amsterdam`. Een herhaald oud Growatt-antwoord telt niet als nieuwe correctie. Een onvolledige, verouderde of te ver uiteenliggende meetronde wijzigt het patroon niet. Onder de ingestelde minimumprognose wordt niet geleerd. Een geldige nulmeting bij voldoende voorspeld vermogen kan factor nul opleveren; de volgende meting wordt weer tegen de oorspronkelijke basis vergeleken.
+
+Standaard geldt `live_today_pattern`: de nieuwste factor corrigeert de nog lopende en toekomstige kwartieren van vandaag. Voor morgen, overmorgen en eventuele verdere voorspeldagen wordt de factor van het betreffende klokkwartier gebruikt. Zonder geleerd kwartier geldt de laatst beschikbare factor. Met `mode: "pattern"` gebruik je het kwartierpatroon ook voor de resterende kwartieren van vandaag. Zodra een patroon bestaat, wordt uurterugval opgesplitst in kwartieren met behoud van het oorspronkelijke instralingsmiddelpunt. Zo kan overmorgen ieder kwartier een eigen correctie krijgen, ook als Open-Meteo daar alleen uurdata heeft.
+
+Dezelfde gecorrigeerde waarden gelden voor het dashboard, ESP32, dagelijkse apparaatadviezen en de PV-cache. Verstreken kwartieren worden bij een nieuwe correctie niet herberekend. De AC-limiet blijft per omvormer gelden, ook als een automatische factor hoger dan één is. Een nieuwe weeropvraag gebruikt het geleerde patroon opnieuw; correcties veroorzaken zelf geen extra Growatt- of weerverzoeken.
+
+De velden hieronder zijn optioneel; laat je bestaande `calibration_factor` staan:
+
+```json
+"pv": {
+  "calibration_factor": 1.0,
+  "automatic_correction": {
+    "enabled": true,
+    "mode": "live_today_pattern",
+    "min_forecast_w": 100,
+    "max_factor": 3,
+    "max_skew_seconds": 300
+  }
+}
+```
+
+`max_factor` begrenst de opwaartse correctie en is instelbaar van 1 tot 10; neerwaarts is nul toegestaan. `max_skew_seconds` begrenst het verschil tussen de vier meetklokken (0–3600 seconden). `min_forecast_w` is het minimale totale basisvermogen om van een meting te leren (>0–20000 W). `enabled: false` schakelt leren en toepassen uit; bestaande patronen blijven bewaard. Na wijzigingen in locatie, paneelverdeling, omvormers, handmatige kalibratie of weerservice krijgt het paneelmodel een eigen nieuw patroon. Dit voorkomt dat een eerdere installatie-indeling ongemerkt wordt hergebruikt.
+
+Op het dashboard staan de laatste correctie en het aantal geleerde kwartieren. `GET /api/v1/pv/corrections` toont alle 96 kwartieren, de laatste factor, basis-/meetvermogen en meet-/bijwerktijd. De voorspellingendpoints tonen per tijdvak `base_power_w`, `power_w`, `automatic_correction_factor` en `correction_source`. De Growatt-webstatus vermeldt de uitkomst van de laatste leercyclus in `forecast_correction`.
+
+### Database-indeling
+
+SQLite gebruikt schemaversie 3 (`PRAGMA user_version`). De belangrijkste scheiding is:
+
+| Tabel | Sleutel en inhoud |
+| --- | --- |
+| `forecast` | Oorspronkelijke instraling per broninterval; een nieuwere bronwaarde overschrijft hetzelfde interval. |
+| `pv_forecast` | Per paneelgroep en interval: `base_power_w`, gecorrigeerd `power_w`, `correction_factor`, `computed_ms` en `model_key`. `fetched_ms` blijft de oorspronkelijke weerophaaltijd. |
+| `pv_correction_pattern` | Eén rij per `model_key + quarter_minute`, met factor, basisvermogen, gemeten totaal, meettijd, bijwerktijd en meetsignatuur. Maximaal 96 rijen per paneelmodel; nieuwe correcties worden overschreven. |
+| `inverter_measurements` / `cloud_inverter_measurements` | Ongewijzigde ontvangen vermogens- en energiemetingen per omvormer en meettijd. |
+| Growatt-/weer-/meterlogtabellen | Losse, begrensde diagnosegegevens; wissen of uitschakelen verwijdert geen kwartierpatronen of opbrengstmetingen. |
+
+Meet- en berekentijden staan in UTC-milliseconden. Alleen `quarter_minute` is een lokale klokindex (0,15,...,1425). Daardoor blijft bijvoorbeeld 14:15 hetzelfde patroonkwartier bij zomer- en wintertijd; bij het dubbele najaarsuur krijgt de nieuwste werkelijke meting voorrang. De patroontabel heeft een samengestelde primaire sleutel, controles op kwartiergrenzen/waarden en een index voor de nieuwste correctie. Het bijwerken van het patroon en het herberekenen van toekomstige cachewaarden gebeurt in één transactie.
+
 ### HomeWizard lokaal
 
 Gebruik eerst `api: "v1"` als jouw firmware de [HomeWizard lokale API v1](https://api-documentation.homewizard.com/docs/v1/measurement/) aanbiedt. Als jouw apparaat v2 vereist, zet dat apparaat op `api: "v2"`, maak op het **apparaat zelf** een lokaal token via [de fysieke knop en `POST /api/user`](https://api-documentation.homewizard.com/docs/v2/authorization/), en geef het token aan de systemd-dienst via `/etc/zonapi/homewizard.env`:
@@ -161,6 +204,7 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | --- | --- |
 | `GET /api/v1/forecast?hours=3` | GHI/DNI/DHI en eigen PV-berekening voor komende uren; `power_w:null` met ontbrekende configuratie als panelen nog niet ingesteld zijn. |
 | `GET /api/v1/forecast/day` | Voorspelling voor de volledige dag uit de cache, met zonsopkomst/-ondergang en aangrenzende tijdvakken voor het aansluiten van de grafieklijn op de daggrenzen. |
+| `GET /api/v1/pv/corrections` | Actieve correctie-instellingen, laatste factor en alle 96 klokkwartieren met basis-/meetvermogen en tijden. |
 | `GET /api/v1/irradiance?hours=3` | Instraling per kwartier met uurterugval en berekende GTI per paneelgroep. |
 | `GET /api/v1/production/current` | Afzonderlijke omvormers plus uitsluitend bij vier verse metingen een betrouwbare som. |
 | `GET /api/v1/production/day` | Totale opbrengst per meetronde van vandaag, met bron, groepeertijd, aantal omvormers en zonsopgang/-ondergang. |
@@ -205,4 +249,4 @@ Een ontvangen `5004` verschijnt als omvormermeting onder het serienummer van adr
 
 ## Testen
 
-`npm test` voert de offline integratietests uit voor de Growatt-webadapter en tokenafscherming, meettijdvoorkeur en tijdzoneconversie van bron tot tabel, herstel van bewaarde cloudhistorie, bronkeuze zonder dubbeltelling, cloudhistorie/basislast, foutterugval en herstart, kwartiernormalisatie, modelkeuze, gemengde resoluties, database-migratie en overschrijven, daglichtquota, meerdere TCP-fragmenten/CRC/ACK/tijdcommando, meerdere verbindingen, totalen van vier omvormers met ongelijke meettijden, onafhankelijke webmetingverversing op de Growatt-pagina bij logfouten, vaste daglichtgrenzen en verbonden meetpunten met grafiekcursor, begrensde logs en uitschakelen met behoud van metingen/quota, HomeWizard-diagnose en dagadviezen rond wintertijd. De tests versturen niets naar externe diensten; de webadapter gebruikt gedocumenteerde antwoordfixtures, geen live Growatt-account.
+`npm test` voert de offline integratietests uit voor automatische kwartiercorrecties zonder stapeling, toekomst versus bevroren historie, patronen voor overmorgen met uurterugval, atomair bijwerken en opslagfouten, behoud van patronen na logbeheer/herstart, uniforme API-/apparaatadviezen, de Growatt-webadapter en tokenafscherming, meettijdvoorkeur en tijdzoneconversie van bron tot tabel, herstel van bewaarde cloudhistorie, bronkeuze zonder dubbeltelling, cloudhistorie/basislast, foutterugval en herstart, kwartiernormalisatie, modelkeuze, gemengde resoluties, database-migratie en overschrijven, daglichtquota, meerdere TCP-fragmenten/CRC/ACK/tijdcommando, meerdere verbindingen, totalen van vier omvormers met ongelijke meettijden, onafhankelijke webmetingverversing op de Growatt-pagina bij logfouten, vaste daglichtgrenzen en verbonden meetpunten met grafiekcursor, begrensde logs en uitschakelen met behoud van metingen/quota, HomeWizard-diagnose en dagadviezen rond wintertijd. De tests versturen niets naar externe diensten; de webadapter gebruikt gedocumenteerde antwoordfixtures, geen live Growatt-account.

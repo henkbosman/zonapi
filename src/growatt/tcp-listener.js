@@ -20,8 +20,8 @@ function sendLocal(socket, server, repository, peer, frameId, type, bytes, event
   });
 }
 
-/** Start uitsluitend een lokale TCP-ontvanger; input: Growatt-config, repository; output: luisterende net.Server. */
-export function startGrowattServer(config, repository) {
+/** Start uitsluitend een lokale TCP-ontvanger; input: Growatt-config, repository en optionele callback na meetopslag; output: luisterende net.Server. */
+export function startGrowattServer(config, repository, onMeasurement) {
   const layoutDir = join(root, 'config/layouts');
   const clients = new Set();
   const server = net.createServer((socket) => {
@@ -79,6 +79,8 @@ export function startGrowattServer(config, repository) {
           if (decoded) {
             repository.saveInverter({ ...decoded, frame_id: id });
             repository.markFrame(id, decoded.clock_fallback ? `decoded:${decoded.layout}:clock_fallback` : `decoded:${decoded.layout}`);
+            try { onMeasurement?.(decoded, at); }
+            catch (error) { repository.saveGrowattEvent(at, peer, 'forecast_correction_error', error.message); }
           } else if (decodeAnnouncement(frame)) repository.markFrame(id, 'announcement');
           else repository.markFrame(id, [0x04, 0x50].includes(frame[7]) ? 'unknown_layout' : 'control');
         }

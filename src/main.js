@@ -11,6 +11,8 @@ import { startHttpServer } from './api/http-server.js';
 import { createGrowattCloudPoller } from './growatt/cloud/poller.js';
 import { growattCloudConfig } from './growatt/cloud/config.js';
 import { repairGrowattCloudTime } from './storage/repair-growatt-cloud-time.js';
+import { learnPvCorrection } from './pv/learn-correction.js';
+import { currentProductionRows } from './production/source.js';
 
 /** Verbindt afzonderlijke modules tot één lokale dienst; input: geen; output: gestart proces of fout. */
 function main() {
@@ -24,9 +26,19 @@ function main() {
   const weather = createWeatherScheduler({ settings, panels, panelErrors, repository });
   const homewizard = createHomeWizardPoller(settings, repository);
   const backups = createBackupJob(db, join(root, 'data'));
-  const growatt = startGrowattServer(settings.growatt, repository);
+  /** Leert na een lokale meting uit de geselecteerde volledige installatie; input: meting en ontvangsttijd; output: void. */
+  function correctLocalForecast(measurement, at) {
+    if (cloudConfig.source !== 'cloud') learnPvCorrection(repository, settings, panels, panelErrors, currentProductionRows(repository, settings, at), at);
+  }
+
+  /** Leert na een complete cloudcyclus uit de geselecteerde bron; input: cyclusmetingen en ontvangsttijd; output: correctiestatus. */
+  function correctCloudForecast(rows, at) {
+    return learnPvCorrection(repository, settings, panels, panelErrors, cloudConfig.source === 'auto' ? currentProductionRows(repository, settings, at) : rows, at);
+  }
+
+  const growatt = startGrowattServer(settings.growatt, repository, correctLocalForecast);
   const growattRuntime = { server: growatt, last_error: null };
-  const growattCloud = createGrowattCloudPoller({ settings, panels, repository });
+  const growattCloud = createGrowattCloudPoller({ settings, panels, repository, onMeasurements: correctCloudForecast });
   const http = startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard, growattRuntime, growattCloud });
   growatt.on('listening', () => console.log(`Growatt TCP luistert op ${settings.growatt.host}:${growatt.address().port}`));
   http.on('listening', () => console.log(`ZonAPI luistert op http://${settings.http.host}:${http.address().port}`));
