@@ -2,7 +2,13 @@
   "timezone": "Europe/Amsterdam",
   "location": { "latitude": 52.442903, "longitude": 5.854103 },
   "http": { "host": "192.168.2.210", "port": 3002 },
-  "growatt": { "host": "192.168.2.210", "port": 5279, "expected_inverters": 4, "fresh_minutes": 12 },
+  "growatt": { "host": "192.168.2.210", "port": 5279, "expected_inverters": 4, "fresh_minutes": 12,
+  "production_source": "cloud",
+  "cloud": {
+    "token": "JOUW_GROWATT_API_TOKEN",
+    "poll_seconds": 300
+  }
+  },
   "weather": {
     "source": "open-meteo",
     "max_requests_per_local_day": 12,
@@ -28,10 +34,5 @@
     "reserve_w": 0,
     "baseload_w": 400,
     "history_days": 7
-  },
-  "production_source": "cloud",
-  "cloud": {
-    "token": "JOUW_GROWATT_API_TOKEN",
-    "poll_seconds": 300
-}
+  }
 }
