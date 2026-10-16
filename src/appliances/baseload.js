@@ -3,11 +3,14 @@ export function primaryNetMeter(meters, now, maxAgeMs = 120000, priority = ['p1'
   return priority.map((id) => meters.find((meter) => meter.device === id)).find((meter) => meter && now - meter.measured_ms >= 0 && now - meter.measured_ms <= maxAgeMs) ?? null;
 }
 
-/** Schat huisbasislast uit één netto-meter en alle PV-metingen; input: repository, meter-id, verwacht aantal omvormers, dagen, nu; output: schatting of null. */
-export function estimateBaseload(repository, device, expectedInverters, days, now) {
+/** Schat huisbasislast uit één netto-meter en de gekozen PV-bron; input: repository, meter-id, omvormeraantal, dagen, nu en optionele instellingen/serienummers; output: schatting of null. */
+export function estimateBaseload(repository, device, expectedInverters, days, now, settings = null, serials = []) {
   const from = now - days * 86400000;
   const byBucket = new Map();
-  for (const row of repository.inverterHistory(from)) {
+  const known = new Set(serials.filter(Boolean));
+  const rows = settings ? productionHistory(repository, settings, from, now + 1).reverse() : repository.inverterHistory(from);
+  for (const row of rows) {
+    if (known.size && !known.has(row.serial)) continue;
     const bucket = Math.floor(row.measured_ms / 300000);
     if (!byBucket.has(bucket)) byBucket.set(bucket, new Map());
     if (!byBucket.get(bucket).has(row.serial)) byBucket.get(bucket).set(row.serial, row.power_w);
@@ -28,12 +31,14 @@ export function estimateBaseload(repository, device, expectedInverters, days, no
   return { power_w: Math.round(loads[Math.floor(loads.length * 0.3)]), source: `${device}_plus_growatt_30th_percentile`, samples: loads.length };
 }
 
-/** Bepaalt basislast of toont een expliciet ontbreken; input: configuratie, repository, nu; output: {power_w,source,samples} of null. */
-export function getBaseload(settings, repository, now) {
+/** Bepaalt basislast uit configuratie of uitgelijnde metingen; input: configuratie, repository, nu en optionele serienummers; output: {power_w,source,samples} of null. */
+export function getBaseload(settings, repository, now, serials = []) {
   if (settings.advice.baseload_w !== null) return { power_w: settings.advice.baseload_w, source: 'config', samples: 0 };
   for (const device of settings.homewizard.net_meter_priority) {
-    const value = estimateBaseload(repository, device, settings.growatt.expected_inverters, settings.advice.history_days, now);
+    const value = estimateBaseload(repository, device, settings.growatt.expected_inverters, settings.advice.history_days, now, settings, serials);
     if (value) return value;
   }
   return null;
 }
+import { productionHistory } from '../production/source.js';
+

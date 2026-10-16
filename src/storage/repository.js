@@ -2,6 +2,7 @@ import { createDiagnosticStore } from './diagnostics.js';
 import { createWeatherCallStore } from './weather-calls.js';
 import { createHomeWizardCallStore } from './homewizard-calls.js';
 import { forecastTimeline, pvForecastTimeline } from '../weather/forecast-timeline.js';
+import { createGrowattCloudStore } from './growatt-cloud.js';
 
 /** Maakt beperkte databasebewerkingen; input: open SQLite DB en optionele logconfiguratie; output: repositorymethoden. */
 export function createRepository(db, logging = {}) {
@@ -21,6 +22,7 @@ export function createRepository(db, logging = {}) {
     ...diagnostics,
     ...createWeatherCallStore(db, diagnostics),
     ...createHomeWizardCallStore(db, diagnostics),
+    ...createGrowattCloudStore(db, diagnostics),
     /** Slaat één nieuwer weertijdvak op; input: {source,start_ms,end_ms,ghi,dni,dhi,fetched_ms}; output: SQLite-resultaat. */
     saveForecast(row) { return q.forecast.run(row.source, row.start_ms, row.end_ms, row.ghi, row.dni, row.dhi, row.fetched_ms, row.model ?? null); },
     /** Slaat een paneelgroepberekening op en staat herberekenen van dezelfde weerdata toe; input: PV-rij; output: SQLite-resultaat, oudere brondata overschrijft niets. */
@@ -59,8 +61,9 @@ export function createRepository(db, logging = {}) {
       try {
         const frames_deleted = db.prepare('DELETE FROM growatt_frames').run().changes;
         const events_deleted = db.prepare('DELETE FROM growatt_events').run().changes;
+        const cloud_calls_deleted = db.prepare('DELETE FROM growatt_cloud_calls').run().changes;
         db.exec('COMMIT');
-        return { frames_deleted, events_deleted };
+        return { frames_deleted, events_deleted, cloud_calls_deleted };
       } catch (error) { db.exec('ROLLBACK'); throw error; }
     },
     /** Leest recente pakketmetadata zonder ruwe inhoud; input: limiet; output: nieuwste rijen. */
@@ -82,13 +85,17 @@ export function createRepository(db, logging = {}) {
       }
       const frameSql = `SELECT id,received_ms AS at_ms,peer,'packet' AS source,protocol,record_type,status,length(raw) AS size_bytes,NULL AS detail FROM growatt_frames ${frames.length ? `WHERE ${frames.join(' AND ')}` : ''}`;
       const eventSql = `SELECT id,at_ms,peer,'event' AS source,NULL AS protocol,NULL AS record_type,kind AS status,NULL AS size_bytes,detail FROM growatt_events ${events.length ? `WHERE ${events.join(' AND ')}` : ''}`;
-      const withFrames = view !== 'events';
-      const withEvents = !type && !address && view !== 'packets';
-      if (!withFrames && !withEvents) return { rows: [], has_more: false };
+      const withFrames = !['events', 'cloud'].includes(view);
+      const withEvents = !type && !address && !['packets', 'cloud'].includes(view);
+      const withCloud = !type && !address && ['all', 'errors', 'cloud'].includes(view);
+      if (!withFrames && !withEvents && !withCloud) return { rows: [], has_more: false };
       const parts = [];
       const params = [];
       if (withFrames) { parts.push(frameSql); params.push(...frameParams); }
       if (withEvents) { parts.push(eventSql); params.push(...eventParams); }
+      if (withCloud) parts.push(`SELECT id,attempted_ms AS at_ms,request_url AS peer,'cloud' AS source,NULL AS protocol,NULL AS record_type,status,length(response_json) AS size_bytes,
+        method || ' · HTTP ' || COALESCE(http_status,'—') || CASE WHEN device_serial IS NULL THEN '' ELSE ' · ' || device_serial END || CASE WHEN detail IS NULL THEN '' ELSE ' · ' || detail END AS detail
+        FROM growatt_cloud_calls ${view === 'errors' ? "WHERE status='error'" : ''}`);
       const rows = db.prepare(`${parts.join(' UNION ALL ')} ORDER BY at_ms DESC,source DESC,id DESC LIMIT ? OFFSET ?`).all(...params, limit + 1, offset);
       return { rows: rows.slice(0, limit), has_more: rows.length > limit };
     },

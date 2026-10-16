@@ -16,6 +16,8 @@ import { getBaseload } from '../appliances/baseload.js';
 import { loadProfiles } from '../appliances/load-profiles.js';
 import { advise } from '../appliances/start-advice.js';
 import { dailyAdvice } from '../appliances/daily-advice.js';
+import { currentProductionRows, productionHistory } from '../production/source.js';
+import { growattCloudConfig } from '../growatt/cloud/config.js';
 
 const staticFiles = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
@@ -33,6 +35,7 @@ const staticFiles = new Map([
   ['/production-chart-series.js', ['production-chart-series.js', 'text/javascript; charset=utf-8']],
   ['/growatt.css', ['growatt.css', 'text/css; charset=utf-8']],
   ['/growatt.js', ['growatt.js', 'text/javascript; charset=utf-8']],
+  ['/growatt-cloud.js', ['growatt-cloud.js', 'text/javascript; charset=utf-8']],
   ['/weather.css', ['weather.css', 'text/css; charset=utf-8']],
   ['/weather.js', ['weather.js', 'text/javascript; charset=utf-8']],
   ['/weather-chart.js', ['weather-chart.js', 'text/javascript; charset=utf-8']]
@@ -61,12 +64,19 @@ export function timeParam(value, defaultMs) {
 }
 
 /** Start een leesbare LAN-API met dashboard; input: dienstafhankelijkheden; output: luisterende http.Server. */
-export function startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard, growattRuntime }) {
+export function startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard, growattRuntime, growattCloud }) {
+  const serials = panels.inverters.map((item) => item.serial);
+  const productionSource = growattCloudConfig(settings).source;
   const server = http.createServer((request, response) => {
     try {
       const url = new URL(request.url, 'http://localhost');
       const action = diagnosticAction(request.method, url, repository);
       if (action !== null) return sendJson(response, 200, action);
+      if (request.method === 'POST' && url.pathname === '/api/v1/growatt/cloud/poll') {
+        if (!growattCloud) return sendJson(response, 503, { error: 'Growatt-webbron niet beschikbaar' });
+        void growattCloud.poll().then((result) => sendJson(response, 200, result)).catch((error) => sendJson(response, 500, { error: error.message }));
+        return;
+      }
       if (request.method === 'POST' && url.pathname === '/api/v1/weather/refresh') {
         if (typeof weather.refresh !== 'function') return sendJson(response, 503, { error: 'Weerscheduler niet beschikbaar' });
         void weather.refresh().then((result) => sendJson(response, 200, result)).catch((error) => sendJson(response, 500, { error: error.message }));
@@ -88,7 +98,14 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       if (url.pathname === '/api/v1/forecast') return sendJson(response, 200, forecastResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location, now, settings.weather.stale_after_hours, getCalibrationFactor(settings)));
       if (url.pathname === '/api/v1/forecast/day') return sendJson(response, 200, dayForecastResponse(repository, settings, panels, panelErrors, weather.status(), now));
       if (url.pathname === '/api/v1/irradiance') return sendJson(response, 200, irradianceResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location));
-      if (url.pathname === '/api/v1/growatt') return sendJson(response, 200, growattOverview(repository, settings, panels, now, growattLimitParam(url.searchParams.get('limit')), growattRuntime));
+      if (url.pathname === '/api/v1/growatt') return sendJson(response, 200, growattOverview(repository, settings, panels, now, growattLimitParam(url.searchParams.get('limit')), growattRuntime, growattCloud));
+      if (url.pathname === '/api/v1/growatt/cloud') return sendJson(response, 200, growattCloud?.status() ?? { state: 'disabled', enabled: false, configured: false });
+      if (/^\/api\/v1\/growatt\/cloud\/calls\/[1-9]\d*$/.test(url.pathname)) {
+        const id = Number(url.pathname.split('/')[6]);
+        if (!Number.isSafeInteger(id)) throw new Error('Ongeldig verzoek-id');
+        const call = repository.growattCloudCall(id);
+        return call ? sendJson(response, 200, { ...call, attempted_at: new Date(call.attempted_ms).toISOString() }) : sendJson(response, 404, { error: 'Verzoek niet gevonden' });
+      }
       if (url.pathname === '/api/v1/weather') return sendJson(response, 200, weatherOverview(repository, settings, weather, now, weatherCallParams(url.searchParams)));
       if (url.pathname === '/api/v1/homewizard') return sendJson(response, 200, homeWizardOverview(repository, settings, homewizard, now, homeWizardCallParams(url.searchParams)));
       if (url.pathname === '/api/v1/growatt/timeline') return sendJson(response, 200, growattTimeline(repository, growattTimelineParams(url.searchParams)));
@@ -98,14 +115,14 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
         const frame = growattFrameDetail(repository, id);
         return frame ? sendJson(response, 200, frame) : sendJson(response, 404, { error: 'Pakket niet gevonden' });
       }
-      if (url.pathname === '/api/v1/production/current') return sendJson(response, 200, productionResponse(repository.currentInverters(), settings.growatt.expected_inverters, settings.growatt.fresh_minutes, now, panels.inverters.map((item) => item.serial)));
+      if (url.pathname === '/api/v1/production/current') return sendJson(response, 200, { production_source: productionSource, ...productionResponse(currentProductionRows(repository, settings, now), settings.growatt.expected_inverters, settings.growatt.fresh_minutes, now, serials) });
       if (url.pathname === '/api/v1/production/day') {
         const { sunrise, sunset } = weather.status();
         const from = sunrise ? Date.parse(sunrise) : now - 26 * 3600000;
         const to = Math.min(now, sunset ? Date.parse(sunset) : now) + 1;
-        const rows = to > from ? repository.history('inverter', from, to, 5000) : [];
+        const rows = to > from ? productionHistory(repository, settings, from, to, 40000) : [];
         return sendJson(response, 200, {
-          sunrise: sunrise ?? null, sunset: sunset ?? null, now: new Date(now).toISOString(), fresh_minutes: settings.growatt.fresh_minutes,
+          production_source: productionSource, sunrise: sunrise ?? null, sunset: sunset ?? null, now: new Date(now).toISOString(), fresh_minutes: settings.growatt.fresh_minutes,
           points: productionSeries(rows, now, sunrise, sunset, settings.growatt.expected_inverters, settings.growatt.fresh_minutes, panels.inverters.map((item) => item.serial))
         });
       }
@@ -119,7 +136,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
         const rows = forecastRows((settings.weather.forecast_days + 1) * 24);
         return sendJson(response, 200, { ...dailyAdvice([...profiles.values()], rows,
           { settings, panels, panelErrors, latitude: settings.location.latitude, longitude: settings.location.longitude,
-            baseload: getBaseload(settings, repository, now), now }, repository), errors });
+            baseload: getBaseload(settings, repository, now, serials), now }, repository), errors });
       }
       if (/^\/api\/v1\/appliances\/[a-z0-9_-]+\/advice$/.test(url.pathname)) {
         const id = url.pathname.split('/')[4];
@@ -127,7 +144,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
         if (!profile) return sendJson(response, 404, { error: 'Onbekend of ongeldig apparaatprofiel' });
         const durationHours = profile.duration_minutes / 60;
         const rows = forecastRows(settings.advice.search_hours + durationHours + 1);
-        const advice = advise(profile, rows, { settings, panels, panelErrors, latitude: settings.location.latitude, longitude: settings.location.longitude, baseload: getBaseload(settings, repository, now), now });
+        const advice = advise(profile, rows, { settings, panels, panelErrors, latitude: settings.location.latitude, longitude: settings.location.longitude, baseload: getBaseload(settings, repository, now, serials), now });
         return sendJson(response, 200, advice);
       }
       if (url.pathname === '/api/v1/history') {
@@ -137,11 +154,13 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
         const limit = Math.min(5000, Math.max(1, Number(url.searchParams.get('limit') ?? 2000)));
         if (!Number.isInteger(limit)) throw new Error('limit moet een geheel getal zijn');
         const metric = url.searchParams.get('metric') ?? 'inverter';
-        return sendJson(response, 200, { metric, from: new Date(from).toISOString(), to: new Date(to).toISOString(), limit, rows: repository.history(metric, from, to, limit) });
+        const source = url.searchParams.get('source') ?? productionSource;
+        if (metric === 'inverter' && !['shinelink', 'cloud', 'auto'].includes(source)) throw new Error('source moet shinelink, cloud of auto zijn');
+        return sendJson(response, 200, { metric, ...(metric === 'inverter' ? { source } : {}), from: new Date(from).toISOString(), to: new Date(to).toISOString(), limit, rows: metric === 'inverter' ? productionHistory(repository, settings, from, to, limit, source) : repository.history(metric, from, to, limit) });
       }
       if (url.pathname === '/api/v1/status') {
         const sunlight = weather.status();
-        return sendJson(response, 200, { time: new Date(now).toISOString(), timezone: settings.timezone, weather: sunlight, panels: { expected: panels.expected_panel_count, groups: panels.groups.length, missing: panelErrors }, growatt: { listener: growattListenerStatus(growattRuntime, settings.growatt), database_path: repository.databasePath(), expected_inverters: settings.growatt.expected_inverters, frames: repository.frameStatus(), ...productionResponse(repository.currentInverters(), settings.growatt.expected_inverters, settings.growatt.fresh_minutes, now, panels.inverters.map((item) => item.serial)) }, homewizard: { errors: homewizard.status(), ...metersResponse(repository.currentMeters(), now, settings.homewizard.net_meter_priority) }, baseload: getBaseload(settings, repository, now) });
+        return sendJson(response, 200, { time: new Date(now).toISOString(), timezone: settings.timezone, weather: sunlight, panels: { expected: panels.expected_panel_count, groups: panels.groups.length, missing: panelErrors }, growatt: { production_source: productionSource, cloud: growattCloud?.status() ?? null, listener: growattListenerStatus(growattRuntime, settings.growatt), database_path: repository.databasePath(), expected_inverters: settings.growatt.expected_inverters, frames: repository.frameStatus(), ...productionResponse(currentProductionRows(repository, settings, now), settings.growatt.expected_inverters, settings.growatt.fresh_minutes, now, serials) }, homewizard: { errors: homewizard.status(), ...metersResponse(repository.currentMeters(), now, settings.homewizard.net_meter_priority) }, baseload: getBaseload(settings, repository, now, serials) });
       }
       return sendJson(response, 404, { error: 'Endpoint bestaat niet' });
     } catch (error) {

@@ -13,9 +13,10 @@ export function productionSeries(rows, now, sunrise, sunset, expected, freshness
     if (!Number.isFinite(at) || at > now || at < start || at > end || localDay(at) !== day) continue;
     if (allowed.size && !allowed.has(row.serial)) continue;
     if (!Number.isFinite(row.power_w) || row.power_w < 0) continue;
-    current.set(row.serial, { power_w: row.power_w, at });
+    current.set(row.serial, { power_w: row.power_w, at, source: row.source ?? 'shinelink' });
     const fresh = [...current.values()].filter((item) => at - item.at <= freshnessMinutes * 60000);
-    const point = { time: new Date(at).toISOString(), power_w: Math.round(fresh.reduce((sum, item) => sum + item.power_w, 0) * 10) / 10, active_inverters: fresh.length, expected_inverters: expected };
+    const sources = [...new Set(fresh.map((item) => item.source))];
+    const point = { time: new Date(at).toISOString(), power_w: Math.round(fresh.reduce((sum, item) => sum + item.power_w, 0) * 10) / 10, active_inverters: fresh.length, expected_inverters: expected, source: sources.length > 1 ? 'mixed' : sources[0] ?? null };
     if (points.at(-1)?.time === point.time) points[points.length - 1] = point;
     else points.push(point);
   }

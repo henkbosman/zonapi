@@ -8,6 +8,7 @@ import { createWeatherScheduler } from './weather/scheduler.js';
 import { createHomeWizardPoller } from './homewizard/poller.js';
 import { startGrowattServer, stopGrowattServer } from './growatt/tcp-listener.js';
 import { startHttpServer } from './api/http-server.js';
+import { createGrowattCloudPoller } from './growatt/cloud/poller.js';
 
 /** Verbindt afzonderlijke modules tot één lokale dienst; input: geen; output: gestart proces of fout. */
 function main() {
@@ -20,7 +21,8 @@ function main() {
   const backups = createBackupJob(db, join(root, 'data'));
   const growatt = startGrowattServer(settings.growatt, repository);
   const growattRuntime = { server: growatt, last_error: null };
-  const http = startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard, growattRuntime });
+  const growattCloud = createGrowattCloudPoller({ settings, panels, repository });
+  const http = startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard, growattRuntime, growattCloud });
   growatt.on('listening', () => console.log(`Growatt TCP luistert op ${settings.growatt.host}:${growatt.address().port}`));
   http.on('listening', () => console.log(`ZonAPI luistert op http://${settings.http.host}:${http.address().port}`));
   growatt.on('error', (error) => {
@@ -32,6 +34,7 @@ function main() {
   http.on('error', (error) => { console.error('HTTP:', error); process.exitCode = 1; });
   weather.start();
   homewizard.start();
+  growattCloud.start();
   backups.start();
   process.once('SIGTERM', () => { void stop().catch((error) => console.error('Afsluiten:', error)); });
   process.once('SIGINT', () => { void stop().catch((error) => console.error('Afsluiten:', error)); });
@@ -42,7 +45,7 @@ function main() {
     if (stopping) return;
     stopping = true;
     weather.stop(); homewizard.stop(); backups.stop();
-    await Promise.all([new Promise((resolve) => http.close(resolve)), stopGrowattServer(growatt)]);
+    await Promise.all([growattCloud.stop(), new Promise((resolve) => http.close(resolve)), stopGrowattServer(growatt)]);
     db.close();
   }
 }

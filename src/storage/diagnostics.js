@@ -42,10 +42,11 @@ export function createDiagnosticStore(db, config = {}) {
     if (source === 'growatt') {
       const kept = db.prepare(`SELECT kind,MIN(id) AS first_id FROM (
         SELECT * FROM (SELECT id,received_ms AS at_ms,'frame' AS kind FROM growatt_frames
-          UNION ALL SELECT id,at_ms,'event' AS kind FROM growatt_events)
+          UNION ALL SELECT id,at_ms,'event' AS kind FROM growatt_events
+          UNION ALL SELECT id,attempted_ms AS at_ms,'cloud' AS kind FROM growatt_cloud_calls)
         ORDER BY at_ms DESC,id DESC,kind DESC LIMIT ?
       ) GROUP BY kind`).all(maxEntries);
-      for (const [kind, table] of [['frame', 'growatt_frames'], ['event', 'growatt_events']]) {
+      for (const [kind, table] of [['frame', 'growatt_frames'], ['event', 'growatt_events'], ['cloud', 'growatt_cloud_calls']]) {
         const first = kept.find((row) => row.kind === kind)?.first_id;
         if (first === undefined) db.exec(`DELETE FROM ${table}`);
         else db.prepare(`DELETE FROM ${table} WHERE id<?`).run(first);

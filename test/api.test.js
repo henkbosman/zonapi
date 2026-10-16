@@ -63,7 +63,7 @@ test('daggrafiek toont drie omvormers en logs wissen bewaart hun metingen', asyn
     assert.match(await chartModule.text(), /drawProductionChart/);
     assert.equal((await (await fetch(`${base}/api/v1/status`)).json()).growatt.power_w, null);
     const cleared = await fetch(`${base}/api/v1/growatt/diagnostics`, { method: 'DELETE' });
-    assert.deepEqual(await cleared.json(), { frames_deleted: 3, events_deleted: 1 });
+    assert.deepEqual(await cleared.json(), { frames_deleted: 3, events_deleted: 1, cloud_calls_deleted: 0 });
     assert.deepEqual((await (await fetch(`${base}/api/v1/growatt/timeline`)).json()).rows, []);
     assert.deepEqual((await (await fetch(`${base}/api/v1/production/day`)).json()).points, day.points);
     assert.equal((await (await fetch(`${base}/api/v1/growatt`)).json()).summary.frames_total, 0);

@@ -464,7 +464,7 @@ test('historische omvormermetingen blijven bestaan na een migratie en het wissen
     const repository = createRepository(db);
     repository.saveGrowattEvent(2, 'local', 'socket_error', 'vorige sessie');
     assert.equal(db.prepare('PRAGMA table_info(inverter_measurements)').all().find((column) => column.name === 'frame_id').notnull, 0);
-    assert.deepEqual(repository.clearGrowattDiagnostics(), { frames_deleted: 1, events_deleted: 1 });
+    assert.deepEqual(repository.clearGrowattDiagnostics(), { frames_deleted: 1, events_deleted: 1, cloud_calls_deleted: 0 });
     assert.equal(repository.recentGrowattFrames(10).length, 0);
     assert.equal(repository.growattTimeline({ limit: 10, offset: 0, type: '', address: '', view: 'all' }).rows.length, 0);
     assert.deepEqual(repository.history('inverter', 0, 10, 10).map((row) => ({ power_w: row.power_w, frame_id: row.frame_id })), [{ power_w: 1200, frame_id: null }]);

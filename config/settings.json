@@ -28,5 +28,10 @@
     "reserve_w": 0,
     "baseload_w": 400,
     "history_days": 7
-  }
+  },
+  "production_source": "cloud",
+  "cloud": {
+    "token": "JOUW_GROWATT_API_TOKEN",
+    "poll_seconds": 300
+}
 }

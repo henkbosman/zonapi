@@ -4,13 +4,14 @@ import { primaryNetMeter } from '../appliances/baseload.js';
 export function productionResponse(rows, expected, freshnessMinutes, now, configuredSerials = []) {
   const known = configuredSerials.filter(Boolean);
   const selected = known.length ? rows.filter((row) => known.includes(row.serial)) : rows;
-  const inverters = selected.map((row) => ({ serial: row.serial, power_w: row.power_w, energy_today_kwh: row.energy_today_kwh, energy_total_kwh: row.energy_total_kwh, measured_at: new Date(row.measured_ms).toISOString(), received_at: new Date(row.received_ms).toISOString(), fresh: now - row.measured_ms >= 0 && now - row.measured_ms <= freshnessMinutes * 60000 }));
+  const inverters = selected.map((row) => ({ serial: row.serial, source: row.source ?? 'shinelink', power_w: row.power_w, energy_today_kwh: row.energy_today_kwh, energy_total_kwh: row.energy_total_kwh, measured_at: new Date(row.measured_ms).toISOString(), received_at: new Date(row.received_ms).toISOString(), fresh: now - row.measured_ms >= 0 && now - row.measured_ms <= freshnessMinutes * 60000 }));
   for (const serial of known) {
-    if (!inverters.some((item) => item.serial === serial)) inverters.push({ serial, power_w: null, energy_today_kwh: null, energy_total_kwh: null, measured_at: null, received_at: null, fresh: false });
+    if (!inverters.some((item) => item.serial === serial)) inverters.push({ serial, source: null, power_w: null, energy_today_kwh: null, energy_total_kwh: null, measured_at: null, received_at: null, fresh: false });
   }
   const fresh = inverters.filter((item) => item.fresh);
   const complete = fresh.length === expected && inverters.length === expected;
-  return { status: complete ? 'ok' : 'partial', expected_inverters: expected, active_inverters: fresh.length, power_w: complete ? Math.round(fresh.reduce((sum, item) => sum + item.power_w, 0) * 10) / 10 : null, inverters, ignored_unmapped: rows.length - selected.length };
+  const sources = [...new Set(fresh.map((item) => item.source))];
+  return { status: complete ? 'ok' : 'partial', source: sources.length > 1 ? 'mixed' : sources[0] ?? null, expected_inverters: expected, active_inverters: fresh.length, power_w: complete ? Math.round(fresh.reduce((sum, item) => sum + item.power_w, 0) * 10) / 10 : null, inverters, ignored_unmapped: rows.length - selected.length };
 }
 
 /** Geeft P1 en kWh op hetzelfde netto meetpunt met één voorkeursmeting; input: meterrijen, nu en prioriteit; output: meterstatus zonder dubbeltelling. */

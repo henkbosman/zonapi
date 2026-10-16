@@ -2,6 +2,7 @@ import { productionResponse } from './measurements.js';
 import { decodeAnnouncement, recordLabel } from '../growatt/announcement.js';
 import { decodeRfConfiguration } from '../growatt/rf-configuration.js';
 import { growattListenerStatus } from '../growatt/listener-status.js';
+import { currentProductionRows } from '../production/source.js';
 
 /** Begrenst het aantal pakketten per aanvraag; input: querywaarde of null; output: geheel getal 1..100 of fout. */
 export function growattLimitParam(value) {
@@ -20,7 +21,7 @@ export function growattTimelineParams(params) {
   const address = (params.get('address') ?? '').toLowerCase();
   if (address && !/^(?:50|51|52|53)$/.test(address)) throw new Error('address moet 50..53 zijn');
   const view = params.get('view') ?? 'all';
-  if (!['all', 'packets', 'errors', 'events'].includes(view)) throw new Error('view ongeldig');
+  if (!['all', 'packets', 'errors', 'events', 'cloud'].includes(view)) throw new Error('view ongeldig');
   return { limit, offset: Number(offset), type, address, view };
 }
 
@@ -29,12 +30,12 @@ export function growattTimeline(repository, filters) {
   const { rows, has_more } = repository.growattTimeline(filters);
   return {
     ...filters, has_more,
-    rows: rows.map((row) => ({ ...row, at: new Date(row.at_ms).toISOString(), label: row.source === 'packet' ? recordLabel(row.record_type) : ({ connected: 'Verbonden', disconnected: 'Verbinding gesloten', idle_disconnect: 'Inactiviteit', incomplete_timeout: 'Onvolledig pakket', incomplete_frame: 'Onvolledig pakket', reply_sent: 'Antwoord', reply_error: 'Antwoordfout', time_sync_sent: 'Tijdsynchronisatie', time_sync_error: 'Synchronisatiefout', time_sync_response: 'Tijdantwoord' })[row.status] ?? 'Verbinding' }))
+    rows: rows.map((row) => ({ ...row, at: new Date(row.at_ms).toISOString(), label: row.source === 'packet' ? recordLabel(row.record_type) : row.source === 'cloud' ? 'Web-API' : ({ connected: 'Verbonden', disconnected: 'Verbinding gesloten', idle_disconnect: 'Inactiviteit', incomplete_timeout: 'Onvolledig pakket', incomplete_frame: 'Onvolledig pakket', reply_sent: 'Antwoord', reply_error: 'Antwoordfout', time_sync_sent: 'Tijdsynchronisatie', time_sync_error: 'Synchronisatiefout', time_sync_response: 'Tijdantwoord', cloud_poll_error: 'Web-API-fout' })[row.status] ?? 'Verbinding' }))
   };
 }
 
 /** Stelt de Growatt-diagnose samen; input: repository, instellingen, panelen, tijd, limiet en optionele listener; output: JSON-geschikt overzicht. */
-export function growattOverview(repository, settings, panels, now, limit, growattRuntime) {
+export function growattOverview(repository, settings, panels, now, limit, growattRuntime, growattCloud) {
   const statuses = repository.frameStatus();
   const frames = repository.recentGrowattFrames(limit);
   const announcements = repository.latestGrowattAnnouncements().map((row) => {
@@ -54,7 +55,8 @@ export function growattOverview(repository, settings, panels, now, limit, growat
     },
     statuses,
     announcements,
-    production: productionResponse(repository.currentInverters(), settings.growatt.expected_inverters, settings.growatt.fresh_minutes, now, panels.inverters.map((item) => item.serial)),
+    cloud: growattCloud?.status() ?? { enabled: false, configured: false, production_source: settings.growatt.production_source ?? 'shinelink', state: 'disabled', devices: [], plants: [] },
+    production: productionResponse(currentProductionRows(repository, settings, now), settings.growatt.expected_inverters, settings.growatt.fresh_minutes, now, panels.inverters.map((item) => item.serial)),
     frames: frames.map((frame) => ({ ...frame, label: recordLabel(frame.record_type), received_at: new Date(frame.received_ms).toISOString() })),
     problems: repository.recentGrowattProblems(20).map((problem) => ({ ...problem, at: new Date(problem.at_ms).toISOString() }))
   };

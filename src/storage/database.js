@@ -44,6 +44,17 @@ export function openDatabase(path) {
       PRIMARY KEY(serial, measured_ms)
     );
     CREATE INDEX IF NOT EXISTS inverter_received ON inverter_measurements(serial, received_ms);
+    CREATE TABLE IF NOT EXISTS cloud_inverter_measurements (
+      serial TEXT NOT NULL, measured_ms INTEGER NOT NULL, received_ms INTEGER NOT NULL,
+      power_w REAL NOT NULL, energy_today_kwh REAL, energy_total_kwh REAL,
+      PRIMARY KEY(serial, measured_ms)
+    );
+    CREATE INDEX IF NOT EXISTS cloud_inverter_time ON cloud_inverter_measurements(measured_ms);
+    CREATE TABLE IF NOT EXISTS growatt_cloud_calls (
+      id INTEGER PRIMARY KEY, attempted_ms INTEGER NOT NULL, method TEXT NOT NULL,
+      request_url TEXT NOT NULL, device_serial TEXT, status TEXT NOT NULL,
+      http_status INTEGER, duration_ms INTEGER NOT NULL, detail TEXT, response_json TEXT
+    );
     CREATE TABLE IF NOT EXISTS meter_measurements (
       device TEXT NOT NULL, measured_ms INTEGER NOT NULL, received_ms INTEGER NOT NULL,
       net_power_w REAL NOT NULL, import_kwh REAL, export_kwh REAL,

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { getCalibrationFactor } from '../pv/calibration.js';
 import { getWeatherResolution } from '../weather/resolution.js';
+import { growattCloudConfig } from '../growatt/cloud/config.js';
 
 export const root = resolve(import.meta.dirname, '../..');
 
@@ -15,6 +16,7 @@ export function validateSettings(config) {
   const errors = [];
   try { getCalibrationFactor(config); } catch (error) { errors.push(error.message); }
   try { getWeatherResolution(config); } catch (error) { errors.push(error.message); }
+  try { growattCloudConfig(config); } catch (error) { errors.push(error.message); }
   if (config.timezone !== 'Europe/Amsterdam') errors.push('timezone moet Europe/Amsterdam zijn');
   if (!Number.isInteger(config.logging?.max_entries_per_source ?? 5000) || (config.logging?.max_entries_per_source ?? 5000) < 100 || (config.logging?.max_entries_per_source ?? 5000) > 100000) errors.push('logging.max_entries_per_source moet 100..100000 zijn');
   for (const [name, item] of [['http', config.http], ['growatt', config.growatt]]) {

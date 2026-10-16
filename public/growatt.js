@@ -1,4 +1,5 @@
 import { setupDiagnosticControls } from './diagnostic-controls.js';
+import { renderGrowattCloud, setupGrowattCloud, showGrowattCloudCall } from './growatt-cloud.js';
 
 const dateTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const pageSize = 100;
@@ -45,11 +46,11 @@ function showEmpty(body, columns, label) {
   body.append(row);
 }
 
-/** Maakt een knop voor de volledige pakketinhoud; input: pakket-id; output: button-element. */
-function frameButton(id) {
+/** Maakt een knop voor één lokaal pakket of webverzoek; input: log-id en optionele cloudvlag; output: button-element. */
+function frameButton(id, cloud = false) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.dataset.frameId = String(id);
+  button.dataset[cloud ? 'cloudCallId' : 'frameId'] = String(id);
   button.textContent = 'Bekijk';
   return button;
 }
@@ -62,6 +63,8 @@ function renderSummary(data) {
   element('#listener').textContent = `TCP: ${listener.host}:${listener.port} · ${state}${error}`;
   element('#db-path').textContent = `Database: ${data.database_path ?? 'geheugen'}`;
   element('#updated').textContent = `Meetstatus: ${data.production.status}`;
+  element('#production-source').textContent = `Opbrengstbron: ${{ shinelink: 'ShineLink', cloud: 'Growatt-web-API', auto: 'Automatisch' }[data.cloud.production_source] ?? '—'}`;
+  renderGrowattCloud(data.cloud);
   element('#frame-count').textContent = data.summary.frames_total.toLocaleString('nl-NL');
   element('#power').textContent = watts(data.production.power_w);
   element('#discovered').textContent = `${data.announcements.length}/${data.production.expected_inverters}`;
@@ -96,9 +99,9 @@ function renderAnnouncements(data) {
 function renderInverters(data) {
   const body = element('#inverters');
   body.replaceChildren();
-  if (!data.production.inverters.length) return showEmpty(body, 6, 'Geen metingen');
+  if (!data.production.inverters.length) return showEmpty(body, 7, 'Geen metingen');
   for (const inverter of data.production.inverters) addRow(body, [
-    inverter.serial, watts(inverter.power_w),
+    inverter.serial, inverter.source === 'cloud' ? 'Web-API' : inverter.source === 'shinelink' ? 'ShineLink' : '—', watts(inverter.power_w),
     inverter.energy_today_kwh === null ? '—' : `${inverter.energy_today_kwh} kWh`,
     inverter.energy_total_kwh === null ? '—' : `${inverter.energy_total_kwh} kWh`,
     time(inverter.measured_at), inverter.fresh ? 'Actueel' : 'Oud'
@@ -112,12 +115,12 @@ function renderTimeline(data) {
   if (!data.rows.length) showEmpty(body, 8, 'Geen berichten voor dit filter');
   for (const row of data.rows) {
     const packet = row.source === 'packet';
-    const isError = packet ? !['control', 'announcement'].includes(row.status) && !row.status.startsWith('decoded:') : !['connected', 'disconnected', 'idle_disconnect', 'reply_sent', 'time_sync_sent', 'time_sync_response'].includes(row.status);
+    const isError = packet ? !['control', 'announcement'].includes(row.status) && !row.status.startsWith('decoded:') : row.source === 'cloud' ? row.status === 'error' : !['connected', 'disconnected', 'idle_disconnect', 'reply_sent', 'time_sync_sent', 'time_sync_response'].includes(row.status);
     const item = addRow(body, [
       time(row.at), row.label, row.record_type?.toUpperCase() ?? '—',
       packet ? row.record_type?.slice(0, 2).toUpperCase() ?? '—' : '—', row.status,
       packet ? row.peer : `${row.peer} · ${row.detail ?? ''}`,
-      row.size_bytes ?? '—', packet ? frameButton(row.id) : '—'
+      row.size_bytes ?? '—', packet ? frameButton(row.id) : row.source === 'cloud' ? frameButton(row.id, true) : '—'
     ]);
     if (isError) item.classList.add('timeline-error');
     else if (!packet) item.classList.add('timeline-event');
@@ -164,6 +167,8 @@ async function showFrame(id) {
 function handleFrameClick(event) {
   const button = event.target.closest?.('button[data-frame-id]');
   if (button) void showFrame(button.dataset.frameId);
+  const cloud = event.target.closest?.('button[data-cloud-call-id]');
+  if (cloud) void showGrowattCloudCall(cloud.dataset.cloudCallId);
 }
 
 /** Vernieuwt de Growatt-metingen en de gefilterde tijdlijn; input: geen; output: Promise<void>. */
@@ -188,12 +193,12 @@ async function refresh() {
 
 /** Wijzigt de tijdlijnfilters en start op de nieuwste pagina; input: geen (leest selectievelden); output: void. */
 function changeFilter() {
-  if (element('#view-filter').value === 'events') {
+  if (['events', 'cloud'].includes(element('#view-filter').value)) {
     element('#type-filter').value = '';
     element('#address-filter').value = '';
   }
-  element('#type-filter').disabled = element('#view-filter').value === 'events';
-  element('#address-filter').disabled = element('#view-filter').value === 'events';
+  element('#type-filter').disabled = ['events', 'cloud'].includes(element('#view-filter').value);
+  element('#address-filter').disabled = ['events', 'cloud'].includes(element('#view-filter').value);
   offset = 0;
   element('#frame-detail').hidden = true;
   void refresh();
@@ -216,5 +221,6 @@ const renderLogging = setupDiagnosticControls('growatt', refresh, () => {
 });
 element('#newer').addEventListener('click', () => changePage(-1));
 element('#older').addEventListener('click', () => changePage(1));
+setupGrowattCloud(refresh);
 void refresh();
 setInterval(() => { void refresh(); }, 15000);

@@ -6,7 +6,7 @@
   <title>ZonAPI · Growatt</title>
   <link rel="stylesheet" href="/dashboard.css">
   <link rel="stylesheet" href="/growatt.css">
-  <script src="/growatt.js" defer></script>
+  <script src="/growatt.js" type="module"></script>
 </head>
 <body>
   <header class="masthead">
@@ -17,7 +17,7 @@
   <main class="layout growatt-layout">
     <section class="intro">
       <h1>Growatt</h1>
-      <div class="meta"><span id="listener">TCP: —</span><span id="db-path">Database: —</span><span id="updated">Meetstatus: —</span><button class="refresh-button" id="refresh-now" type="button">Vernieuwen</button></div>
+      <div class="meta"><span id="listener">TCP: —</span><span id="production-source">Opbrengstbron: —</span><span id="db-path">Database: —</span><span id="updated">Meetstatus: —</span><button class="refresh-button" id="refresh-now" type="button">Vernieuwen</button></div>
     </section>
 
     <section class="highlights growatt-highlights" aria-label="Growatt-status">
@@ -26,6 +26,23 @@
       <div class="tile"><div class="label">Herkende adressen</div><strong id="discovered">—</strong></div>
       <div class="tile"><div class="label">Actieve omvormers</div><strong id="active">—</strong></div>
       <div class="tile"><div class="label">Laatste ontvangst</div><strong class="time-value" id="last-frame">—</strong></div>
+    </section>
+
+    <section class="full-card" id="cloud-section">
+      <div class="timeline-heading"><h2>Growatt-web-API</h2><button type="button" class="refresh-button" id="cloud-poll" disabled>Nu ophalen</button></div>
+      <dl class="cloud-details">
+        <div><dt>Status</dt><dd id="cloud-state">—</dd></div>
+        <div><dt>API-token</dt><dd id="cloud-token">—</dd></div>
+        <div><dt>Server</dt><dd id="cloud-server">—</dd></div>
+        <div><dt>Installatie</dt><dd id="cloud-plant">—</dd></div>
+        <div><dt>Interval</dt><dd id="cloud-interval">—</dd></div>
+        <div><dt>Laatste poging</dt><dd id="cloud-attempt">—</dd></div>
+        <div><dt>Laatste succes</dt><dd id="cloud-success">—</dd></div>
+        <div><dt>Volgend verzoek</dt><dd id="cloud-next">—</dd></div>
+        <div><dt>Laatste HTTP-status</dt><dd id="cloud-http">—</dd></div>
+        <div><dt>Laatste fout</dt><dd id="cloud-error">—</dd></div>
+      </dl>
+      <div class="detail-meta" id="cloud-plants"></div>
     </section>
 
     <section class="full-card">
@@ -40,13 +57,13 @@
 
     <section class="full-card">
       <h2>Omvormers</h2>
-      <div class="table-scroll"><table class="data-table"><thead><tr><th>Serienummer</th><th>Vermogen</th><th>Vandaag</th><th>Totaal</th><th>Meting</th><th>Status</th></tr></thead><tbody id="inverters"></tbody></table></div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>Serienummer</th><th>Bron</th><th>Vermogen</th><th>Vandaag</th><th>Totaal</th><th>Meting</th><th>Status</th></tr></thead><tbody id="inverters"></tbody></table></div>
     </section>
 
     <section class="full-card">
       <div class="timeline-heading"><h2>Berichten en verbindingen</h2><div class="log-actions"><button type="button" id="toggle-logging" class="refresh-button" aria-pressed="true" disabled>Logging —</button><button type="button" id="clear-logs" class="clear-button">Berichten en logs verwijderen</button></div></div>
       <div class="timeline-filters">
-        <label>Toon <select id="view-filter"><option value="all">Alles</option><option value="packets">Pakketten</option><option value="errors">Fouten</option><option value="events">Verbindingen</option></select></label>
+        <label>Toon <select id="view-filter"><option value="all">Alles</option><option value="packets">Pakketten</option><option value="cloud">Web-API</option><option value="errors">Fouten</option><option value="events">Verbindingen</option></select></label>
         <label>Type <select id="type-filter"><option value="">Alle typen</option><option value="xx04">xx04 meting</option><option value="xx50">xx50 archief</option><option value="xx03">xx03 aanmelding</option><option value="xx29">xx29 RF-configuratie</option><option value="xx18">xx18 tijdantwoord</option><option value="xx16">xx16 ping</option></select></label>
         <label>Adres <select id="address-filter"><option value="">Alle adressen</option><option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option></select></label>
       </div>
