@@ -23,7 +23,7 @@
     "start_step_minutes": 5,
     "min_solar_share": 0.7,
     "reserve_w": 300,
-    "baseload_w": null,
+    "baseload_w": 400,
     "history_days": 7
   }
 }
