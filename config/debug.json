@@ -1,0 +1,8 @@
+{
+  "logging": {
+    "growatt": false,
+    "weather": false,
+    "homewizard": false,
+    "max_entries_per_source": 5000
+  }
+}
