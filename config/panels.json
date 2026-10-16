@@ -7,9 +7,9 @@
     { "id": "080", "serial": "FUJ2BJ40PA", "ac_limit_w": 2000 }
   ],
   "groups": [
-    { "id": "rij1", "inverter_id": "081", "count": 5, "wp_per_panel": 400, "tilt_deg": 14, "azimuth_deg": 180, "loss_factor": 0.8 },
-    { "id": "rij2", "inverter_id": "080", "count": 5, "wp_per_panel": 400, "tilt_deg": 14, "azimuth_deg": 180, "loss_factor": 0.8 },
-    { "id": "rij3", "inverter_id": "083", "count": 5, "wp_per_panel": 400, "tilt_deg": 14, "azimuth_deg": 180, "loss_factor": 0.8 },
-    { "id": "rij4", "inverter_id": "082", "count": 5, "wp_per_panel": 400, "tilt_deg": 14, "azimuth_deg": 180, "loss_factor": 0.8 }
+    { "id": "rij1", "inverter_id": "081", "count": 5, "wp_per_panel": 400, "tilt_deg": 14, "azimuth_deg": 180, "loss_factor": 0.9 },
+    { "id": "rij2", "inverter_id": "080", "count": 5, "wp_per_panel": 400, "tilt_deg": 14, "azimuth_deg": 180, "loss_factor": 0.9 },
+    { "id": "rij3", "inverter_id": "083", "count": 5, "wp_per_panel": 400, "tilt_deg": 14, "azimuth_deg": 180, "loss_factor": 0.9 },
+    { "id": "rij4", "inverter_id": "082", "count": 5, "wp_per_panel": 400, "tilt_deg": 14, "azimuth_deg": 180, "loss_factor": 0.9 }
   ]
 }
