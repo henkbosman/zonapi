@@ -1,11 +1,10 @@
 {
   "id": "wasmachine",
   "name": "Wasmachine",
-  "estimated_profile": true,
+  "estimated_profile": false,
   "steps": [
-    { "duration_minutes": 10, "power_w": 200 },
-    { "duration_minutes": 15, "power_w": 1900 },
-    { "duration_minutes": 55, "power_w": 150 },
-    { "duration_minutes": 10, "power_w": 600 }
+    { "duration_minutes": 25, "power_w": 2000 },
+    { "duration_minutes": 30, "power_w": 90 },
+    { "duration_minutes": 10, "power_w": 350 }
   ]
 }

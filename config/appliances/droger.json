@@ -1,10 +1,8 @@
 {
   "id": "droger",
   "name": "Droger",
-  "estimated_profile": true,
+  "estimated_profile": false,
   "steps": [
-    { "duration_minutes": 20, "power_w": 1800 },
-    { "duration_minutes": 100, "power_w": 1400 },
-    { "duration_minutes": 30, "power_w": 600 }
+    { "duration_minutes": 120, "power_w": 400 }
   ]
 }
