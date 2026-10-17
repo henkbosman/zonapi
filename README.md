@@ -25,7 +25,7 @@ Stop de Node-dienst en kopieer `src/` en `public/` uit het archief naar de besta
 
 Het losse dashboardupdatearchief bevat uitsluitend `src/`, `public/`, `test/` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
 
-Deze update voegt een rode basislastlijn aan de drie daggrafieken toe en kan per apparaat een HomeWizard Energy Socket uitlezen. De kaart **Netvermogen nu** toont afname of teruglevering; de meternaam `KWH` is daar weggehaald. Automatische kwartiercorrecties blijven actief. Bestaande instellingen blijven geldig: zonder `growatt.production_source` wordt uitsluitend de lokale ShineLink-bron gebruikt. Zonder `weather.resolution_minutes` worden kwartierwaarden opgehaald. Een oude `weather.forecast_days` van `2` wordt bij het laden verhoogd tot `3`.
+Deze update voegt per apparaat een cyclusgrafiek toe: gemeten verbruik, de vorige volledige cyclus als verwachting en een lijn met verstreken tijd. De rode basislastlijn in de drie Zonopbrengst-grafieken en de socketherkenning blijven beschikbaar. Bestaande instellingen blijven geldig: zonder `growatt.production_source` wordt uitsluitend de lokale ShineLink-bron gebruikt. Zonder `weather.resolution_minutes` worden kwartierwaarden opgehaald. Een oude `weather.forecast_days` van `2` wordt bij het laden verhoogd tot `3`.
 
 ### Logging en dashboard
 
@@ -82,7 +82,21 @@ Pas na **5 minuten aaneengesloten 5 W of lager** wordt het apparaat weer **Niet 
 
 Bij een mislukte of te oude socketmeting toont het dashboard **Socket niet bereikbaar**, met de fout als toelichting. Het presenteert dan geen actuele aan/uitstatus. De geldigheid is minimaal 2 minuten, of drie pollintervallen als dat langer is. Na een langdurige meetonderbreking wordt de start opnieuw vastgesteld. Een korte serverherstart behoudt een recent herkend programma; IP- of grenswijzigingen beginnen met nieuwe herkenning.
 
-`GET /api/v1/appliances` bevat per profiel `activity` met `configured`, `state`, `running`, `power_w`, `measured_at`, `started_at`, `stopped_at` en `error`. Apparaatverbruik komt in een eigen statustabel en wordt nooit als extra netmeter bij P1/kWh opgeteld. Zonder debuglogging bewaart SQLite slechts **één overschreven statusrij per apparaat**, geen geschiedenis van iedere socketmeting. Met HomeWizard-logging aan verschijnen de aanvragen als `socket:<apparaat-id>` in de bestaande begrensde verzoekentijdlijn. Logs wissen laat de actuele apparaatstatus staan.
+`GET /api/v1/appliances` bevat per profiel `activity` met `configured`, `state`, `running`, `power_w`, `measured_at`, `started_at`, `stopped_at` en `error`. Apparaatverbruik komt in een eigen statustabel en wordt nooit als extra netmeter bij P1/kWh opgeteld. De laatste status overschrijft één rij per apparaat. Daarnaast worden de begrensde cyclusmetingen hieronder bewaard, ook als debuglogging uitstaat. Met HomeWizard-logging aan verschijnen de aanvragen als `socket:<apparaat-id>` in de bestaande begrensde verzoekentijdlijn. Logs wissen laat de actuele apparaatstatus en cyclusgrafieken staan.
+
+### Apparaatgrafieken per cyclus
+
+Onder **Apparaatverbruik** staat per apparaat een grafiek met het vermogen in watt en tijd sinds de start. De groene lijn toont de huidige cyclus; de gele lijn gebruikt de vorige volledig gemeten cyclus als verwachting. Beide beginnen op **0 minuten**, zodat de verbruiksfasen gelijk op de tijdas staan, ook wanneer de programma's op verschillende dagen gestart zijn. De vorige lijn blijft in beeld voor de volledige eerder gemeten programmaduur. Het is een vergelijking met het vorige programma; een ander gekozen programma kan een ander verloop hebben.
+
+De verticale lijn toont **Verstreken uu:mm:ss** en telt iedere seconde verder. Hiervoor zijn geen extra socketaanvragen nodig; de vermogensmetingen volgen het bestaande HomeWizard-interval en het dashboard haalt nieuwe meetpunten iedere 30 seconden uit de eigen API. Beweeg de muis over de grafiek voor verstreken tijd en het huidige en vorige vermogen. Na focus werken Home, End en de pijlen; de pijlen verplaatsen hier één minuut. De datum/tijd van de echte start staat boven de grafiek, de grafiek zelf gebruikt uitsluitend verstreken tijd en blijft daardoor correct rond middernacht en zomer-/wintertijd.
+
+De opname begint bij de eerste meting van de bevestigde start. De metingen tijdens de startwachttijd worden daarvoor tijdelijk bewaard en bij een bevestigde start meegenomen; een korte losse piek verdwijnt weer. Korte pauzes binnen een programma blijven zichtbaar. Na bevestiging van het einde worden de extra metingen van de stopwachttijd afgeknipt: de eindtijd ligt bij de eerste lage meting van die laatste, aaneengesloten stopperiode. Er wordt geen hele dag met stand-byverbruik getekend. Als het apparaat klaar is, blijft de laatste cyclus staan om te bekijken, met de voorafgaande volledige cyclus ernaast als die beschikbaar is.
+
+Een volledige referentie is pas beschikbaar nadat ZonAPI een cyclus vanaf een recente waargenomen inactieve toestand tot het bevestigde einde heeft kunnen opnemen. Bij installatie terwijl het apparaat al draait, een ontbrekend begin, een langdurige meetonderbreking of gewijzigde socketinstellingen wordt een gedeeltelijke curve getoond; die wordt niet als verwachting gebruikt. Bij ontbrekende actuele metingen bevriest de verticale lijn op de laatste meting en staat er **Gemeten tot**. Meetgaten langer dan de maximale meetpauze worden niet doorgetrokken. Een korte herstart behoudt de lopende cyclus en al vastgelegde meetpunten. De eerste bruikbare verwachting ontstaat na een volledig opgenomen cyclus.
+
+De database bewaart per apparaat maximaal **de lopende cyclus plus de twee laatst afgesloten cycli**. Onderbroken cycli tellen mee in die twee; alleen volledige, normaal afgesloten cycli kunnen referentie zijn. Oudere cycli en hun meetpunten worden automatisch verwijderd. Een startkandidaat die niet bevestigd wordt, verdwijnt eveneens. Iedere cyclus is begrensd op 24 uur en 20.000 meetpunten. Zo groeit deze historie niet onbeperkt. De cyclusopslag en socketstatus worden samen in één transactie bijgewerkt; logging is hiervan onafhankelijk.
+
+`GET /api/v1/appliances/cycles` geeft per apparaat `current`, `previous`, `live`, `elapsed_seconds` en `activity`. Meetpunten bevatten `elapsed_seconds` en `power_w`; de cyclusmetadata bevat de echte start/eindtijd, duur, maximale meetpauze en `complete`. `previous` is `null` zolang er geen bruikbare voorafgaande cyclus is. Deze grafiekverwachting gebruikt de vorige cyclus; de bestaande JSON-verbruiksprofielen blijven de bron voor de berekende startadviezen.
 
 ### Growatt via de web-API
 
@@ -216,7 +230,7 @@ Op het dashboard staan de laatste correctie en het aantal geleerde kwartieren. `
 
 ### Database-indeling
 
-SQLite gebruikt schemaversie 4 (`PRAGMA user_version`). Bestaande databases worden bij starten aangevuld met de socketstatustabel; meetgeschiedenis en geleerde kwartiercorrecties blijven behouden. De belangrijkste scheiding is:
+SQLite gebruikt schemaversie 5 (`PRAGMA user_version`). Bestaande databases worden bij starten aangevuld met de cyclusopslag; socketstatus, meetgeschiedenis en geleerde kwartiercorrecties blijven behouden. De belangrijkste scheiding is:
 
 | Tabel | Sleutel en inhoud |
 | --- | --- |
@@ -225,6 +239,7 @@ SQLite gebruikt schemaversie 4 (`PRAGMA user_version`). Bestaande databases word
 | `pv_correction_pattern` | Eén rij per `model_key + quarter_minute`, met factor, basisvermogen, gemeten totaal, meettijd, bijwerktijd en meetsignatuur. Maximaal 96 rijen per paneelmodel; nieuwe correcties worden overschreven. |
 | `inverter_measurements` / `cloud_inverter_measurements` | Ongewijzigde ontvangen vermogens- en energiemetingen per omvormer en meettijd. |
 | `appliance_socket_state` | Eén actuele toestand per apparaat-id, met configuratiesleutel, laatste meettijd, vermogen en bevestigde start-/stoptijden. Nieuwe uitlezingen overschrijven dezelfde rij. |
+| `appliance_cycles` / `appliance_cycle_samples` | Begrensde cyclusmetadata en vermogen per meettijd, met twee afgesloten cycli en maximaal één startkandidaat/lopende cyclus per apparaat. Verwijderen van een cyclus verwijdert ook de bijbehorende meetpunten. |
 | Growatt-/weer-/meterlogtabellen | Losse, begrensde diagnosegegevens; wissen of uitschakelen verwijdert geen kwartierpatronen of opbrengstmetingen. |
 
 Meet- en berekentijden staan in UTC-milliseconden. Alleen `quarter_minute` is een lokale klokindex (0,15,...,1425). Daardoor blijft bijvoorbeeld 14:15 hetzelfde patroonkwartier bij zomer- en wintertijd; bij het dubbele najaarsuur krijgt de nieuwste werkelijke meting voorrang. De patroontabel heeft een samengestelde primaire sleutel, controles op kwartiergrenzen/waarden en een index voor de nieuwste correctie. Het bijwerken van het patroon en het herberekenen van toekomstige cachewaarden gebeurt in één transactie.

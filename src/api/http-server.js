@@ -17,6 +17,7 @@ import { loadProfiles } from '../appliances/load-profiles.js';
 import { advise } from '../appliances/start-advice.js';
 import { dailyAdvice } from '../appliances/daily-advice.js';
 import { socketActivity } from '../appliances/socket-activity.js';
+import { applianceCycleResponse } from './appliance-cycles.js';
 import { currentProductionRows, productionHistory } from '../production/source.js';
 import { growattCloudConfig } from '../growatt/cloud/config.js';
 import { createPvForecastModel } from '../pv/forecast-model.js';
@@ -31,6 +32,8 @@ const staticFiles = new Map([
   ['/diagnostic-controls.js', ['diagnostic-controls.js', 'text/javascript; charset=utf-8']],
   ['/chart-cursor.js', ['chart-cursor.js', 'text/javascript; charset=utf-8']],
   ['/dashboard-daily-advice.js', ['dashboard-daily-advice.js', 'text/javascript; charset=utf-8']],
+  ['/dashboard-appliance-charts.js', ['dashboard-appliance-charts.js', 'text/javascript; charset=utf-8']],
+  ['/appliance-cycle-chart.js', ['appliance-cycle-chart.js', 'text/javascript; charset=utf-8']],
   ['/dashboard.css', ['dashboard.css', 'text/css; charset=utf-8']],
   ['/dashboard.js', ['dashboard.js', 'text/javascript; charset=utf-8']],
   ['/dashboard-production-chart.js', ['dashboard-production-chart.js', 'text/javascript; charset=utf-8']],
@@ -138,6 +141,11 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
         const { profiles, errors } = loadProfiles(profilesDirectory);
         return sendJson(response, 200, { profiles: [...profiles.values()].map((profile) => ({ ...profile,
           activity: socketActivity(profile, repository, settings.homewizard.poll_seconds, now) })), errors });
+      }
+      if (url.pathname === '/api/v1/appliances/cycles') {
+        const { profiles, errors } = loadProfiles(profilesDirectory);
+        return sendJson(response, 200, { generated_at: new Date(now).toISOString(),
+          appliances: [...profiles.values()].map((profile) => applianceCycleResponse(profile, repository, settings, now)), errors });
       }
       if (url.pathname === '/api/v1/appliances/daily') {
         const { profiles, errors } = loadProfiles(profilesDirectory);

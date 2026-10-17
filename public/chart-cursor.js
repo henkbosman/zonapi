@@ -8,10 +8,11 @@ function node(tag, attributes) {
 }
 
 /** Voegt een aanwijsbare tijd- en waardecursor toe; input: SVG, tijd-/plotgrenzen en optionele {label,color,valueAt}[]-reeksen; output: void. */
-export function attachTimeCursor(svg, { start, end, left, right, top, bottom, width }, series = []) {
+export function attachTimeCursor(svg, { start, end, left, right, top, bottom, width,
+  formatTime = (ms) => timeFormat.format(new Date(ms)), ariaLabel = 'Tijd in zonopbrengstgrafiek', stepMs = 5 * 60000, labelWidth = 56 }, series = []) {
   const cursor = node('g', { visibility: 'hidden', 'pointer-events': 'none', 'data-chart-cursor': '' });
   const line = node('line', { y1: top, y2: bottom, stroke: '#172629', 'stroke-width': 1.2 });
-  const background = node('rect', { y: bottom + 3, width: 56, height: 22, rx: 5, fill: '#172629' });
+  const background = node('rect', { y: bottom + 3, width: labelWidth, height: 22, rx: 5, fill: '#172629' });
   const text = node('text', { y: bottom + 18, fill: '#fff', 'font-size': 12, 'text-anchor': 'middle' });
   cursor.append(line, background, text);
   const values = node('g', { 'data-chart-values': '' });
@@ -25,17 +26,17 @@ export function attachTimeCursor(svg, { start, end, left, right, top, bottom, wi
   });
   if (series.length) cursor.append(values);
   const target = node('rect', { x: left, y: top, width: right - left, height: bottom - top, fill: 'transparent', tabindex: 0,
-    role: 'slider', 'aria-label': 'Tijd in zonopbrengstgrafiek', 'aria-valuemin': start, 'aria-valuemax': end });
+    role: 'slider', 'aria-label': ariaLabel, 'aria-valuemin': start, 'aria-valuemax': end });
   let time = start;
 
   /** Plaatst cursor, tijd en waarden op de getekende lijnen; input: epoch-ms; output: void. */
   function show(ms) {
     time = Math.round(Math.min(end, Math.max(start, ms)));
     const x = left + (time - start) / (end - start) * (right - left);
-    const center = Math.max(left + 28, Math.min(right - 28, x));
+    const center = Math.max(left + labelWidth / 2, Math.min(right - labelWidth / 2, x));
     line.setAttribute('x1', x); line.setAttribute('x2', x);
-    background.setAttribute('x', center - 28); text.setAttribute('x', center);
-    text.textContent = timeFormat.format(new Date(time));
+    background.setAttribute('x', center - labelWidth / 2); text.setAttribute('x', center);
+    text.textContent = formatTime(time);
     const boxX = Math.max(left + 5, Math.min(right - boxWidth - 5, x + 12 > right - boxWidth ? x - boxWidth - 12 : x + 12));
     box.setAttribute('x', boxX); box.setAttribute('y', top + 7);
     for (const [index, item] of series.entries()) {
@@ -60,7 +61,7 @@ export function attachTimeCursor(svg, { start, end, left, right, top, bottom, wi
   target.addEventListener('keydown', (event) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    show(event.key === 'Home' ? start : event.key === 'End' ? end : time + (event.key === 'ArrowLeft' ? -1 : 1) * 5 * 60000);
+    show(event.key === 'Home' ? start : event.key === 'End' ? end : time + (event.key === 'ArrowLeft' ? -1 : 1) * stepMs);
   });
   svg.append(target, cursor);
 }

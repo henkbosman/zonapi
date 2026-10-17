@@ -10,7 +10,7 @@ body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 5%,#
 .mark { display:inline-grid; place-items:center; width:38px; height:38px; background:#f9df9d; border-radius:13px; color:#816000; font-size:24px }
 .connection { margin-left:auto; background:var(--mint); color:var(--teal); border-radius:99px; font-size:12px; font-weight:700; padding:8px 12px }
 .layout { max-width:1224px; padding:24px 22px 70px; margin:auto; display:grid; grid-template-columns:1fr 1fr; gap:20px }
-.intro,.highlights,.appliances,.health { grid-column:1 / -1 }
+.intro,.highlights,.appliances,.appliance-charts,.health { grid-column:1 / -1 }
 .intro { padding:24px 22px 12px }
 .intro h1 { font-size:clamp(30px,4vw,49px); letter-spacing:-.052em; line-height:1.08; margin:8px 0 12px; max-width:640px }
 .eyebrow { margin:0; text-transform:uppercase; color:var(--teal); font-weight:800; letter-spacing:.16em; font-size:11px }
@@ -43,6 +43,12 @@ body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 5%,#
 .chart.short svg { height:180px }
 .pv-chart-card .chart { min-height:360px }
 .pv-chart-card .chart svg { height:360px }
+.appliance-chart-card { margin-top:16px }
+.appliance-chart-card .chart svg { height:360px }
+.appliance-chart-card .section-heading { align-items:flex-start; flex-wrap:wrap }
+.appliance-chart-card h3 { font-size:23px; letter-spacing:-.04em; margin:5px 0 }
+.cycle-progress { color:var(--teal); font-size:14px; font-weight:750; font-variant-numeric:tabular-nums; padding-top:7px }
+.cycle-note { margin:12px 0 0; min-height:18px }
 .empty { min-height:190px; display:grid; place-items:center; color:var(--muted); text-align:center; padding:20px; line-height:1.5; background:#f7faf7; border-radius:12px }
 .appliances { padding:24px }
 .appliance-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:18px }

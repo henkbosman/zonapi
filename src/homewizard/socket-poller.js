@@ -23,7 +23,8 @@ export function createSocketPoller(settings, repository, directory, reader = fet
         state = { ...previous, pending_start_ms: null, pending_stop_ms: null, error: String(error.message).slice(0, 500) };
       }
       const at = clock();
-      repository.saveApplianceSocketState({ appliance_id: profile.id, config_key: key, updated_ms: at, state });
+      repository.saveApplianceSocketState({ appliance_id: profile.id, config_key: key, updated_ms: at, state,
+        max_gap_ms: socketFreshnessMs(settings.homewizard.poll_seconds) });
       repository.saveHomeWizardCall({ attempted_ms: started, device, request_url: meterRequestUrl(config), duration_ms: Math.max(0, at - started),
         status: state.error ? 'error' : 'ok', detail: state.error, measurement: state.error ? null : measurement });
     }));

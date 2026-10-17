@@ -1,11 +1,13 @@
 import { setupProductionDayCharts } from './dashboard-production-days.js';
 import { renderDailyAdvice } from './dashboard-daily-advice.js';
+import { setupApplianceCharts } from './dashboard-appliance-charts.js';
 
 /** Zoekt één dashboardelement; input: CSS-selector; output: Element of null. */
 const $ = (selector) => document.querySelector(selector);
 const dutchTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit' });
 const dutchDay = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const renderProductionDays = setupProductionDayCharts();
+const renderApplianceCharts = setupApplianceCharts($('#appliance-cycle-charts'));
 
 /** Leest één endpoint met expliciete foutstatus; input: pad; output: Promise<JSON> of fout. */
 async function json(path) {
@@ -86,8 +88,8 @@ function renderStatus(status, profileErrors = []) {
 /** Haalt huidige gegevens, grafieken en apparaatadviezen op; input: geen; output: Promise<void>. */
 async function refresh() {
   try {
-    const [status, forecasts, profiles, production, daily] = await Promise.all([
-      json('/api/v1/status'), json('/api/v1/forecast/days'), json('/api/v1/appliances'), json('/api/v1/production/day'), json('/api/v1/appliances/daily')
+    const [status, forecasts, profiles, production, daily, cycles] = await Promise.all([
+      json('/api/v1/status'), json('/api/v1/forecast/days'), json('/api/v1/appliances'), json('/api/v1/production/day'), json('/api/v1/appliances/daily'), json('/api/v1/appliances/cycles')
     ]);
     const forecast = forecasts.days[0];
     renderStatus(status, profiles.errors);
@@ -104,6 +106,7 @@ async function refresh() {
     $('#forecast-note').textContent = forecast.status === 'ok' ? '' : `Voorspelling: ${forecast.status}`;
     drawChart($('#history-chart'), production.points.map((point) => ({ time:point.time, value:point.power_w })), '#137771');
     renderDailyAdvice($('#appliance-list'), profiles.profiles, daily);
+    renderApplianceCharts(cycles);
     $('#connection').textContent = 'Online';
   } catch (error) {
     $('#connection').textContent = `Kon gegevens niet ophalen: ${error.message}`;

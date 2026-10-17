@@ -73,7 +73,7 @@ test('automatische correctie heeft configureerbare grenzen en een eigen patroon 
     assert.notEqual(correctionModelKey({ ...f.settings, pv: { calibration_factor: 1.5 } }, f.panels), key);
     const moved = { ...f.panels, groups: f.panels.groups.map((group) => ({ ...group, tilt_deg: 20 })) };
     assert.notEqual(correctionModelKey(f.settings, moved), key);
-    assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 4);
+    assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 5);
     assert.ok(f.db.prepare('PRAGMA table_info(pv_forecast)').all().some((column) => column.name === 'base_power_w'));
   } finally { f.db.close(); }
 });

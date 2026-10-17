@@ -187,7 +187,7 @@ test('een recente programmaherkenning overleeft herstart en logs wissen; een v3-
     repository.saveMeter(normalizeMeter('p1', 'v1', { active_power_w: -50 }, at));
     db.exec('DROP TABLE appliance_socket_state; PRAGMA user_version=3');
     db.close(); db = openDatabase(path); repository = createRepository(db);
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 4);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 5);
     assert.equal(repository.currentMeters()[0].net_power_w, -50);
     const configured = profile('wasmachine', { start_delay_seconds: 0 }), config = socketConfig(configured);
     repository.saveApplianceSocketState({ appliance_id: configured.id, config_key: socketConfigKey(config), updated_ms: at,
