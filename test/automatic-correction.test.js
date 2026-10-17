@@ -270,7 +270,7 @@ test('uurterugval overmorgen krijgt vier verschillende kwartiercorrecties in API
 });
 
 test('Growatt-opvragen corrigeren API, daggrafiek, cache en apparaatadviezen; een gedeeltelijke cyclus leert niet', async (t) => {
-  const f = fixture({ irradiance: 500 });
+  const f = fixture({ irradiance: 500, now: Date.parse('2026-10-16T10:15:00Z') });
   let now = f.now, total = 800, reads = 0, cycles = 0, fail = false;
   t.mock.method(Date, 'now', () => now);
   const cloud = createGrowattCloudPoller({ settings: f.settings, panels: f.panels, repository: f.repository, environment: {}, clock: () => now,
@@ -303,13 +303,13 @@ test('Growatt-opvragen corrigeren API, daggrafiek, cache en apparaatadviezen; ee
     await fetch(`${base}/api/v1/growatt/logging?enabled=false`, { method: 'PUT' });
     await fetch(`${base}/api/v1/growatt/diagnostics`, { method: 'DELETE' });
     assert.equal((await get('/api/v1/pv/corrections')).learned_quarters, 1);
-    now += 5 * minute; total = 400;
+    now += quarter; total = 400;
     assert.equal((await cloud.poll()).forecast_correction.factor, 0.1);
-    assert.equal((await get('/api/v1/pv/corrections')).learned_quarters, 1);
-    now += 5 * minute; fail = true;
+    assert.equal((await get('/api/v1/pv/corrections')).learned_quarters, 2);
+    now += quarter; fail = true;
     assert.equal((await cloud.poll()).reason, 'partial');
     assert.equal(cycles, 2);
-    assert.equal((await get('/api/v1/pv/corrections')).learned_quarters, 1);
+    assert.equal((await get('/api/v1/pv/corrections')).learned_quarters, 2);
     assert.equal((await get('/api/v1/pv/corrections')).latest.factor, 0.1);
     assert.equal((await get('/api/v1/growatt/cloud')).forecast_correction.status, 'incomplete');
     const source = await get('/api/v1/production/current');

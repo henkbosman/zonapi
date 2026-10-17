@@ -1,4 +1,5 @@
 import { localDay } from '../weather/local-day.js';
+import { productionFreshnessMinutes } from '../production/freshness.js';
 
 /** Bundelt complete omvormerrondes tot één dagtotaal per meetmoment; input: historie, nu, zonuren, omvormeraantal, versheid, serienummers en optionele groepeertijd in seconden; output: chronologische totaalpunten zonder individuele tussenstanden. */
 export function productionSeries(rows, now, sunrise, sunset, expected, freshnessMinutes, serials = [], groupSeconds = 60) {
@@ -14,7 +15,7 @@ export function productionSeries(rows, now, sunrise, sunset, expected, freshness
   /** Bewaart één complete ronde en begint daarna een nieuwe; input: geen (gebruikt de actuele omvormers); output: void, onvolledige totalen worden niet getekend. */
   function finishRound() {
     if (!pending.size) return;
-    const fresh = [...current.values()].filter((item) => lastAt - item.at <= freshnessMinutes * 60000);
+    const fresh = [...current.values()].filter((item) => lastAt - item.at <= productionFreshnessMinutes(freshnessMinutes, item.source) * 60000);
     if (fresh.length === expected) {
       const sources = [...new Set(fresh.map((item) => item.source))];
       const point = { time: new Date(lastAt).toISOString(), power_w: Math.round(fresh.reduce((sum, item) => sum + item.power_w, 0) * 10) / 10,

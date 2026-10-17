@@ -1,4 +1,5 @@
 import { growattCloudConfig } from '../growatt/cloud/config.js';
+import { productionFreshnessMinutes } from './freshness.js';
 
 /** Selecteert één meting per serienummer; input: lokale/cloudrijen, bronkeuze, versheid en peiltijd; output: rijen met expliciete bron, auto kiest recente lokale data vóór cloud. */
 export function selectCurrentProduction(localRows, cloudRows, source, freshnessMinutes, now) {
@@ -6,7 +7,7 @@ export function selectCurrentProduction(localRows, cloudRows, source, freshnessM
   const cloud = new Map(cloudRows.map((row) => [row.serial, { ...row, source: 'cloud' }]));
   if (source === 'shinelink') return [...local.values()];
   if (source === 'cloud') return [...cloud.values()];
-  const fresh = (row) => row && now >= row.measured_ms && now - row.measured_ms <= freshnessMinutes * 60000;
+  const fresh = (row) => row && now >= row.measured_ms && now - row.measured_ms <= productionFreshnessMinutes(freshnessMinutes, row.source) * 60000;
   return [...new Set([...local.keys(), ...cloud.keys()])].map((serial) => {
     const localRow = local.get(serial), cloudRow = cloud.get(serial);
     if (fresh(localRow)) return localRow;

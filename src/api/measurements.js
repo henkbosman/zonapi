@@ -1,10 +1,11 @@
 import { primaryNetMeter } from '../appliances/baseload.js';
+import { productionFreshnessMinutes } from '../production/freshness.js';
 
 /** Berekent betrouwbaar huidig PV-vermogen uit afzonderlijke omvormers; input: rijen, aantal, leeftijd, nu, bekende serials; output: totaalsom of partial. */
 export function productionResponse(rows, expected, freshnessMinutes, now, configuredSerials = []) {
   const known = configuredSerials.filter(Boolean);
   const selected = known.length ? rows.filter((row) => known.includes(row.serial)) : rows;
-  const inverters = selected.map((row) => ({ serial: row.serial, source: row.source ?? 'shinelink', power_w: row.power_w, energy_today_kwh: row.energy_today_kwh, energy_total_kwh: row.energy_total_kwh, measured_at: new Date(row.measured_ms).toISOString(), received_at: new Date(row.received_ms).toISOString(), fresh: now - row.measured_ms >= 0 && now - row.measured_ms <= freshnessMinutes * 60000 }));
+  const inverters = selected.map((row) => ({ serial: row.serial, source: row.source ?? 'shinelink', power_w: row.power_w, energy_today_kwh: row.energy_today_kwh, energy_total_kwh: row.energy_total_kwh, measured_at: new Date(row.measured_ms).toISOString(), received_at: new Date(row.received_ms).toISOString(), fresh: now - row.measured_ms >= 0 && now - row.measured_ms <= productionFreshnessMinutes(freshnessMinutes, row.source) * 60000 }));
   for (const serial of known) {
     if (!inverters.some((item) => item.serial === serial)) inverters.push({ serial, source: null, power_w: null, energy_today_kwh: null, energy_total_kwh: null, measured_at: null, received_at: null, fresh: false });
   }

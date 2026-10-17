@@ -4,6 +4,7 @@ import { correctionModelKey } from './correction-key.js';
 import { clockQuarter, quarterLabel } from './quarter.js';
 import { basePvAtTime } from './base-at-time.js';
 import { refreshPvForecast } from './refresh-forecast.js';
+import { productionFreshnessMinutes } from '../production/freshness.js';
 
 /** Leert één actuele kwartiercorrectie van een volledige Growatt-meetronde; input: opslag, instellingen, panelen, configuratiefouten, meetrijen en ontvangsttijd; output: status, factor en kwartier, zonder stapeling of leren van onvolledige/te oude metingen. */
 export function learnPvCorrection(repository, settings, panels, panelErrors, rows, now) {
@@ -14,7 +15,7 @@ export function learnPvCorrection(repository, settings, panels, panelErrors, row
   const selected = new Map(rows.filter((row) => !serials.length || serials.includes(row.serial)).map((row) => [row.serial, row]));
   if (selected.size !== settings.growatt.expected_inverters) return { status: 'incomplete' };
   const values = [...selected.values()];
-  if (values.some((row) => !Number.isFinite(row.power_w) || row.power_w < 0 || !Number.isFinite(row.measured_ms) || now < row.measured_ms || now - row.measured_ms > settings.growatt.fresh_minutes * 60000)) return { status: 'stale' };
+  if (values.some((row) => !Number.isFinite(row.power_w) || row.power_w < 0 || !Number.isFinite(row.measured_ms) || now < row.measured_ms || now - row.measured_ms > productionFreshnessMinutes(settings.growatt.fresh_minutes, row.source) * 60000)) return { status: 'stale' };
   const times = values.map((row) => row.measured_ms);
   if (Math.max(...times) - Math.min(...times) > config.max_skew_seconds * 1000) return { status: 'time_skew' };
   const measuredMs = Math.round(times.reduce((sum, value) => sum + value, 0) / times.length);

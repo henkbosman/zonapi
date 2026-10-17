@@ -4,16 +4,19 @@ import { createGrowattCloudClient } from './client.js';
 import { redactCloud } from './redact.js';
 import { localDay } from '../../weather/local-day.js';
 import { offlineSunTimes } from '../../weather/solar-position.js';
+import { CLOUD_QUARTER_MS, nextQuarter, quarterAtOrAfter, restoredQuarter } from './schedule.js';
+import { productionFreshnessMinutes } from '../../production/freshness.js';
 
-/** Maakt de periodieke Growatt-webbron; input: instellingen, panelen, opslag en optionele klok/omgeving/client/callback na complete meetcyclus; output: {poll,start,stop,status} met persistent interval en foutterugval. */
-export function createGrowattCloudPoller({ settings, panels, repository, clock = () => Date.now(), environment = process.env, client, onMeasurements }) {
+/** Maakt de Growatt-webbron op vaste klokkwartieren; input: instellingen, panelen, opslag en optionele klok/omgeving/client/timers/callback; output: {poll,start,stop,status} met persistente foutwachttijd. */
+export function createGrowattCloudPoller({ settings, panels, repository, clock = () => Date.now(), environment = process.env, client, onMeasurements, timers = { setTimeout, clearTimeout } }) {
   const config = growattCloudConfig(settings);
   const token = growattCloudToken(config, environment);
   const configured = panels.inverters.map((item) => item.serial).filter(Boolean).map((serial) => ({ serial, device_type: config.device_type }));
   const fingerprint = createHash('sha256').update(JSON.stringify([config.base_url, config.plant_id, config.device_type, token, configured])).digest('hex');
   let state = repository.diagnosticState('growatt', 'cloud') ?? {};
   if (state.fingerprint !== fingerprint) state = { fingerprint, failures: 0 };
-  let timer = null, pending = null, controller = null, stopping = false;
+  state.next_ms = restoredQuarter(state, clock());
+  let timer = null, pending = null, controller = null, stopping = false, running = false;
   const api = client ?? createGrowattCloudClient(config, token, { clock, onCall: repository.saveGrowattCloudCall });
 
   /** Leest zontijden uit lokale opslag of berekening; input: lokale dag; output: zonuren of null. */
@@ -49,7 +52,8 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
     const started = clock();
     controller = new AbortController();
     state.last_attempt_ms = started;
-    state.next_ms = started + config.poll_seconds * 1000;
+    state.last_slot_ms = Math.floor(started / CLOUD_QUARTER_MS) * CLOUD_QUARTER_MS;
+    state.next_ms = nextQuarter(started);
     persist();
     const errors = [];
     const observations = [];
@@ -86,8 +90,10 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
       }
     }
     state.failures = errors.length ? (state.failures ?? 0) + 1 : 0;
-    const wait = errors.length ? Math.max(Math.min(3600000, config.poll_seconds * 1000 * 2 ** Math.min(5, state.failures - 1)), retryMs) : config.poll_seconds * 1000;
-    state.next_ms = clock() + wait;
+    const finished = clock();
+    const backoff = Math.min(3600000, CLOUD_QUARTER_MS * 2 ** Math.min(5, state.failures - 1));
+    state.retry_not_before_ms = errors.length ? Math.max(started + backoff, finished + retryMs) : 0;
+    state.next_ms = Math.max(nextQuarter(Math.max(started, finished)), quarterAtOrAfter(state.retry_not_before_ms));
     state.last_error = errors.length ? errors.join(' · ').slice(0, 1500) : null;
     state.status = errors.length ? (measurements ? 'partial' : 'error') : 'ok';
     state.last_measurement_count = measurements;
@@ -105,13 +111,19 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
     if (!token) return result('configuration');
     if (pending) return result('busy');
     const now = clock();
-    if (now < (state.next_ms ?? 0)) return result('interval');
+    if (now < state.next_ms) return result('interval');
+    // Een korte timervertraging mag; gemiste kwartieren worden nooit later in het kwartier ingehaald.
+    if (now % CLOUD_QUARTER_MS >= 60000) {
+      state.next_ms = nextQuarter(now);
+      persist();
+      return result('interval');
+    }
     if (config.daylight_only) {
       const day = localDay(now), sun = sunTimes(day);
-      if (!sun) return result('sun_times');
+      if (!sun) { state.next_ms = nextQuarter(now); persist(); return result('sun_times'); }
       if (now < sun.sunrise_ms || now >= sun.sunset_ms) {
         const nextDay = now < sun.sunrise_ms ? day : new Date(Date.parse(`${day}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
-        state.next_ms = sunTimes(nextDay)?.sunrise_ms ?? now + config.poll_seconds * 1000;
+        state.next_ms = Math.max(nextQuarter(now), quarterAtOrAfter(sunTimes(nextDay)?.sunrise_ms ?? nextQuarter(now)));
         persist();
         return result('daylight');
       }
@@ -119,9 +131,14 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
     if (config.source === 'auto') {
       const serials = new Set(configured.map((item) => item.serial));
       const fresh = repository.currentInverters().filter((item) => (!serials.size || serials.has(item.serial)) && now >= item.measured_ms && now - item.measured_ms <= settings.growatt.fresh_minutes * 60000);
-      if (fresh.length === settings.growatt.expected_inverters) return result('local_fresh');
+      if (fresh.length === settings.growatt.expected_inverters) {
+        state.last_slot_ms = Math.floor(now / CLOUD_QUARTER_MS) * CLOUD_QUARTER_MS;
+        state.next_ms = nextQuarter(now);
+        persist();
+        return result('local_fresh');
+      }
     }
-    pending = run().finally(() => { pending = null; controller = null; });
+    pending = run().finally(() => { pending = null; controller = null; arm(); });
     return pending;
   }
 
@@ -129,26 +146,47 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
   function status() {
     const iso = (ms) => Number.isFinite(ms) ? new Date(ms).toISOString() : null;
     return { enabled: config.source !== 'shinelink', configured: Boolean(token), production_source: config.source, base_url: config.base_url, token_env: config.token_env,
-      fetching: pending !== null, poll_seconds: config.poll_seconds, daylight_only: config.daylight_only,
+      fetching: pending !== null, poll_seconds: config.poll_seconds, poll_schedule: config.poll_schedule,
+      fresh_minutes: productionFreshnessMinutes(settings.growatt.fresh_minutes, 'cloud'), daylight_only: config.daylight_only,
       state: config.source === 'shinelink' ? 'disabled' : !token ? 'configuration_incomplete' : state.status ?? 'waiting',
       last_error: config.source === 'shinelink' ? null : !token ? 'API-token ontbreekt' : state.last_error ?? null,
-      last_attempt: iso(state.last_attempt_ms), last_success: iso(state.last_success_ms), next_fetch: iso(state.next_ms),
+      last_attempt: iso(state.last_attempt_ms), last_success: iso(state.last_success_ms), next_fetch: config.source === 'shinelink' || !token ? null : iso(state.next_ms),
       plant_id: config.plant_id || state.plant_id || null, plants: state.plants ?? [], devices: configured.length ? configured : state.devices ?? [],
       last_measurement_count: state.last_measurement_count ?? 0, forecast_correction: state.forecast_correction ?? null,
       last_request: repository.diagnosticState('growatt', 'cloud_last_request') };
   }
 
-  /** Start achtergrondcontrole zonder het Growatt-interval te verkorten; input: geen; output: void. */
+  /** Plant één timer op het volgende klokkwartier; input: geen; output: void, zonder relatieve intervalverschuiving. */
+  function arm() {
+    if (timer !== null) timers.clearTimeout(timer);
+    timer = null;
+    if (!running || stopping || config.source === 'shinelink' || !token) return;
+    timer = timers.setTimeout(() => { timer = null; void tick(); }, Math.max(1, state.next_ms - clock()));
+  }
+
+  /** Voert de achtergrondpoging uit en plant daarna opnieuw; input: geen; output: Promise<void>. */
+  async function tick() {
+    try { const result = await poll(); if (!result.attempted) arm(); }
+    catch (error) {
+      console.error('Growatt cloud:', redactCloud(error.message, token));
+      state.next_ms = nextQuarter(clock());
+      arm();
+    }
+  }
+
+  /** Start ophalen op :00, :15, :30 en :45; input: geen; output: void, herhaald starten maakt geen extra timer. */
   function start() {
-    if (timer || stopping) return;
-    void poll().catch((error) => console.error('Growatt cloud:', redactCloud(error.message, token)));
-    timer = setInterval(() => { void poll().catch((error) => console.error('Growatt cloud:', redactCloud(error.message, token))); }, 15000);
+    if (running || stopping) return;
+    running = true;
+    void tick();
   }
 
   /** Stopt nieuwe aanvragen en wacht op een lopende aanvraag voordat SQLite sluit; input: geen; output: Promise<void>. */
   async function stop() {
     stopping = true;
-    if (timer) clearInterval(timer);
+    running = false;
+    if (timer !== null) timers.clearTimeout(timer);
+    timer = null;
     controller?.abort();
     if (pending) await pending;
   }

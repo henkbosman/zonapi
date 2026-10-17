@@ -78,3 +78,24 @@ test('de rode basislast blijft zichtbaar boven de voorspelling; nul en ontbreken
     assert.ok(container.children[0].children.every((node) => !('data-baseload-w' in node.attributes)));
   } finally { globalThis.document = before; }
 });
+
+test('apparaatkaarten vermelden welke andere actieve apparaten in hun startadvies meetellen', () => {
+  const before = globalThis.document;
+  globalThis.document = { createElement: element };
+  try {
+    const container = element('div');
+    const profiles = [{ id: 'wasmachine', name: 'Wasmachine', duration_minutes: 90 }, { id: 'droger', name: 'Droger', duration_minutes: 150 }];
+    const daily = { days: [], active_appliances: [{ id: 'droger', name: 'Droger', fresh: true, remaining_minutes: 40, overrun: false }] };
+    renderDailyAdvice(container, profiles, daily);
+    assert.match(text(container.children[0]), /Rekening gehouden met: Droger/);
+    assert.doesNotMatch(text(container.children[1]), /Rekening gehouden met/);
+    const note = container.children[0].children.find((node) => node.className === 'active-appliances-note');
+    assert.match(note.title, /nog circa 40 min/);
+    daily.active_appliances[0].fresh = false;
+    renderDailyAdvice(container, profiles, daily);
+    assert.match(text(container.children[0]), /laatste status actief/);
+    daily.active_appliances = [];
+    renderDailyAdvice(container, profiles, daily);
+    assert.doesNotMatch(text(container), /Rekening gehouden met/);
+  } finally { globalThis.document = before; }
+});

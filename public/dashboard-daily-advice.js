@@ -3,7 +3,8 @@ const timeFormat = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterda
 const statuses = {
   stale: 'Verwachting verouderd', configuration_incomplete: 'Configuratie ontbreekt',
   insufficient_baseload: 'Basislast ontbreekt', forecast_unavailable: 'Geen verwachting',
-  forecast_incomplete: 'Verwachting onvolledig', sun_times_unavailable: 'Zontijden ontbreken', no_daylight_window: 'Geen starttijd meer'
+  forecast_incomplete: 'Verwachting onvolledig', sun_times_unavailable: 'Zontijden ontbreken', no_daylight_window: 'Geen starttijd meer',
+  already_active: 'Actieve cyclus meegerekend'
 };
 
 /** Toont het gemeten draaien van een apparaat; input: apparaatkaart en actuele socketstatus; output: void. */
@@ -34,6 +35,13 @@ export function renderDailyAdvice(container, profiles, daily) {
     const duration = document.createElement('p'); duration.textContent = `Cyclus: ${profile.duration_minutes} min`;
     card.append(title, duration);
     renderActivity(card, profile.activity);
+    const active = (daily.active_appliances ?? []).filter((item) => item.id !== profile.id);
+    if (active.length) {
+      const accounted = document.createElement('p'); accounted.className = 'active-appliances-note';
+      accounted.textContent = `Rekening gehouden met: ${active.map((item) => `${item.name}${item.fresh ? '' : ' (laatste status actief)'}`).join(', ')}`;
+      accounted.title = active.map((item) => `${item.name}: nog circa ${item.remaining_minutes} min${item.overrun ? '; programma duurt langer dan verwacht' : ''}`).join('\n');
+      card.append(accounted);
+    }
     const list = document.createElement('dl'); list.className = 'daily-starts';
     for (const [index, day] of daily.days.entries()) {
       const advice = day.appliances.find((item) => item.id === profile.id);

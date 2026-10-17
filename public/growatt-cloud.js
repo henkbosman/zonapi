@@ -7,7 +7,7 @@ function time(value) { return value ? fullTime.format(new Date(value)) : '—'; 
 export function renderGrowattCloud(cloud) {
   const labels = { disabled: 'Uitgeschakeld', configuration_incomplete: 'Configuratie ontbreekt', waiting: 'Wachten', ok: 'Actief', partial: 'Gedeeltelijk', error: 'Fout' };
   const values = { 'cloud-state': cloud.fetching ? 'Bezig' : labels[cloud.state] ?? cloud.state, 'cloud-token': cloud.configured ? 'Ingesteld' : 'Ontbreekt',
-    'cloud-server': cloud.base_url ?? '—', 'cloud-plant': cloud.plant_id ?? '—', 'cloud-interval': cloud.poll_seconds ? `${cloud.poll_seconds / 60} min` : '—',
+    'cloud-server': cloud.base_url ?? '—', 'cloud-plant': cloud.plant_id ?? '—', 'cloud-interval': cloud.poll_schedule === 'quarter_hour' ? ':00 · :15 · :30 · :45' : cloud.poll_seconds ? `${cloud.poll_seconds / 60} min` : '—',
     'cloud-attempt': time(cloud.last_attempt), 'cloud-success': time(cloud.last_success), 'cloud-next': time(cloud.next_fetch),
     'cloud-http': cloud.last_request?.http_status ?? '—', 'cloud-error': cloud.last_error ?? '—' };
   for (const [id, value] of Object.entries(values)) document.getElementById(id).textContent = value;

@@ -1,11 +1,13 @@
-/** Leest de optionele Growatt-cloudinstellingen; input: applicatie-instellingen; output: gevalideerde bronkeuze en cloudconfiguratie of fout. */
+export const GROWATT_CLOUD_POLL_SECONDS = 900;
+
+/** Leest de optionele Growatt-cloudinstellingen; input: applicatie-instellingen; output: gevalideerde bronkeuze en cloudconfiguratie met vaste klokkwartieren of fout. */
 export function growattCloudConfig(settings) {
   const source = settings.growatt?.production_source ?? 'shinelink';
   if (!['shinelink', 'cloud', 'auto'].includes(source)) throw new Error('growatt.production_source moet shinelink, cloud of auto zijn');
   const supplied = settings.growatt?.cloud ?? {};
   if (!supplied || typeof supplied !== 'object' || Array.isArray(supplied)) throw new Error('growatt.cloud moet een object zijn');
   const config = { base_url: 'https://openapi.growatt.com', token_env: 'GROWATT_API_TOKEN', token: '', plant_id: '',
-    device_type: 'min', poll_seconds: 300, request_pause_ms: 1100, daylight_only: false, timezone: settings.timezone ?? 'Europe/Amsterdam', ...supplied };
+    device_type: 'min', poll_seconds: GROWATT_CLOUD_POLL_SECONDS, request_pause_ms: 1100, daylight_only: false, timezone: settings.timezone ?? 'Europe/Amsterdam', ...supplied };
   let url;
   try { url = new URL(config.base_url); } catch { throw new Error('growatt.cloud.base_url moet een HTTPS-serveradres zijn'); }
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('growatt.cloud.base_url moet een HTTPS-serveradres zonder pad of inloggegevens zijn');
@@ -18,7 +20,8 @@ export function growattCloudConfig(settings) {
   if (!Number.isInteger(config.request_pause_ms) || config.request_pause_ms < 1000 || config.request_pause_ms > 10000) throw new Error('growatt.cloud.request_pause_ms moet 1000..10000 zijn');
   if (typeof config.daylight_only !== 'boolean') throw new Error('growatt.cloud.daylight_only moet true of false zijn');
   try { new Intl.DateTimeFormat('en', { timeZone: config.timezone }).format(); } catch { throw new Error('growatt.cloud.timezone ongeldig'); }
-  return { source, ...config };
+  // Oudere settings.json-bestanden blijven geldig; de klokplanning geldt ook bij een oud interval van 300 seconden.
+  return { source, ...config, poll_seconds: GROWATT_CLOUD_POLL_SECONDS, poll_schedule: 'quarter_hour' };
 }
 
 /** Leest uitsluitend het ingestelde Growatt-token; input: cloudconfig en optionele omgevingsvariabelen; output: getrimd token of lege string. */
