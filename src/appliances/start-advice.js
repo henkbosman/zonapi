@@ -1,6 +1,8 @@
 import { estimatePv } from '../pv/model.js';
 import { getCalibrationFactor } from '../pv/calibration.js';
 
+const SHARE_EPSILON = 1e-12;
+
 /** Simuleert een volledig stroomprofiel tegen voorspeltijdvakken; input: apparaat, start-ms, weertijdvakken, modelcontext; output: energie/fractie of null bij een gat. */
 export function evaluateStart(profile, startMs, weather, context) {
   const busyUntil = context.activeDemand?.busyUntil(profile.id);
@@ -27,7 +29,12 @@ export function evaluateStart(profile, startMs, weather, context) {
       cursor = end;
     }
   }
-  return { start: new Date(startMs).toISOString(), solar_share_percent: totalWh ? Math.round(solarWh / totalWh * 1000) / 10 : 100, energy_wh: Math.round(totalWh), solar_wh: Math.round(solarWh), forecast_age_minutes: Math.max(0, Math.round(recordAgeMs / 60000)) };
+  const fraction = totalWh ? Math.min(1, Math.max(0, solarWh / totalWh)) : 1;
+  const share = fraction >= 1 - SHARE_EPSILON ? 1 : fraction;
+  // Rond uitsluitend de weergave af: een gedeeltelijk gedekte cyclus mag daardoor geen 100%-advies worden.
+  const percent = Math.min(share < 1 ? 99.9 : 100, Math.round(share * 1000) / 10);
+  return { start: new Date(startMs).toISOString(), solar_share: share, solar_share_percent: percent,
+    energy_wh: Math.round(totalWh), solar_wh: Math.round(solarWh), forecast_age_minutes: Math.max(0, Math.round(recordAgeMs / 60000)) };
 }
 
 /** Zoekt vroegste passende en beste starttijd van een machine; input: profiel, weerreeks, modelcontext; output: advies met versheid/status. */
@@ -44,15 +51,15 @@ export function advise(profile, weather, context) {
   if (start > end && busyUntil !== null) return { ...active, status: 'already_active', can_start_now: false, earliest_start: null, best_start: null, search_until: new Date(end).toISOString() };
   const nowStart = context.now >= start && context.now <= end ? evaluateStart(profile, context.now, weather, context) : null;
   const stepMs = context.settings.advice.start_step_minutes * 60000;
-  let first = nowStart && nowStart.solar_share_percent / 100 >= threshold ? nowStart : null;
+  let first = nowStart && nowStart.solar_share >= threshold - SHARE_EPSILON ? nowStart : null;
   let best = nowStart;
   let evaluated = 0;
   for (let at = Math.ceil(start / stepMs) * stepMs; at <= end; at += stepMs) {
     const result = evaluateStart(profile, at, weather, context);
     if (!result) continue;
     evaluated++;
-    if (!first && result.solar_share_percent / 100 >= threshold) first = result;
-    if (!best || result.solar_share_percent > best.solar_share_percent) best = result;
+    if (!first && result.solar_share >= threshold - SHARE_EPSILON) first = result;
+    if (!best || result.solar_share > best.solar_share + SHARE_EPSILON) best = result;
   }
   if (!evaluated && !nowStart) return { ...active, status: 'forecast_incomplete', can_start_now: null, earliest_start: null, best_start: null, search_until: new Date(end).toISOString() };
   const staleLimit = context.settings.weather.stale_after_hours * 3600000;
@@ -60,7 +67,7 @@ export function advise(profile, weather, context) {
   return {
     ...active, status: stale ? 'stale' : 'ok', id: profile.id, duration_minutes: profile.duration_minutes,
     estimated_profile: profile.estimated_profile === true, baseload: context.baseload, minimum_solar_share_percent: threshold * 100,
-    can_start_now: busyUntil !== null && context.now < busyUntil ? false : stale || !nowStart ? null : nowStart.solar_share_percent / 100 >= threshold,
+    can_start_now: busyUntil !== null && context.now < busyUntil ? false : stale || !nowStart ? null : nowStart.solar_share >= threshold - SHARE_EPSILON,
     now: nowStart, earliest_start: first?.start ?? null, earliest: first, best_start: best?.start ?? null, best,
     search_until: new Date(end).toISOString(), evaluated_starts: evaluated
   };

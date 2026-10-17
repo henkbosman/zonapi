@@ -64,8 +64,10 @@ body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 5%,#
 .daily-starts { margin:16px 0 0; font-size:13px; font-variant-numeric:tabular-nums }
 .daily-start { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:13px 0; border-top:1px solid var(--line) }
 .daily-start dt { color:var(--muted); white-space:nowrap }
-.daily-start dd { margin:0; text-align:right }
+.daily-start dd { margin:0; min-width:0; text-align:right }
 .start-time { font-size:18px; font-weight:800; color:var(--teal) }
+.start-alternative { color:#78550b }
+.start-solar-note { display:block; color:#78550b; font-size:12px; font-weight:600; line-height:1.45; margin-top:4px }
 .start-unavailable { color:var(--muted); font-size:12px }
 .health { padding:20px 24px; color:var(--muted); font-size:13px }
 .health h2 { color:var(--ink); margin:0 0 10px; font-size:17px }

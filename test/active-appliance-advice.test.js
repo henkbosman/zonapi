@@ -93,6 +93,24 @@ test('meerdere actieve apparaten tellen samen, basislast en reserve worden elk Ã
   assert.equal(noReserve.can_start_now, true);
 });
 
+test('beste gedeeltelijke zonmoment wacht op lopend verbruik en trekt ook basislast en reserve af', () => {
+  const f = fixture(now, 1200);
+  f.settings.advice.reserve_w = 100;
+  const running = appliance('droger', [{ duration_minutes: 30, power_w: 600 }], true);
+  const target = appliance('wasmachine', [{ duration_minutes: 10, power_w: 1000 }]);
+  f.active(running);
+  const context = { ...f.context, activeDemand: f.demand([running, target]) };
+  const result = advise(target, f.weather, context);
+  assert.equal(result.earliest_start, null);
+  assert.equal(result.best_start, new Date(now + 30 * minute).toISOString());
+  assert.equal(result.best.solar_share_percent, 70);
+  assert.equal(result.now.solar_share_percent, 10);
+  const daily = dailyAdvice([running, target], f.weather, context, f.repository);
+  const today = daily.days[0].appliances.find((item) => item.id === target.id);
+  assert.equal(today.best_start, result.best_start);
+  assert.equal(today.best.solar_share_percent, 70);
+});
+
 test('de vorige volledige cyclus bepaalt het resterende verloop met dezelfde lineaire fasen als de grafiek', () => {
   const f = fixture(now, 1000); f.context.baseload.power_w = 0;
   const running = appliance('droger', [{ duration_minutes: 90, power_w: 2000 }], true);

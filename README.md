@@ -56,6 +56,10 @@ De groepeertijd is standaard 60 seconden voor ShineLink en gelijk aan `growatt.c
 
 Het dashboard geeft per apparaat een starttijd op iedere dag van `weather.forecast_days`. De volledige cyclus moet binnen de zonuren van die dag passen. Vandaag worden alleen toekomstige starttijden gezocht. Dezelfde apparaatprofielen, basislast, reserve en minimale zonnefractie gelden als voor het bestaande ESP32-advies. Ontbrekende of verouderde gegevens worden afzonderlijk weergegeven. Het bestaande `/advice`-endpoint blijft `advice.search_hours` gebruiken; het nieuwe `/appliances/daily` gebruikt alle ingestelde voorspeldagen.
 
+Als geen startmoment de hele cyclus voor 100% uit zonne-energie kan dekken, toont het dashboard per apparaat en per dag **Meeste zon**, met het beste starttijdstip en de verwachte zonnedekking. Bijvoorbeeld: **14:10 — Meeste zon · 65%**. Er is dan aanvulling uit het net nodig. De keuze maximaliseert de zonne-energie die het apparaat gedurende zijn volledige cyclus gebruikt; het tijdstip met de hoogste zonnepaneelopbrengst hoeft daarvoor niet het beste startmoment te zijn. Basislast, reserve en lopende apparaten tellen mee. Bij gelijke uitkomsten wordt het vroegste moment gekozen. De bestaande stapgrootte `advice.start_step_minutes` blijft gelden.
+
+Een starttijd die aan het ingestelde `min_solar_share` voldoet, blijft staan. Is die grens bijvoorbeeld 70% en bestaat er geen optie van 100%, dan kan daarnaast **Meeste zon: 14:10 · 85%** verschijnen. Als beide tijden gelijk zijn, wordt het tijdstip eenmaal getoond. Bij nul bruikbare zonne-energie, ontbrekende of verouderde gegevens verschijnt geen alternatief. Een draaiend apparaat blijft vandaag **Bezig** tonen. Voor deze toevoeging zijn geen configuratiewijzigingen of extra bronverzoeken nodig.
+
 Op `/homewizard` staan host, lokale API-versie, laatste meetwaarden, import-/exporttellers, responstijd en fout per meter. De verzoekentijdlijn kan op apparaat en resultaat worden gefilterd. **Nu ophalen** leest de ingestelde lokale meters. Autorisatieheaders en tokens worden niet gelogd.
 
 ### Energy Socket per apparaat
@@ -320,7 +324,7 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 | `GET /weather` | Weerpagina met zontijden, bronverzoeken, fouten, instralingsgrafiek en handmatige ophaalknop, verversing iedere 15 seconden. |
 | `GET /homewizard` | Lokale meterinformatie, poll-logs, filters, logbeheer en handmatig ophalen; verversing iedere 15 seconden. |
 
-Bijvoorbeeld voor een ESP32: lees `can_start_now` alleen als `status === "ok"`; bij `null`, `stale` of ontbrekende instellingen toon je "onbekend" in plaats van "nee". `earliest_start` kan na drie uur liggen. `best_start` laat de beste optie zien als de drempel nergens wordt gehaald.
+Bijvoorbeeld voor een ESP32: lees `can_start_now` alleen als `status === "ok"`; bij `null`, `stale` of ontbrekende instellingen toon je "onbekend" in plaats van "nee". `earliest_start` kan na drie uur liggen. `best_start` en `best` bevatten het moment met de meeste zonne-energie, ook als de minimumdrempel nergens wordt gehaald. Deze velden staan eveneens per apparaat in `/api/v1/appliances/daily`. De nieuwe `solar_share` is de ongeronde fractie (0–1); `solar_share_percent` blijft het leesbare percentage met maximaal één decimaal. De vergelijking van startmomenten en minimumdrempels gebruikt de ongeronde fractie, zodat afronden geen gedeeltelijke dekking als 100% presenteert. Een bruikbaar gedeeltelijk alternatief vereist `status === "ok"` en `0 < best.solar_share < 1`; houd ook rekening met `already_active` of de socketstatus.
 
 ## Growatt-validatie bij eerste live-verbinding
 

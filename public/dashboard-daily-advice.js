@@ -26,6 +26,24 @@ function renderActivity(card, activity) {
   }
 }
 
+/** Geeft een bruikbaar alternatief als een hele cyclus op zon niet haalbaar is; input: dagadvies; output: beste gedeeltelijk gedekte cyclus of null. */
+function solarAlternative(advice) {
+  if (advice?.status !== 'ok' || !advice.best_start || !advice.best) return null;
+  const share = advice.best.solar_share ?? advice.best.solar_share_percent / 100;
+  return Number.isFinite(share) && share > 0 && share < 1 ? advice.best : null;
+}
+
+/** Voegt het beste zonmoment met de verwachte dekking toe; input: tijdvak, beste cyclus en eventueel al getoonde start; output: void. */
+function renderSolarAlternative(element, best, displayedStart) {
+  const note = document.createElement('span'); note.className = 'start-solar-note';
+  const time = best.start === displayedStart ? '' : `: ${timeFormat.format(new Date(best.start))}`;
+  const percent = best.solar_share_percent === 0 ? '<0,1' : best.solar_share_percent.toLocaleString('nl-NL');
+  note.textContent = `Meeste zon${time} · ${percent}%`;
+  element.append(note);
+  const detail = `Verwachte zonne-energie over de volledige cyclus: ${best.solar_wh} van ${best.energy_wh} Wh. Aanvulling uit het net nodig.`;
+  element.title = element.title ? `${element.title}\n${detail}` : detail;
+}
+
 /** Toont per apparaat een startmoment op iedere voorspelde dag; input: container, profielen en dagadviezen; output: void. */
 export function renderDailyAdvice(container, profiles, daily) {
   container.replaceChildren();
@@ -48,6 +66,7 @@ export function renderDailyAdvice(container, profiles, daily) {
       const row = document.createElement('div'); row.className = 'daily-start';
       const date = document.createElement('dt'); date.textContent = dayFormat.format(new Date(`${day.date}T12:00:00Z`));
       const start = document.createElement('dd');
+      const alternative = solarAlternative(advice);
       if (index === 0 && profile.activity?.running) {
         start.textContent = 'Bezig'; start.className = 'start-time';
       } else if (advice?.status === 'ok' && advice.earliest_start) {
@@ -55,6 +74,11 @@ export function renderDailyAdvice(container, profiles, daily) {
         if (advice.can_start_now) start.textContent = `Nu · ${start.textContent}`;
         start.className = 'start-time';
         start.title = `Eigen zon: ${advice.earliest.solar_share_percent}%`;
+        if (alternative) renderSolarAlternative(start, alternative, advice.earliest_start);
+      } else if (alternative) {
+        start.textContent = timeFormat.format(new Date(advice.best_start));
+        start.className = 'start-time start-alternative';
+        renderSolarAlternative(start, alternative, advice.best_start);
       } else {
         start.textContent = advice?.status === 'ok' ? 'Te weinig zon' : statuses[advice?.status] ?? 'Geen advies';
         start.className = 'start-unavailable';
