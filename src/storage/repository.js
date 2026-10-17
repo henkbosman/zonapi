@@ -4,6 +4,7 @@ import { createHomeWizardCallStore } from './homewizard-calls.js';
 import { forecastTimeline, pvForecastTimeline } from '../weather/forecast-timeline.js';
 import { createGrowattCloudStore } from './growatt-cloud.js';
 import { createPvCorrectionStore } from './pv-corrections.js';
+import { createApplianceSocketStore } from './appliance-sockets.js';
 
 /** Maakt beperkte databasebewerkingen; input: open SQLite DB en optionele logconfiguratie; output: repositorymethoden. */
 export function createRepository(db, logging = {}) {
@@ -29,6 +30,7 @@ export function createRepository(db, logging = {}) {
     ...createHomeWizardCallStore(db, diagnostics),
     ...createGrowattCloudStore(db, diagnostics),
     ...createPvCorrectionStore(db),
+    ...createApplianceSocketStore(db),
     /** Slaat één nieuwer weertijdvak op; input: {source,start_ms,end_ms,ghi,dni,dhi,fetched_ms}; output: SQLite-resultaat. */
     saveForecast(row) { return q.forecast.run(row.source, row.start_ms, row.end_ms, row.ghi, row.dni, row.dhi, row.fetched_ms, row.model ?? null); },
     /** Slaat een paneelgroepberekening op en staat herberekenen van dezelfde weerdata toe; input: PV-rij; output: SQLite-resultaat, oudere brondata overschrijft niets. */

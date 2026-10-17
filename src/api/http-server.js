@@ -16,6 +16,7 @@ import { getBaseload } from '../appliances/baseload.js';
 import { loadProfiles } from '../appliances/load-profiles.js';
 import { advise } from '../appliances/start-advice.js';
 import { dailyAdvice } from '../appliances/daily-advice.js';
+import { socketActivity } from '../appliances/socket-activity.js';
 import { currentProductionRows, productionHistory } from '../production/source.js';
 import { growattCloudConfig } from '../growatt/cloud/config.js';
 import { createPvForecastModel } from '../pv/forecast-model.js';
@@ -67,7 +68,7 @@ export function timeParam(value, defaultMs) {
 }
 
 /** Start een leesbare LAN-API met dashboard; input: dienstafhankelijkheden; output: luisterende http.Server. */
-export function startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard, growattRuntime, growattCloud }) {
+export function startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard, growattRuntime, growattCloud, profilesDirectory = join(root, 'config/appliances') }) {
   const serials = panels.inverters.map((item) => item.serial);
   const productionSource = growattCloudConfig(settings).source;
   const server = http.createServer((request, response) => {
@@ -134,11 +135,12 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       }
       if (url.pathname === '/api/v1/meters/current') return sendJson(response, 200, metersResponse(repository.currentMeters(), now, settings.homewizard.net_meter_priority));
       if (url.pathname === '/api/v1/appliances') {
-        const { profiles, errors } = loadProfiles(join(root, 'config/appliances'));
-        return sendJson(response, 200, { profiles: [...profiles.values()], errors });
+        const { profiles, errors } = loadProfiles(profilesDirectory);
+        return sendJson(response, 200, { profiles: [...profiles.values()].map((profile) => ({ ...profile,
+          activity: socketActivity(profile, repository, settings.homewizard.poll_seconds, now) })), errors });
       }
       if (url.pathname === '/api/v1/appliances/daily') {
-        const { profiles, errors } = loadProfiles(join(root, 'config/appliances'));
+        const { profiles, errors } = loadProfiles(profilesDirectory);
         const pvModel = createPvForecastModel(repository, settings, panels, now);
         const rows = pvModel.prepare(forecastRows((settings.weather.forecast_days + 1) * 24));
         return sendJson(response, 200, { ...dailyAdvice([...profiles.values()], rows,
@@ -147,7 +149,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       }
       if (/^\/api\/v1\/appliances\/[a-z0-9_-]+\/advice$/.test(url.pathname)) {
         const id = url.pathname.split('/')[4];
-        const profile = loadProfiles(join(root, 'config/appliances')).profiles.get(id);
+        const profile = loadProfiles(profilesDirectory).profiles.get(id);
         if (!profile) return sendJson(response, 404, { error: 'Onbekend of ongeldig apparaatprofiel' });
         const durationHours = profile.duration_minutes / 60;
         const pvModel = createPvForecastModel(repository, settings, panels, now);

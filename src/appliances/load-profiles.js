@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { socketConfig } from './socket-config.js';
 
 /** Controleert één apparaatprofiel; input: JSON-object; output: foutlijst. */
 export function validateProfile(profile) {
@@ -14,6 +15,7 @@ export function validateProfile(profile) {
   if (Array.isArray(profile?.steps) && profile.steps.every((step) => step.power_w === 0)) errors.push('apparaatprofiel heeft geen energieverbruik');
   if (profile.min_solar_share !== undefined && (!Number.isFinite(profile.min_solar_share) || profile.min_solar_share < 0 || profile.min_solar_share > 1)) errors.push('min_solar_share moet 0..1 zijn');
   if (profile.reserve_w !== undefined && (!Number.isFinite(profile.reserve_w) || profile.reserve_w < 0)) errors.push('reserve_w moet >=0 zijn');
+  try { socketConfig(profile); } catch (error) { errors.push(error.message); }
   return errors;
 }
 

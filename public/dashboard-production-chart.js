@@ -35,8 +35,8 @@ function drawLine(svg, points, x, y, color, maxGapMs) {
   }
 }
 
-/** Tekent een ruime daggrafiek binnen de zonuren; input: container, dagdata, voorspelslots en optioneel forecastOnly; output: void met tijd-/waardecursor. */
-export function drawProductionChart(container, day, slots, { forecastOnly = false } = {}) {
+/** Tekent een ruime daggrafiek binnen de zonuren; input: container, dagdata, voorspelslots en optioneel forecastOnly/baseloadW; output: void met basislast en tijd-/waardecursor. */
+export function drawProductionChart(container, day, slots, { forecastOnly = false, baseloadW = null } = {}) {
   container.replaceChildren();
   const now = Date.parse(day.now);
   const sunrise = Date.parse(day.sunrise), sunset = Date.parse(day.sunset);
@@ -54,7 +54,8 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
   const svg = node('svg', { viewBox: `0 0 ${width} ${height}`, width, height, preserveAspectRatio: 'xMinYMin meet', role: 'group',
     'aria-label': forecastOnly ? 'Voorspelde zonopbrengst tussen zonsopkomst en zonsondergang' : 'Gemeten en voorspelde zonopbrengst tussen zonsopkomst en zonsondergang' });
   const left = 52, right = width - 18, top = 24, bottom = height - 48;
-  const maxPower = Math.max(500, Math.ceil(Math.max(0, ...measured.map((point) => point.value), ...forecast.map((point) => point.value)) / 500) * 500);
+  const hasBaseload = Number.isFinite(baseloadW) && baseloadW >= 0;
+  const maxPower = Math.max(500, Math.ceil(Math.max(hasBaseload ? baseloadW : 0, ...measured.map((point) => point.value), ...forecast.map((point) => point.value)) / 500) * 500);
   const x = (ms) => left + (right - left) * (ms - start) / (end - start);
   const y = (value) => bottom - (bottom - top) * value / maxPower;
   for (let i = 0; i <= 3; i++) {
@@ -68,6 +69,11 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
   }
   drawLine(svg, measured, x, y, '#137771', Infinity);
   drawLine(svg, forecast, x, y, '#e6a321', 75 * 60000);
+  if (hasBaseload) {
+    const line = node('line', { x1: left, x2: right, y1: y(baseloadW), y2: y(baseloadW), stroke: '#c64040', 'stroke-width': 2,
+      'data-baseload-w': baseloadW });
+    const title = node('title'); title.textContent = `Basislast: ${Math.round(baseloadW)} W`; line.append(title); svg.append(line);
+  }
   if (!measured.length && !forecast.length) label(svg, forecastOnly ? 'Geen voorspelling' : 'Geen meetpunten', (left + right) / 2, (top + bottom) / 2);
   if (now >= start && now <= end) {
     const nowX = x(now);
@@ -76,7 +82,8 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
   }
   attachTimeCursor(svg, { start, end, left, right, top, bottom, width }, [
     ...(forecastOnly ? [] : [{ label: 'Gemeten', color: '#137771', valueAt: (ms) => lineValueAt(measured, ms, Infinity) }]),
-    { label: 'Voorspelling', color: '#996200', valueAt: (ms) => lineValueAt(forecast, ms, 75 * 60000) }
+    { label: 'Voorspelling', color: '#996200', valueAt: (ms) => lineValueAt(forecast, ms, 75 * 60000) },
+    ...(hasBaseload ? [{ label: 'Basislast', color: '#c64040', valueAt: () => baseloadW }] : [])
   ]);
   container.append(svg);
 }

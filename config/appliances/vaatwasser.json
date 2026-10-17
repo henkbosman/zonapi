@@ -6,5 +6,8 @@
     { "duration_minutes": 15, "power_w": 2000 },
     { "duration_minutes": 95, "power_w": 40 },
     { "duration_minutes": 25, "power_w": 2000 }
-  ]
+  ],
+  "homewizard": {
+    "host": "192.168.2.73"
+  }
 }

@@ -29,6 +29,7 @@ body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 5%,#
 .chart-legend i { display:inline-block; width:17px; height:3px; border-radius:3px }
 .legend-measured { background:#137771 }
 .legend-forecast { background:#e6a321 }
+.legend-baseload { background:#c64040 }
 .section-heading { display:flex; justify-content:space-between; align-items:center; gap:18px }
 .section-heading h2 { font-size:23px; letter-spacing:-.04em; margin:5px 0 }
 .unit,.chart-footer { color:var(--muted); font-size:12px; line-height:1.45 }
@@ -49,6 +50,10 @@ body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 5%,#
 .appliance h3 { margin:0 0 5px; font-size:17px }
 .appliance .time { font-weight:800; font-size:21px; margin:15px 0 5px; color:var(--teal) }
 .appliance p { color:var(--muted); font-size:12px; line-height:1.45; margin:5px 0 }
+.appliance .appliance-activity { display:inline-block; margin:9px 0 2px; border-radius:9px; padding:7px 9px; background:#edf2ef; color:var(--ink); font-weight:700 }
+.appliance .activity-running { background:var(--mint); color:var(--teal) }
+.appliance .activity-starting { background:#fff1ce; color:#78550b }
+.appliance .activity-unavailable { background:#fbe9e6; color:#9a3e31 }
 .appliance .badge { display:inline-block; background:var(--mint); color:var(--teal); border-radius:99px; padding:6px 9px; font-size:11px; font-weight:700; margin-top:8px }
 .daily-starts { margin:16px 0 0; font-size:13px; font-variant-numeric:tabular-nums }
 .daily-start { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:13px 0; border-top:1px solid var(--line) }

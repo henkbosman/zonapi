@@ -60,7 +60,7 @@ function drawChart(container, points, color) {
 }
 
 /** Vult kaarten en status in; input: statusobject; output: void. */
-function renderStatus(status) {
+function renderStatus(status, profileErrors = []) {
   $('#now').textContent = dutchDay.format(new Date(status.time));
   $('#source').textContent = `Weerbron: ${status.weather.source}`;
   $('#sun').textContent = status.weather.sunrise ? `Zon ${dutchTime.format(new Date(status.weather.sunrise))}–${dutchTime.format(new Date(status.weather.sunset))}` : 'Zonuren: locatie ontbreekt';
@@ -68,10 +68,11 @@ function renderStatus(status) {
   const pvSource = { shinelink: 'ShineLink', cloud: 'Web-API', mixed: 'ShineLink + web-API' }[status.growatt.source];
   $('#pv-sub').textContent = `${status.growatt.active_inverters}/${status.growatt.expected_inverters} omvormers recent${pvSource ? ` · ${pvSource}` : ''}`;
   $('#net-now').textContent = watts(status.homewizard.net_power_w);
-  $('#net-sub').textContent = status.homewizard.selected_device ? status.homewizard.selected_device.toUpperCase() : 'Geen recente netmeting';
+  const netPower = status.homewizard.net_power_w;
+  $('#net-sub').textContent = !Number.isFinite(netPower) ? 'Geen recente netmeting' : netPower < 0 ? 'Teruglevering aan het net' : netPower > 0 ? 'Afname van het net' : 'Geen afname of teruglevering';
   $('#quota').textContent = `${status.weather.used_requests} / ${status.weather.max_requests}`;
   $('#next-fetch').textContent = status.weather.next_fetch ? `Volgende: ${dutchTime.format(new Date(status.weather.next_fetch))}` : 'Volgende: —';
-  const problems = [ ...(status.panels.missing ?? []), ...(status.weather.location_configured ? [] : ['Locatie ontbreekt']), ...(status.weather.last_error ? [`Weerbron: ${status.weather.last_error}`] : []), ...(status.growatt.cloud?.enabled && status.growatt.cloud.last_error ? [`Growatt-web-API: ${status.growatt.cloud.last_error}`] : []), ...Object.entries(status.homewizard.errors).filter(([, error]) => error).map(([key, error]) => `${key}: ${error}`) ];
+  const problems = [ ...(status.panels.missing ?? []), ...profileErrors.map((item) => `${item.file}: ${item.errors.join(', ')}`), ...(status.weather.location_configured ? [] : ['Locatie ontbreekt']), ...(status.weather.last_error ? [`Weerbron: ${status.weather.last_error}`] : []), ...(status.growatt.cloud?.enabled && status.growatt.cloud.last_error ? [`Growatt-web-API: ${status.growatt.cloud.last_error}`] : []), ...Object.entries(status.homewizard.errors).filter(([, error]) => error).map(([key, error]) => `${key}: ${error}`) ];
   const health = $('#health'); health.replaceChildren();
   health.hidden = problems.length === 0;
   if (problems.length) {
@@ -89,8 +90,8 @@ async function refresh() {
       json('/api/v1/status'), json('/api/v1/forecast/days'), json('/api/v1/appliances'), json('/api/v1/production/day'), json('/api/v1/appliances/daily')
     ]);
     const forecast = forecasts.days[0];
-    renderStatus(status);
-    renderProductionDays(forecasts.days, production);
+    renderStatus(status, profiles.errors);
+    renderProductionDays(forecasts.days, production, status.baseload?.power_w ?? null);
     const correction = forecast.automatic_correction;
     $('#pv-correction').textContent = correction?.status === 'active'
       ? `Correctie ${correction.latest.correction_percent > 0 ? '+' : ''}${correction.latest.correction_percent.toLocaleString('nl-NL')}% · Patroon ${correction.learned_quarters}/96` : '';

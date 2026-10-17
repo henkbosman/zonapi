@@ -7,6 +7,7 @@ import { createBackupJob } from './storage/backup.js';
 import { refreshPvForecast } from './pv/refresh-forecast.js';
 import { createWeatherScheduler } from './weather/scheduler.js';
 import { createHomeWizardPoller } from './homewizard/poller.js';
+import { createSocketPoller } from './homewizard/socket-poller.js';
 import { startGrowattServer, stopGrowattServer } from './growatt/tcp-listener.js';
 import { startHttpServer } from './api/http-server.js';
 import { createGrowattCloudPoller } from './growatt/cloud/poller.js';
@@ -27,6 +28,7 @@ function main() {
   refreshPvForecast(repository, settings, panels, panelErrors, Date.now());
   const weather = createWeatherScheduler({ settings, panels, panelErrors, repository });
   const homewizard = createHomeWizardPoller(settings, repository);
+  const sockets = createSocketPoller(settings, repository, join(root, 'config/appliances'));
   const backups = createBackupJob(db, join(root, 'data'));
   /** Leert na een lokale meting uit de geselecteerde volledige installatie; input: meting en ontvangsttijd; output: void. */
   function correctLocalForecast(measurement, at) {
@@ -53,6 +55,7 @@ function main() {
   http.on('error', (error) => { console.error('HTTP:', error); process.exitCode = 1; });
   weather.start();
   homewizard.start();
+  sockets.start();
   growattCloud.start();
   backups.start();
   process.once('SIGTERM', () => { void stop().catch((error) => console.error('Afsluiten:', error)); });
@@ -64,7 +67,7 @@ function main() {
     if (stopping) return;
     stopping = true;
     weather.stop(); homewizard.stop(); backups.stop();
-    await Promise.all([growattCloud.stop(), new Promise((resolve) => http.close(resolve)), stopGrowattServer(growatt)]);
+    await Promise.all([sockets.stop(), growattCloud.stop(), new Promise((resolve) => http.close(resolve)), stopGrowattServer(growatt)]);
     db.close();
   }
 }

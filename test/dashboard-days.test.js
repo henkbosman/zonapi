@@ -17,6 +17,7 @@ test('drie ruime daggrafieken behouden hun eigen zonuren, cursorwaarden en hoogt
   const ids = ['pv-chart', 'pv-chart-tomorrow', 'pv-chart-after-tomorrow'];
   const nodes = new Map(ids.map((id, index) => [id, element('div', [1100, 720, 320][index])]));
   for (let index = 0; index < 3; index++) nodes.set(`pv-date-${index}`, element('span'));
+  for (let index = 0; index < 3; index++) nodes.set(`pv-baseload-${index}`, element('span'));
   for (let index = 1; index < 3; index++) nodes.set(`forecast-note-${index}`, element('div'));
   let resized;
   const observed = [];
@@ -31,19 +32,24 @@ test('drie ruime daggrafieken behouden hun eigen zonuren, cursorwaarden en hoogt
       return { date, sunrise, sunset: new Date(start + 12 * 3600000).toISOString(), now, status: 'ok', slots };
     });
     const production = { ...days[0], points: [{ time: now, power_w: 450, active_inverters: 4, expected_inverters: 4 }] };
-    render(days, production);
+    render(days, production, 400);
     assert.equal(observed.length, 3);
     for (const [index, id] of ids.entries()) {
       const chart = nodes.get(id), svg = chart.children[0], width = chart.clientWidth;
       assert.equal(svg.attributes.viewBox, `0 0 ${width} 360`);
       assert.equal(svg.attributes.height, '360');
       assert.equal(svg.attributes.preserveAspectRatio, 'xMinYMin meet');
+      const baseline = svg.children.find((child) => child.attributes['data-baseload-w'] === '400');
+      assert.equal(baseline.attributes.stroke, '#c64040');
+      assert.equal(baseline.attributes.y1, baseline.attributes.y2);
+      assert.equal(nodes.get(`pv-baseload-${index}`).textContent, 'Basislast · 400 W');
       assert.equal(svg.children.filter((child) => child.attributes['stroke-dasharray'] === '5 4').length, index === 0 ? 1 : 0);
       const target = svg.children.find((child) => child.attributes.role === 'slider');
       assert.equal(Number(target.attributes['aria-valuemin']), Date.parse(days[index].sunrise));
       assert.equal(Number(target.attributes['aria-valuemax']), Date.parse(days[index].sunset));
       target.listeners.pointermove({ clientX: 52 + (width - 70) / 2 });
       assert.match(target.attributes['aria-valuetext'], new RegExp(`Voorspelling: ${400 + 200 * index} W`));
+      assert.match(target.attributes['aria-valuetext'], /Basislast: 400 W/);
       if (index > 0) {
         assert.doesNotMatch(target.attributes['aria-valuetext'], /Gemeten/);
         assert.equal(svg.children.filter((child) => child.tagName === 'path' && child.attributes.stroke === '#137771').length, 0);
@@ -61,7 +67,7 @@ test('drie ruime daggrafieken behouden hun eigen zonuren, cursorwaarden en hoogt
     const box = cursor.children.find((child) => 'data-chart-values' in child.attributes).children[0];
     assert.ok(Number(box.attributes.x) >= 52);
     assert.ok(Number(box.attributes.x) + Number(box.attributes.width) <= 262);
-    render(days, production);
+    render(days, production, 400);
     assert.ok(ids.every((id) => nodes.get(id).children.length === 1));
   } finally { globalThis.document = previousDocument; globalThis.ResizeObserver = previousObserver; }
 });

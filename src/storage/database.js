@@ -7,7 +7,7 @@ import { createPvCorrectionSchema } from './pv-correction-schema.js';
 export function openDatabase(path) {
   mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
-  if (db.prepare('PRAGMA user_version').get().user_version > 3) { db.close(); throw new Error('Database heeft een nieuwere schemaversie'); }
+  if (db.prepare('PRAGMA user_version').get().user_version > 4) { db.close(); throw new Error('Database heeft een nieuwere schemaversie'); }
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;
     CREATE TABLE IF NOT EXISTS forecast (
       source TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
@@ -74,6 +74,9 @@ export function openDatabase(path) {
       id INTEGER PRIMARY KEY, attempted_ms INTEGER NOT NULL, device TEXT NOT NULL, status TEXT NOT NULL,
       request_url TEXT NOT NULL, duration_ms INTEGER NOT NULL, detail TEXT, measurement TEXT
     );
+    CREATE TABLE IF NOT EXISTS appliance_socket_state (
+      appliance_id TEXT PRIMARY KEY, config_key TEXT NOT NULL, updated_ms INTEGER NOT NULL, state_json TEXT NOT NULL
+    );
   `);
   // Bestaande weerhistorie behouden en nieuwe diagnosevelden toevoegen.
   const weatherColumns = new Set(db.prepare('PRAGMA table_info(weather_calls)').all().map((column) => column.name));
@@ -109,5 +112,6 @@ export function openDatabase(path) {
     if (previous) db.prepare("INSERT OR IGNORE INTO diagnostic_state VALUES('weather',?,?)").run(key, JSON.stringify(previous));
   }
   createPvCorrectionSchema(db);
+  db.exec('PRAGMA user_version=4');
   return db;
 }

@@ -25,7 +25,7 @@ Stop de Node-dienst en kopieer `src/` en `public/` uit het archief naar de besta
 
 Het losse dashboardupdatearchief bevat uitsluitend `src/`, `public/`, `test/` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
 
-Deze update voegt `debug.json`, weerophaling gedurende alle uren en ruime Zonopbrengst-grafieken voor vandaag, morgen en overmorgen toe. Automatische kwartiercorrecties blijven actief. Bestaande instellingen blijven geldig: zonder `growatt.production_source` wordt uitsluitend de lokale ShineLink-bron gebruikt. Zonder `weather.resolution_minutes` worden kwartierwaarden opgehaald. Een oude `weather.forecast_days` van `2` wordt bij het laden verhoogd tot `3`.
+Deze update voegt een rode basislastlijn aan de drie daggrafieken toe en kan per apparaat een HomeWizard Energy Socket uitlezen. De kaart **Netvermogen nu** toont afname of teruglevering; de meternaam `KWH` is daar weggehaald. Automatische kwartiercorrecties blijven actief. Bestaande instellingen blijven geldig: zonder `growatt.production_source` wordt uitsluitend de lokale ShineLink-bron gebruikt. Zonder `weather.resolution_minutes` worden kwartierwaarden opgehaald. Een oude `weather.forecast_days` van `2` wordt bij het laden verhoogd tot `3`.
 
 ### Logging en dashboard
 
@@ -50,11 +50,39 @@ Logs staan aanvankelijk uit. Bij ingeschakelde logging houdt automatische opscho
 
 Het dashboard toont drie Zonopbrengst-grafieken: **Vandaag**, **Morgen** en **Overmorgen**. Elke grafiek is 360 pixels hoog, past zich aan de beschikbare breedte aan en gebruikt de eigen zonsopkomst en zonsondergang. Vandaag blijft ook de voorspelling voor het verstreken deel van de dag zichtbaar. De voorspellingen worden met rechte, schuine lijnen tussen de middelpunten van hun tijdvakken verbonden. De gemeten lijn van vandaag toont uitsluitend de totale opbrengst van alle ingestelde omvormers en verbindt de totaalpunten, ook bij langere meetintervallen. Gelijktijdig binnenkomende omvormermetingen worden samengevoegd tot één punt per meetronde; losse tussenstanden worden niet getekend. Alleen recente waarden binnen `growatt.fresh_minutes` tellen in een totaal mee. De kaart **Zonnepanelen nu** en de grafiek **Gemeten opwek** gebruiken eveneens totalen.
 
+De rode horizontale lijn toont de **basislast**, gelijk aan de basislast die het apparaatadvies gebruikt. `advice.reserve_w` is daar niet bij opgeteld. De waarde staat in de legenda en bij de cursor. Bij `advice.baseload_w: null` wordt de beschikbare automatische schatting gebruikt; zolang die ontbreekt, verschijnt er geen lijn en staat in de legenda **Basislast ontbreekt**. De schaal houdt ook rekening met een basislast die hoger is dan de hele voorspelling.
+
 De groepeertijd is standaard 60 seconden voor ShineLink en gelijk aan `growatt.cloud.poll_seconds` voor de cloudbron of automatische bronkeuze. Met het optionele `growatt.overview_group_seconds` kun je deze tijd aanpassen (1–86400 seconden). Dit verandert uitsluitend de groepering in het overzicht; alle oorspronkelijke omvormermetingen blijven bewaard. Beweeg de muis over een grafiek voor een verticale lijn met tijd en voorspeld vermogen in watt; vandaag wordt ook het gemeten totaalvermogen getoond. De waarden volgen de getekende lijnen. De toetsen Home, End en de pijlen werken na focus op de grafiek. Binnen de zonuren van vandaag blijft de lijn voor de huidige tijd zichtbaar. De drie dagvoorspellingen komen uit één cache-aanvraag en veroorzaken geen extra weerverzoeken. Handmatige kalibratie en geleerde kwartiercorrecties gelden voor alle drie de grafieken.
 
 Het dashboard geeft per apparaat een starttijd op iedere dag van `weather.forecast_days`. De volledige cyclus moet binnen de zonuren van die dag passen. Vandaag worden alleen toekomstige starttijden gezocht. Dezelfde apparaatprofielen, basislast, reserve en minimale zonnefractie gelden als voor het bestaande ESP32-advies. Ontbrekende of verouderde gegevens worden afzonderlijk weergegeven. Het bestaande `/advice`-endpoint blijft `advice.search_hours` gebruiken; het nieuwe `/appliances/daily` gebruikt alle ingestelde voorspeldagen.
 
 Op `/homewizard` staan host, lokale API-versie, laatste meetwaarden, import-/exporttellers, responstijd en fout per meter. De verzoekentijdlijn kan op apparaat en resultaat worden gefilterd. **Nu ophalen** leest de ingestelde lokale meters. Autorisatieheaders en tokens worden niet gelogd.
+
+### Energy Socket per apparaat
+
+Voeg aan ieder gewenst bestand in `config/appliances/` een `homewizard`-object toe, naast `id`, `name` en `steps`. Vul het eigen IP-adres van de Energy Socket in:
+
+```json
+"homewizard": {
+  "host": "192.168.2.123",
+  "start_threshold_w": 10,
+  "stop_threshold_w": 5,
+  "start_delay_seconds": 30,
+  "stop_delay_seconds": 300
+}
+```
+
+Alleen `host` is nodig; de overige velden hierboven zijn de standaardwaarden. Een ontbrekend `homewizard`-object of lege `host` schakelt de uitlezing voor dat apparaat uit. Bestaande apparaatprofielen blijven geldig. Het bestand wordt bij iedere socketronde opnieuw gelezen; IP-adressen en herkenningsgrenzen kun je daardoor tijdens bedrijf aanpassen. De update-ZIP overschrijft je bestaande apparaatbestanden niet. De volledige versie bevat een lege host per voorbeeldapparaat.
+
+Zet per socket de **Lokale API** aan in de HomeWizard-app via **Instellingen → Meters → de socket → Lokale API**. ZonAPI leest via het LAN `GET http://<host>/api/v1/data` en gebruikt `active_power_w`. Dat is de [officieel gedocumenteerde Energy Socket-meet-API](https://api-documentation.homewizard.com/docs/v1/measurement/). De huidige Energy Sockets gebruiken hiervoor v1; je hoeft geen token in te stellen. De aanvraag schakelt de socket of het apparaat niet aan of uit.
+
+ZonAPI leest de sockets iedere `homewizard.poll_seconds` uit `settings.json`, onafhankelijk van de P1- en kWh-meter. Volgens de standaardherkenning moet het vermogen minstens **30 seconden aaneengesloten 10 W of hoger** zijn om een start vast te stellen. De kaart toont vervolgens **Actief**, het actuele vermogen en de tijd vanaf de eerste bevestigde verbruikstoename. De starttijd is het moment waarop ZonAPI het verhoogde verbruik voor het eerst waarnam; bij een al draaiend apparaat kan de echte start eerder zijn geweest. Vandaag staat in de startplanning dan **Bezig**. De berekening van de zonnedekking en de planning voor volgende dagen blijven hetzelfde.
+
+Pas na **5 minuten aaneengesloten 5 W of lager** wordt het apparaat weer **Niet actief**. Dat voorkomt dat korte pauzes in een programma als stoppen worden gezien. Stel de grenzen af op het stand-byverbruik en de langste gebruikelijke programmapauze van je eigen apparaat; verbruik alleen kan niet ieder programma of iedere handmatige pauze onderscheiden. Verbruik tussen de beide grenzen verandert de lopende toestand niet. `stop_threshold_w` moet lager zijn dan `start_threshold_w`; beide wachttijden zijn instelbaar van 0 tot 3600 seconden.
+
+Bij een mislukte of te oude socketmeting toont het dashboard **Socket niet bereikbaar**, met de fout als toelichting. Het presenteert dan geen actuele aan/uitstatus. De geldigheid is minimaal 2 minuten, of drie pollintervallen als dat langer is. Na een langdurige meetonderbreking wordt de start opnieuw vastgesteld. Een korte serverherstart behoudt een recent herkend programma; IP- of grenswijzigingen beginnen met nieuwe herkenning.
+
+`GET /api/v1/appliances` bevat per profiel `activity` met `configured`, `state`, `running`, `power_w`, `measured_at`, `started_at`, `stopped_at` en `error`. Apparaatverbruik komt in een eigen statustabel en wordt nooit als extra netmeter bij P1/kWh opgeteld. Zonder debuglogging bewaart SQLite slechts **één overschreven statusrij per apparaat**, geen geschiedenis van iedere socketmeting. Met HomeWizard-logging aan verschijnen de aanvragen als `socket:<apparaat-id>` in de bestaande begrensde verzoekentijdlijn. Logs wissen laat de actuele apparaatstatus staan.
 
 ### Growatt via de web-API
 
@@ -188,7 +216,7 @@ Op het dashboard staan de laatste correctie en het aantal geleerde kwartieren. `
 
 ### Database-indeling
 
-SQLite gebruikt schemaversie 3 (`PRAGMA user_version`). De belangrijkste scheiding is:
+SQLite gebruikt schemaversie 4 (`PRAGMA user_version`). Bestaande databases worden bij starten aangevuld met de socketstatustabel; meetgeschiedenis en geleerde kwartiercorrecties blijven behouden. De belangrijkste scheiding is:
 
 | Tabel | Sleutel en inhoud |
 | --- | --- |
@@ -196,6 +224,7 @@ SQLite gebruikt schemaversie 3 (`PRAGMA user_version`). De belangrijkste scheidi
 | `pv_forecast` | Per paneelgroep en interval: `base_power_w`, gecorrigeerd `power_w`, `correction_factor`, `computed_ms` en `model_key`. `fetched_ms` blijft de oorspronkelijke weerophaaltijd. |
 | `pv_correction_pattern` | Eén rij per `model_key + quarter_minute`, met factor, basisvermogen, gemeten totaal, meettijd, bijwerktijd en meetsignatuur. Maximaal 96 rijen per paneelmodel; nieuwe correcties worden overschreven. |
 | `inverter_measurements` / `cloud_inverter_measurements` | Ongewijzigde ontvangen vermogens- en energiemetingen per omvormer en meettijd. |
+| `appliance_socket_state` | Eén actuele toestand per apparaat-id, met configuratiesleutel, laatste meettijd, vermogen en bevestigde start-/stoptijden. Nieuwe uitlezingen overschrijven dezelfde rij. |
 | Growatt-/weer-/meterlogtabellen | Losse, begrensde diagnosegegevens; wissen of uitschakelen verwijdert geen kwartierpatronen of opbrengstmetingen. |
 
 Meet- en berekentijden staan in UTC-milliseconden. Alleen `quarter_minute` is een lokale klokindex (0,15,...,1425). Daardoor blijft bijvoorbeeld 14:15 hetzelfde patroonkwartier bij zomer- en wintertijd; bij het dubbele najaarsuur krijgt de nieuwste werkelijke meting voorrang. De patroontabel heeft een samengestelde primaire sleutel, controles op kwartiergrenzen/waarden en een index voor de nieuwste correctie. Het bijwerken van het patroon en het herberekenen van toekomstige cachewaarden gebeurt in één transactie.
