@@ -94,23 +94,23 @@ test('daggrafiek bewaart de hele voorspelling, verbindt uurpunten schuin en toon
     target.listeners.pointermove({ clientX: 100 + 407 / 2 });
     assert.equal(cursor.attributes.visibility, 'visible');
     assert.equal(Number(cursor.children[0].attributes.x1), 407);
-    assert.equal(cursor.children[2].textContent, '14:00');
+    assert.equal(cursor.children[2].textContent, '14:00:00');
     const values = cursor.children.find((child) => 'data-chart-values' in child.attributes);
-    assert.deepEqual(values.children.filter((child) => child.tagName === 'text').map((child) => child.textContent), ['Gemeten: 600 W', 'Voorspelling: 600 W']);
+    assert.deepEqual(values.children.filter((child) => child.tagName === 'text').map((child) => child.textContent), ['Gemeten: 600 W', 'Voorspelling: 500 W']);
     const middleX = 52 + 710 * 5.75 / 12;
     target.listeners.pointermove({ clientX: 100 + middleX / 2 });
-    assert.equal(cursor.children[2].textContent, '13:45');
+    assert.equal(cursor.children[2].textContent, '13:45:00');
     assert.equal(values.children.filter((child) => child.tagName === 'text')[0].textContent, 'Gemeten: 400 W');
     const futureX = 52 + 710 * 10 / 12;
     target.listeners.pointermove({ clientX: 100 + futureX / 2 });
-    assert.equal(cursor.children[2].textContent, '18:00');
-    assert.deepEqual(values.children.filter((child) => child.tagName === 'text').map((child) => child.textContent), ['Gemeten: —', 'Voorspelling: 1.100 W']);
+    assert.equal(cursor.children[2].textContent, '18:00:00');
+    assert.deepEqual(values.children.filter((child) => child.tagName === 'text').map((child) => child.textContent), ['Gemeten: —', 'Voorspelling: 1.500 W']);
     const valueBox = values.children[0].attributes;
     assert.ok(Number(valueBox.x) >= 52 && Number(valueBox.x) + Number(valueBox.width) <= 762);
     target.listeners.pointerleave();
     assert.equal(cursor.attributes.visibility, 'hidden');
     target.listeners.keydown({ key: 'End', preventDefault() {} });
-    assert.equal(cursor.children[2].textContent, '20:00');
+    assert.equal(cursor.children[2].textContent, '20:00:00');
     assert.equal(Number(cursor.children[0].attributes.x1), 762);
   } finally { globalThis.document = before; }
 });
@@ -119,8 +119,9 @@ test('tijdcursor gebruikt dezelfde lineaire waarden als de grafiek en vult geen 
   const start = Date.parse('2026-10-14T10:00:00Z');
   const slots = [250, 450].map((power_w, index) => ({ start: new Date(start + index * 3600000).toISOString(), end: new Date(start + (index + 1) * 3600000).toISOString(), power_w }));
   const points = forecastLinePoints(slots, start, start + 2 * 3600000);
-  assert.deepEqual(points.map((point) => point.value), [250, 250, 450, 450]);
-  assert.equal(lineValueAt(points, start + 3600000, 75 * 60000), 350);
+  assert.deepEqual(points.map((point) => point.value), [250, 250, 450]);
+  assert.equal(lineValueAt(points, start + 3600000, 75 * 60000), 250);
+  assert.equal(lineValueAt(points, start + 90 * 60000, 75 * 60000), 350);
   const measured = [{ ms: start, value: 200 }, { ms: start + 10 * 60000, value: 400 }, { ms: start + 40 * 60000, value: 600 }];
   assert.equal(lineValueAt(measured, start + 5 * 60000, 12 * 60000), 300);
   assert.equal(lineValueAt(measured, start + 20 * 60000, 12 * 60000), null);
@@ -139,9 +140,13 @@ test('de dagvoorspelling blijft zowel voor zonsopkomst als na zonsondergang voll
       const slots = [];
       for (let at = Date.parse('2026-10-14T05:00:00Z'); at < Date.parse('2026-10-14T18:00:00Z'); at += 3600000) slots.push({ start: new Date(at).toISOString(), end: new Date(at + 3600000).toISOString(), power_w: 500 });
       drawProductionChart(container, { sunrise: '2026-10-14T06:03:00Z', sunset: '2026-10-14T16:47:00Z', now: `2026-10-14T${hour}:00:00Z`, points: [] }, slots);
-      const xs = container.children[0].children.filter((child) => child.tagName === 'circle').map((child) => Number(child.attributes.cx));
-      assert.equal(Math.min(...xs), 52);
-      assert.equal(Math.max(...xs), 762);
+      const svg = container.children[0];
+      const native = svg.children.filter((child) => child.tagName === 'circle');
+      assert.ok(native.every((point) => Date.parse(point.attributes['data-time']) % 3600000 === 0));
+      assert.ok(native.every((point) => Number(point.attributes.cx) > 52 && Number(point.attributes.cx) < 762));
+      const path = svg.children.find((child) => child.tagName === 'path').attributes.d;
+      assert.match(path, /^M52\.0,/);
+      assert.match(path, /L762\.0,/);
     }
   } finally { globalThis.document = before; }
 });

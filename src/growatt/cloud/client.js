@@ -34,7 +34,7 @@ export function createGrowattCloudClient(config, token, { fetcher = fetch, clock
         const message = redactCloud(String(json.error_msg || json.message || json.msg || 'API-fout'), token).slice(0, 400);
         throw Object.assign(new Error(`Growatt HTTP ${response.status}${code === undefined ? '' : ` · code ${code}`}: ${message}`), { api_code: code ?? null });
       }
-      result = transform(json.data);
+      result = transform(json.data, started);
     } catch (error) {
       failure = Object.assign(new Error(redactCloud(String(error.message ?? error), token)), { http_status: response?.status ?? null, api_code: error.api_code ?? null,
         retry_after_ms: Math.max(retryAfter(response?.headers.get('retry-after'), clock()), [102, 501].includes(Number(error.api_code)) ? 300000 : 0) });
@@ -75,7 +75,7 @@ export function createGrowattCloudClient(config, token, { fetcher = fetch, clock
   /** Leest één recente omvormermeting via v4 zonder instellingen te wijzigen; input: serial/type en afbreeksignaal; output: genormaliseerde meting. */
   async function read(device, signal) {
     return request('/v4/new-api/queryLastData', { body: { deviceType: device.device_type, deviceSn: device.serial }, signal,
-      transform: (data) => normalizeGrowattCloud(data, device, clock(), config.timezone) });
+      transform: (data, requestedMs) => ({ ...normalizeGrowattCloud(data, device, clock(), config.timezone), requested_ms: requestedMs }) });
   }
 
   return { plants, devices, read };

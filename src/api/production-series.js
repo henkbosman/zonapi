@@ -16,9 +16,13 @@ export function productionSeries(rows, now, sunrise, sunset, expected, freshness
   function finishRound() {
     if (!pending.size) return;
     const fresh = [...current.values()].filter((item) => lastAt - item.at <= productionFreshnessMinutes(freshnessMinutes, item.source) * 60000);
-    if (fresh.length === expected) {
+    if (pending.size === expected && fresh.length === expected) {
       const sources = [...new Set(fresh.map((item) => item.source))];
+      const firstAt = Math.min(...fresh.map((item) => item.at));
+      const received = Math.max(...fresh.map((item) => item.received ?? -Infinity));
       const point = { time: new Date(lastAt).toISOString(), power_w: Math.round(fresh.reduce((sum, item) => sum + item.power_w, 0) * 10) / 10,
+        measured_from: new Date(firstAt).toISOString(), measured_to: new Date(lastAt).toISOString(), measurement_span_seconds: (lastAt - firstAt) / 1000,
+        received_at: Number.isFinite(received) ? new Date(received).toISOString() : null,
         active_inverters: fresh.length, expected_inverters: expected, source: sources.length > 1 ? 'mixed' : sources[0] ?? null };
       if (points.at(-1)?.time === point.time) points[points.length - 1] = point;
       else points.push(point);
@@ -34,7 +38,7 @@ export function productionSeries(rows, now, sunrise, sunset, expected, freshness
     if (!Number.isFinite(row.power_w) || row.power_w < 0) continue;
     if (pending.size && at - roundStart >= groupSeconds * 1000) finishRound();
     if (!pending.size) roundStart = at;
-    current.set(row.serial, { power_w: row.power_w, at, source: row.source ?? 'shinelink' });
+    current.set(row.serial, { power_w: row.power_w, at, received: row.received_ms, source: row.source ?? 'shinelink' });
     pending.add(row.serial);
     lastAt = at;
     if (pending.size === expected) finishRound();

@@ -195,8 +195,8 @@ test('grafiek en cursor verbinden kwartieren met uurterugval en laten ontbrekend
   const points = forecastLinePoints(slots, start, start + 120 * minute);
   assert.equal(lineValueAt(points, start + 22 * minute, 75 * minute), null);
   assert.equal(canConnectPoints(points[1], points[2], 75 * minute), false);
-  assert.equal(lineValueAt(points, start + 45 * minute, 75 * minute), 500);
-  assert.equal(lineValueAt(points, start + 60 * minute, 75 * minute), 360);
+  assert.equal(lineValueAt(points, start + 45 * minute, 75 * minute), 600);
+  assert.equal(lineValueAt(points, start + 60 * minute, 75 * minute), 400);
   assert.equal(points[0].ms, start);
   assert.equal(points.at(-1).ms, start + 120 * minute);
 });

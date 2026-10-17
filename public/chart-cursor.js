@@ -25,7 +25,7 @@ export function attachTimeCursor(svg, { start, end, left, right, top, bottom, wi
     return row;
   });
   if (series.length) cursor.append(values);
-  const target = node('rect', { x: left, y: top, width: right - left, height: bottom - top, fill: 'transparent', tabindex: 0,
+  const target = node('rect', { x: left, y: top, width: right - left, height: bottom - top, fill: 'transparent', 'pointer-events': 'none', tabindex: 0,
     role: 'slider', 'aria-label': ariaLabel, 'aria-valuemin': start, 'aria-valuemax': end });
   let time = start;
 
@@ -49,13 +49,17 @@ export function attachTimeCursor(svg, { start, end, left, right, top, bottom, wi
     cursor.setAttribute('visibility', 'visible');
   }
 
-  target.addEventListener('pointermove', (event) => {
+  const move = (event) => {
     const bounds = svg.getBoundingClientRect();
     if (!bounds.width) return;
     const x = (event.clientX - bounds.left) / bounds.width * width;
     show(start + (x - left) / (right - left) * (end - start));
-  });
-  target.addEventListener('pointerleave', () => cursor.setAttribute('visibility', 'hidden'));
+  };
+  // De cursor mag SVG-punten niet afdekken: hun eigen tooltip bevat de echte meettijd en tijdvakgrenzen.
+  for (const receiver of [svg, target]) {
+    receiver.addEventListener('pointermove', move);
+    receiver.addEventListener('pointerleave', () => cursor.setAttribute('visibility', 'hidden'));
+  }
   target.addEventListener('focus', () => show(time));
   target.addEventListener('blur', () => cursor.setAttribute('visibility', 'hidden'));
   target.addEventListener('keydown', (event) => {

@@ -33,8 +33,8 @@ export function drawRadiationChart(forecast, now, container) {
     const label = svgNode('text', { x: left - 8, y: ordinate + 4, 'text-anchor': 'end', class: 'axis-label' }, chart);
     label.textContent = String(Math.round(value));
   }
-  for (const [time, anchor] of [[sunrise, 'start'], [(sunrise + sunset) / 2, 'middle'], [sunset, 'end']]) {
-    const label = svgNode('text', { x: x(time), y: 232, 'text-anchor': anchor, class: 'axis-label' }, chart);
+  for (const time of clockAxisTicks(sunrise, sunset, right - left)) {
+    const label = svgNode('text', { x: x(time), y: 232, 'text-anchor': time === sunrise ? 'start' : time === sunset ? 'end' : 'middle', class: 'axis-label' }, chart);
     label.textContent = hour.format(time);
   }
   for (const [field, color] of [['ghi_w_m2', '#daa21c'], ['dni_w_m2', '#137771'], ['dhi_w_m2', '#738ebd']]) {
@@ -44,5 +44,5 @@ export function drawRadiationChart(forecast, now, container) {
   }
   if (now >= sunrise && now <= sunset) svgNode('line', { x1: x(now), x2: x(now), y1: top, y2: bottom, stroke: '#273737', 'stroke-width': 1.5, 'stroke-dasharray': '4 4' }, chart);
 }
-import { forecastLinePoints, canConnectPoints } from './production-chart-series.js';
+import { forecastLinePoints, canConnectPoints, clockAxisTicks } from './production-chart-series.js';
 

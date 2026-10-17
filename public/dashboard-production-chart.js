@@ -1,7 +1,8 @@
 import { attachTimeCursor } from './chart-cursor.js';
-import { forecastLinePoints, lineValueAt, canConnectPoints } from './production-chart-series.js';
+import { forecastLinePoints, lineValueAt, canConnectPoints, clockAxisTicks } from './production-chart-series.js';
 
 const timeLabel = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit' });
+const preciseTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 /** Bouwt een veilig SVG-element; input: tag en attributen; output: SVG-element. */
 function node(tag, attributes = {}) {
@@ -27,9 +28,19 @@ function drawLine(svg, points, x, y, color, maxGapMs) {
   }
   svg.append(node('path', { d: path.trim(), fill: 'none', stroke: color, 'stroke-width': 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
   for (const point of points) {
-    const circle = node('circle', { cx: x(point.ms), cy: y(point.value), r: points.length === 1 ? 5 : 3.5, fill: color });
+    if (point.synthetic) continue;
+    const circle = node('circle', { cx: x(point.ms), cy: y(point.value), r: points.length === 1 ? 5 : 3.5, fill: color,
+      'data-time': new Date(point.ms).toISOString(), 'data-point-kind': point.count ? 'measurement' : 'interval_mean' });
     const title = node('title');
-    title.textContent = `${timeLabel.format(new Date(point.ms))} · ${Math.round(point.value)} W${point.count ? ` · ${point.count}/${point.expected} omvormers` : ''}`;
+    if (point.count) {
+      const span = point.measuredFrom && point.measuredFrom !== point.ms ? ` · Metingen ${preciseTime.format(new Date(point.measuredFrom))}–${preciseTime.format(new Date(point.ms))}` : '';
+      title.textContent = `${preciseTime.format(new Date(point.ms))} · ${Math.round(point.value)} W · ${point.count}/${point.expected} omvormers${span}`;
+    } else {
+      circle.setAttribute('data-interval-start', new Date(point.interval_start_ms).toISOString());
+      circle.setAttribute('data-interval-end', new Date(point.interval_end_ms).toISOString());
+      const source = point.source_resolution_minutes > (point.interval_end_ms - point.interval_start_ms) / 60000 ? ` · bron ${point.source_resolution_minutes} min` : '';
+      title.textContent = `${timeLabel.format(new Date(point.ms))} · ${Math.round(point.value)} W · Gemiddelde ${timeLabel.format(new Date(point.sample_start_ms))}–${timeLabel.format(new Date(point.sample_end_ms))}${source}`;
+    }
     circle.append(title);
     svg.append(circle);
   }
@@ -47,7 +58,8 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
   }
   const start = sunrise, end = sunset;
   const measured = (forecastOnly ? [] : day.points).filter((point) => point.active_inverters === point.expected_inverters && Number.isFinite(point.power_w) && Date.parse(point.time) >= start && Date.parse(point.time) <= end)
-    .map((point) => ({ ms: Date.parse(point.time), value: point.power_w, count: point.active_inverters, expected: point.expected_inverters }))
+    .map((point) => ({ ms: Date.parse(point.time), value: point.power_w, count: point.active_inverters, expected: point.expected_inverters,
+      measuredFrom: Date.parse(point.measured_from ?? point.time) }))
     .sort((a, b) => a.ms - b.ms);
   const forecast = forecastLinePoints(slots, start, end);
   const width = Math.max(280, container.clientWidth || 780), height = 360;
@@ -63,9 +75,12 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
     svg.append(node('line', { x1: left, x2: right, y1: yy, y2: yy, stroke: '#e4ece8' }));
     label(svg, `${Math.round(maxPower * i / 300) / 10} kW`, 45, yy + 4, 'end');
   }
-  for (const fraction of [0, .25, .5, .75, 1]) {
-    const ms = start + (end - start) * fraction;
-    label(svg, timeLabel.format(new Date(ms)), x(ms), height - 12, fraction === 0 ? 'start' : fraction === 1 ? 'end' : 'middle');
+  for (let ms = Math.ceil(start / 900000) * 900000; ms < end; ms += 900000) {
+    svg.append(node('line', { x1: x(ms), x2: x(ms), y1: top, y2: bottom,
+      stroke: ms % 3600000 === 0 ? '#e4ece8' : '#f0f4f1', 'data-clock-quarter': new Date(ms).toISOString() }));
+  }
+  for (const ms of clockAxisTicks(start, end, right - left)) {
+    label(svg, timeLabel.format(new Date(ms)), x(ms), height - 12, ms === start ? 'start' : ms === end ? 'end' : 'middle');
   }
   drawLine(svg, measured, x, y, '#137771', Infinity);
   drawLine(svg, forecast, x, y, '#e6a321', 75 * 60000);
@@ -80,7 +95,7 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
     svg.append(node('line', { x1: nowX, x2: nowX, y1: top, y2: bottom, stroke: '#172629', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }));
     label(svg, 'Nu', Math.min(right - 12, Math.max(left + 12, nowX)), 14);
   }
-  attachTimeCursor(svg, { start, end, left, right, top, bottom, width }, [
+  attachTimeCursor(svg, { start, end, left, right, top, bottom, width, formatTime: (ms) => preciseTime.format(new Date(ms)), labelWidth: 82, stepMs: 900000 }, [
     ...(forecastOnly ? [] : [{ label: 'Gemeten', color: '#137771', valueAt: (ms) => lineValueAt(measured, ms, Infinity) }]),
     { label: 'Voorspelling', color: '#996200', valueAt: (ms) => lineValueAt(forecast, ms, 75 * 60000) },
     ...(hasBaseload ? [{ label: 'Basislast', color: '#c64040', valueAt: () => baseloadW }] : [])

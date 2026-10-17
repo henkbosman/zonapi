@@ -19,9 +19,10 @@ export function forecastResponse(rows, panels, panelErrors, location, now, stale
     calibration_factor: calibrationFactor, ...(status ? { automatic_correction: status } : {}), ...forecastResolution(prepared), slots };
 }
 
-/** Beschrijft één effectief voorspeltijdvak; input: opgeslagen rij; output: ISO-grenzen, bron, model en oorspronkelijke en effectieve resolutie. */
+/** Beschrijft één effectief voorspeltijdvak; input: opgeslagen rij; output: einde als bronklok, gemiddeldebetekenis, ISO-grenzen en bronresolutie. */
 export function slotMetadata(row) {
-  return { start: new Date(row.start_ms).toISOString(), end: new Date(row.end_ms).toISOString(),
+  return { start: new Date(row.start_ms).toISOString(), end: new Date(row.end_ms).toISOString(), time: new Date(row.end_ms).toISOString(),
+    time_basis: 'preceding_interval_mean', sample_start: new Date(row.sample_start_ms ?? row.start_ms).toISOString(), sample_end: new Date(row.sample_end_ms ?? row.end_ms).toISOString(),
     source: row.source, model: row.model ?? null, fetched_at: new Date(row.fetched_ms).toISOString(),
     resolution_minutes: (row.end_ms - row.start_ms) / 60000,
     source_resolution_minutes: row.source_resolution_minutes ?? (row.end_ms - row.start_ms) / 60000 };

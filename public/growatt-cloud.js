@@ -9,8 +9,9 @@ export function renderGrowattCloud(cloud) {
   const values = { 'cloud-state': cloud.fetching ? 'Bezig' : labels[cloud.state] ?? cloud.state, 'cloud-token': cloud.configured ? 'Ingesteld' : 'Ontbreekt',
     'cloud-server': cloud.base_url ?? '—', 'cloud-plant': cloud.plant_id ?? '—', 'cloud-interval': cloud.poll_schedule === 'quarter_hour' ? ':00 · :15 · :30 · :45' : cloud.poll_seconds ? `${cloud.poll_seconds / 60} min` : '—',
     'cloud-attempt': time(cloud.last_attempt), 'cloud-success': time(cloud.last_success), 'cloud-next': time(cloud.next_fetch),
+    'cloud-scheduled': time(cloud.last_scheduled), 'cloud-delay': Number.isFinite(cloud.schedule_delay_ms) ? `${cloud.schedule_delay_ms.toLocaleString('nl-NL')} ms` : '—',
     'cloud-http': cloud.last_request?.http_status ?? '—', 'cloud-error': cloud.last_error ?? '—' };
-  for (const [id, value] of Object.entries(values)) document.getElementById(id).textContent = value;
+  for (const [id, value] of Object.entries(values)) { const element = document.getElementById(id); if (element) element.textContent = value; }
   document.getElementById('cloud-poll').disabled = !cloud.enabled || !cloud.configured || cloud.fetching;
   const list = document.getElementById('cloud-plants');
   list.replaceChildren();
@@ -18,6 +19,15 @@ export function renderGrowattCloud(cloud) {
     const item = document.createElement('span');
     item.textContent = `${plant.name} · ${plant.plant_id}`;
     list.append(item);
+  }
+  const measurements = document.getElementById('cloud-measurement-times');
+  if (measurements) {
+    measurements.replaceChildren();
+    for (const row of cloud.last_measurements ?? []) {
+      const item = document.createElement('p');
+      item.textContent = `${row.serial} · opgevraagd ${time(row.requested_at)} · gemeten ${time(row.measured_at)} · ontvangen ${time(row.received_at)}`;
+      measurements.append(item);
+    }
   }
 }
 

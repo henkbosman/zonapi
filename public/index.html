@@ -28,13 +28,15 @@
     <section class="chart-card pv-chart-card">
       <div class="section-heading"><div><p class="eyebrow">Vandaag · <span id="pv-date-0">—</span></p><h2>Zonopbrengst</h2></div><span class="unit">Vermogen · W</span></div>
       <div class="chart" id="pv-chart" aria-label="Gemeten en voorspelde zonopbrengst van zonsopkomst tot zonsondergang"></div>
-      <div class="chart-legend"><span><i class="legend-measured"></i>Gemeten totaal</span><span><i class="legend-forecast"></i>Voorspelling · hele dag</span><span><i class="legend-baseload"></i><span id="pv-baseload-0">Basislast</span></span><span id="chart-coverage"></span><span id="pv-correction"></span></div>
+      <div class="chart-legend"><span><i class="legend-measured"></i>Gemeten totaal · meettijd</span><span><i class="legend-forecast"></i>Voorspelling · hele dag · tijdvakgemiddelde</span><span><i class="legend-baseload"></i><span id="pv-baseload-0">Basislast</span></span><span id="chart-coverage"></span><span id="pv-correction"></span></div>
+      <p class="chart-footer">Geel: gemiddelde over het tijdvak vóór het punt. Blauw: werkelijke meettijd. Wijs een punt aan voor de tijden; de lijn tussen punten is een schatting.</p>
       <div class="chart-footer" id="forecast-note" hidden></div>
     </section>
 
     <section class="chart-card pv-chart-card">
       <div class="section-heading"><div><p class="eyebrow">Morgen · <span id="pv-date-1">—</span></p><h2>Zonopbrengst</h2></div><span class="unit">Vermogen · W</span></div>
       <div class="chart" id="pv-chart-tomorrow" aria-label="Voorspelde zonopbrengst voor morgen van zonsopkomst tot zonsondergang"></div>
+      <p class="chart-footer">Elk voorspeld punt toont het gemiddelde over het voorafgaande tijdvak. Wijs een punt aan om dat tijdvak te zien.</p>
       <div class="chart-legend"><span><i class="legend-forecast"></i>Voorspelling</span><span><i class="legend-baseload"></i><span id="pv-baseload-1">Basislast</span></span></div>
       <div class="chart-footer" id="forecast-note-1" hidden></div>
     </section>
@@ -42,6 +44,7 @@
     <section class="chart-card pv-chart-card">
       <div class="section-heading"><div><p class="eyebrow">Overmorgen · <span id="pv-date-2">—</span></p><h2>Zonopbrengst</h2></div><span class="unit">Vermogen · W</span></div>
       <div class="chart" id="pv-chart-after-tomorrow" aria-label="Voorspelde zonopbrengst voor overmorgen van zonsopkomst tot zonsondergang"></div>
+      <p class="chart-footer">Elk voorspeld punt toont het gemiddelde over het voorafgaande tijdvak. Wijs een punt aan om dat tijdvak te zien.</p>
       <div class="chart-legend"><span><i class="legend-forecast"></i>Voorspelling</span><span><i class="legend-baseload"></i><span id="pv-baseload-2">Basislast</span></span></div>
       <div class="chart-footer" id="forecast-note-2" hidden></div>
     </section>

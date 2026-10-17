@@ -53,6 +53,9 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
     controller = new AbortController();
     state.last_attempt_ms = started;
     state.last_slot_ms = Math.floor(started / CLOUD_QUARTER_MS) * CLOUD_QUARTER_MS;
+    state.last_scheduled_ms = state.last_slot_ms;
+    state.last_schedule_delay_ms = started - state.last_slot_ms;
+    state.last_measurements = [];
     state.next_ms = nextQuarter(started);
     persist();
     const errors = [];
@@ -66,6 +69,8 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
           const measurement = await api.read(device, controller.signal);
           repository.saveCloudInverter(measurement);
           observations.push(measurement);
+          state.last_measurements.push({ serial: measurement.serial, requested_ms: measurement.requested_ms ?? null,
+            measured_ms: measurement.measured_ms, received_ms: measurement.received_ms });
           measurements++;
         } catch (error) {
           if (stopping) break;
@@ -151,6 +156,11 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
       state: config.source === 'shinelink' ? 'disabled' : !token ? 'configuration_incomplete' : state.status ?? 'waiting',
       last_error: config.source === 'shinelink' ? null : !token ? 'API-token ontbreekt' : state.last_error ?? null,
       last_attempt: iso(state.last_attempt_ms), last_success: iso(state.last_success_ms), next_fetch: config.source === 'shinelink' || !token ? null : iso(state.next_ms),
+      last_scheduled: Number.isFinite(state.last_attempt_ms) ? iso(state.last_scheduled_ms ?? Math.floor(state.last_attempt_ms / CLOUD_QUARTER_MS) * CLOUD_QUARTER_MS) : null,
+      schedule_delay_ms: state.last_schedule_delay_ms ?? null,
+      last_measurements: (state.last_measurements ?? []).map((row) => ({ serial: row.serial,
+        requested_at: iso(row.requested_ms), measured_at: iso(row.measured_ms), received_at: iso(row.received_ms),
+        age_at_receipt_seconds: Number.isFinite(row.received_ms) ? (row.received_ms - row.measured_ms) / 1000 : null })),
       plant_id: config.plant_id || state.plant_id || null, plants: state.plants ?? [], devices: configured.length ? configured : state.devices ?? [],
       last_measurement_count: state.last_measurement_count ?? 0, forecast_correction: state.forecast_correction ?? null,
       last_request: repository.diagnosticState('growatt', 'cloud_last_request') };

@@ -101,7 +101,7 @@ async function refresh() {
     $('#chart-coverage').textContent = recent ? `${recent.active_inverters}/${recent.expected_inverters} omvormers` : '';
     const now = Date.parse(production.now);
     const upcoming = forecast.slots.filter((slot) => Date.parse(slot.end) > now && Date.parse(slot.start) < now + 3 * 3600000);
-    drawChart($('#ghi-chart'), upcoming.map((slot) => ({ time:slot.start, value:slot.ghi_w_m2 })), '#e6a321');
+    drawChart($('#ghi-chart'), upcoming.map((slot) => ({ time:slot.time ?? slot.end, value:slot.ghi_w_m2 })), '#e6a321');
     $('#forecast-note').hidden = forecast.status === 'ok';
     $('#forecast-note').textContent = forecast.status === 'ok' ? '' : `Voorspelling: ${forecast.status}`;
     drawChart($('#history-chart'), production.points.map((point) => ({ time:point.time, value:point.power_w })), '#137771');

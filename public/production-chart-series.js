@@ -20,15 +20,17 @@ export function lineValueAt(points, ms, maxGapMs) {
   return previous.value + (next.value - previous.value) * (ms - previous.ms) / (next.ms - previous.ms);
 }
 
-/** Zet voorspeltijdvakken om naar een rechte lijn tussen hun middelpunten, begrensd op daglicht; input: voorspelslots en zonsopkomst/-ondergang in ms; output: geordende punten met tijdvakgrenzen. */
+/** Zet tijdvakgemiddelden op hun eindtijd, zoals de Open-Meteo-bronklok; input: slots en zonuren in ms; output: punten met expliciete tijdvakken en ongemarkeerde lijnranden. */
 export function forecastLinePoints(slots, start, end) {
   const samples = new Map();
   const valid = [];
   for (const slot of slots) {
     const from = Date.parse(slot.start), to = Date.parse(slot.end);
     if (!Number.isFinite(slot.power_w) || slot.power_w < 0 || !Number.isFinite(from) || !Number.isFinite(to) || to <= from) continue;
-    const ms = (from + to) / 2;
-    const point = { ms, value: slot.power_w, interval_start_ms: from, interval_end_ms: to };
+    const ms = to;
+    const point = { ms, value: slot.power_w, interval_start_ms: from, interval_end_ms: to,
+      sample_start_ms: Date.parse(slot.sample_start ?? slot.start), sample_end_ms: Date.parse(slot.sample_end ?? slot.end),
+      source_resolution_minutes: slot.source_resolution_minutes ?? (to - from) / 60000 };
     samples.set(ms, point);
     valid.push(point);
   }
@@ -40,7 +42,20 @@ export function forecastLinePoints(slots, start, end) {
     // Het eerste/laatste tijdvak kan nog wel de grens dekken als een buurpunt ontbreekt.
     const covering = valid.find((slot) => slot.interval_start_ms <= boundary && slot.interval_end_ms >= boundary);
     const edge = value ?? covering?.value;
-    if (edge !== undefined && edge !== null) points.push({ ...covering, ms: boundary, value: edge });
+    if (edge !== undefined && edge !== null) points.push({ ...covering, ms: boundary, value: edge, synthetic: true });
   }
   return points.sort((a, b) => a.ms - b.ms);
+}
+
+/** Kiest leesbare kloklabels op vaste kwartier-/uurgrenzen plus de zonranden; input: begin/einde en plotbreedte; output: epoch-ms zonder willekeurige dagfracties. */
+export function clockAxisTicks(start, end, width) {
+  const count = Math.max(1, Math.floor(width / 90));
+  const steps = [15, 30, 60, 120, 180, 240, 360, 720, 1440].map((minutes) => minutes * 60000);
+  const step = steps.find((candidate) => (end - start) / candidate <= count) ?? steps.at(-1);
+  const edgeGap = (end - start) * 52 / width;
+  const ticks = [start];
+  for (let at = Math.ceil(start / step) * step; at < end; at += step) {
+    if (at - start >= edgeGap && end - at >= edgeGap) ticks.push(at);
+  }
+  return [...ticks, end];
 }
