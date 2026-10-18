@@ -9,6 +9,7 @@ export function createPvCorrectionSchema(db) {
     PRIMARY KEY(model_key,quarter_minute)
   ) WITHOUT ROWID;
   CREATE INDEX IF NOT EXISTS pv_correction_latest ON pv_correction_pattern(model_key,measured_ms DESC);`);
+  if (!db.prepare('PRAGMA table_info(pv_correction_pattern)').all().some((column) => column.name === 'sampling_json')) db.exec('ALTER TABLE pv_correction_pattern ADD COLUMN sampling_json TEXT');
   const columns = new Set(db.prepare('PRAGMA table_info(pv_forecast)').all().map((column) => column.name));
   for (const [name, type] of Object.entries({ base_power_w: 'REAL', correction_factor: 'REAL NOT NULL DEFAULT 1', computed_ms: 'INTEGER NOT NULL DEFAULT 0', model_key: "TEXT NOT NULL DEFAULT ''" })) {
     if (!columns.has(name)) db.exec(`ALTER TABLE pv_forecast ADD COLUMN ${name} ${type}`);

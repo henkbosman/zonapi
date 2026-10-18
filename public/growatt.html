@@ -36,15 +36,16 @@
         <div><dt>Server</dt><dd id="cloud-server">—</dd></div>
         <div><dt>Installatie</dt><dd id="cloud-plant">—</dd></div>
         <div><dt>Ophaalmomenten per uur</dt><dd id="cloud-interval">—</dd></div>
-        <div><dt>Gepland klokkwartier</dt><dd id="cloud-scheduled">—</dd></div>
+        <div><dt>Gepland opvragen</dt><dd id="cloud-scheduled">—</dd></div>
         <div><dt>Startvertraging ronde</dt><dd id="cloud-delay">—</dd></div>
         <div><dt>Laatste poging</dt><dd id="cloud-attempt">—</dd></div>
         <div><dt>Laatste succes</dt><dd id="cloud-success">—</dd></div>
         <div><dt>Volgend verzoek</dt><dd id="cloud-next">—</dd></div>
         <div><dt>Laatste HTTP-status</dt><dd id="cloud-http">—</dd></div>
         <div><dt>Laatste fout</dt><dd id="cloud-error">—</dd></div>
+        <div><dt>Kwartiercorrectie</dt><dd id="cloud-correction">—</dd></div>
       </dl>
-      <p class="chart-footer">De ronde start op het klokkwartier. De omvormers worden na elkaar uitgelezen; de meettijd komt uit het Growatt-antwoord en kan eerder liggen.</p>
+      <p class="chart-footer">De ronde start om de vijf minuten op de klok. De correctie van een Open-Meteo-kwartier wacht op de echte metingen vijf minuten vóór, rond en vijf minuten na dat kwartier. Een ontbrekende meting wordt niet ingevuld.</p>
       <div id="cloud-measurement-times"></div>
       <div class="detail-meta" id="cloud-plants"></div>
     </section>

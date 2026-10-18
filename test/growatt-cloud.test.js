@@ -146,10 +146,10 @@ test('poller slaat vier omvormers onafhankelijk op en behoudt het interval over 
     poller = createGrowattCloudPoller({ settings, panels, repository, clock: () => now, environment: {}, client });
     assert.equal((await poller.poll()).reason, 'interval');
     assert.equal(repository.currentCloudInverters().length, 3);
-    now += 900000;
+    now += 300000;
     await poller.poll();
     assert.equal(calls, 8);
-    assert.equal(Date.parse(poller.status().next_fetch) - now, 1800000);
+    assert.equal(Date.parse(poller.status().next_fetch) - now, 600000);
   } finally { db.close(); rmSync(folder, { recursive: true, force: true }); }
 });
 
@@ -164,7 +164,7 @@ test('HTTP 429 en Growatt 501 worden gelogd met persistent Retry-After en zonder
     const poller = createGrowattCloudPoller({ settings, panels, repository, clock: () => now, environment: {}, client });
     assert.equal((await poller.poll()).reason, 'error');
     assert.equal(requests, 1);
-    assert.equal(Date.parse(poller.status().next_fetch), now + 1800000);
+    assert.equal(Date.parse(poller.status().next_fetch), now + 1200000);
     assert.doesNotMatch(JSON.stringify(poller.status()), /private\/growatt/);
     const log = repository.growattTimeline({ limit: 20, offset: 0, type: '', address: '', view: 'errors' });
     assert.ok(log.rows.some((row) => row.source === 'cloud' && row.detail.includes('HTTP 429')));
@@ -265,7 +265,7 @@ test('API, daggrafiek en Growatt-tijdlijn gebruiken clouddata; logbeheer behoudt
     assert.equal(day.points.at(-1).power_w, 1000);
     assert.equal(day.points.at(-1).active_inverters, 4);
     assert.equal(day.points.at(-1).source, 'cloud');
-    assert.equal(day.overview_group_seconds, 900);
+    assert.equal(day.overview_group_seconds, 300);
     const overview = await (await fetch(`${base}/api/v1/growatt`)).json();
     assert.deepEqual(overview.production.inverters, current.inverters);
     const local = await (await fetch(`${base}/api/v1/history?metric=inverter&source=shinelink`)).json();

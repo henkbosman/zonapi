@@ -1,6 +1,6 @@
-export const GROWATT_CLOUD_POLL_SECONDS = 900;
+export const GROWATT_CLOUD_POLL_SECONDS = 300;
 
-/** Leest de optionele Growatt-cloudinstellingen; input: applicatie-instellingen; output: gevalideerde bronkeuze en cloudconfiguratie met vaste klokkwartieren of fout. */
+/** Leest de optionele Growatt-cloudinstellingen; input: applicatie-instellingen; output: gevalideerde bronkeuze en vaste vijfminutenplanning of fout. */
 export function growattCloudConfig(settings) {
   const source = settings.growatt?.production_source ?? 'shinelink';
   if (!['shinelink', 'cloud', 'auto'].includes(source)) throw new Error('growatt.production_source moet shinelink, cloud of auto zijn');
@@ -20,8 +20,8 @@ export function growattCloudConfig(settings) {
   if (!Number.isInteger(config.request_pause_ms) || config.request_pause_ms < 1000 || config.request_pause_ms > 10000) throw new Error('growatt.cloud.request_pause_ms moet 1000..10000 zijn');
   if (typeof config.daylight_only !== 'boolean') throw new Error('growatt.cloud.daylight_only moet true of false zijn');
   try { new Intl.DateTimeFormat('en', { timeZone: config.timezone }).format(); } catch { throw new Error('growatt.cloud.timezone ongeldig'); }
-  // Oudere settings.json-bestanden blijven geldig; de klokplanning geldt ook bij een oud interval van 300 seconden.
-  return { source, ...config, poll_seconds: GROWATT_CLOUD_POLL_SECONDS, poll_schedule: 'quarter_hour' };
+  // Ook een bestaand interval van 900 seconden gebruikt automatisch de vaste vijfminutenplanning.
+  return { source, ...config, poll_seconds: GROWATT_CLOUD_POLL_SECONDS, poll_schedule: 'five_minutes' };
 }
 
 /** Leest uitsluitend het ingestelde Growatt-token; input: cloudconfig en optionele omgevingsvariabelen; output: getrimd token of lege string. */

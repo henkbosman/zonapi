@@ -50,17 +50,19 @@ export function createPvForecastModel(repository, settings, panels, now) {
 
   /** Beschrijft de gebruikte correctiesnapshot zonder meetwaarden te wijzigen; input: geen; output: configuratie, laatste correctie en kwartierpatroon. */
   function status() {
+    const sampling = (row) => { try { return row?.sampling_json ? JSON.parse(row.sampling_json) : null; } catch { return null; } };
     return { enabled: config.enabled, mode: config.mode, status: !config.enabled ? 'disabled' : active ? 'active' : 'learning', model_key: modelKey,
       min_forecast_w: config.min_forecast_w, max_factor: config.max_factor, max_skew_seconds: config.max_skew_seconds,
+      sample_tolerance_seconds: config.sample_tolerance_seconds, outlier_relative: config.outlier_relative, outlier_min_w: config.outlier_min_w,
       learned_quarters: pattern.length,
       latest: latest ? { time: quarterLabel(latest.quarter_minute), factor: latest.factor, correction_percent: Math.round((latest.factor - 1) * 1000) / 10,
-        measured_at: new Date(latest.measured_ms).toISOString(), updated_at: new Date(latest.updated_ms).toISOString(), predicted_w: latest.predicted_w, measured_w: latest.measured_w } : null,
+        measured_at: new Date(latest.measured_ms).toISOString(), updated_at: new Date(latest.updated_ms).toISOString(), predicted_w: latest.predicted_w, measured_w: latest.measured_w, sampling: sampling(latest) } : null,
       quarters: Array.from({ length: 96 }, (_, index) => {
         const minute = index * 15, row = byQuarter.get(minute);
         return { time: quarterLabel(minute), quarter_minute: minute, factor: row?.factor ?? null,
           correction_percent: row ? Math.round((row.factor - 1) * 1000) / 10 : null,
           measured_at: row ? new Date(row.measured_ms).toISOString() : null, updated_at: row ? new Date(row.updated_ms).toISOString() : null,
-          predicted_w: row?.predicted_w ?? null, measured_w: row?.measured_w ?? null };
+          predicted_w: row?.predicted_w ?? null, measured_w: row?.measured_w ?? null, sampling: sampling(row) };
       }) };
   }
   return { prepare, estimate, status, modelKey, active };

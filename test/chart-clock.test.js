@@ -112,7 +112,7 @@ test('Growatt kan op het kwartier worden opgevraagd terwijl de echte blauwe meet
   assert.equal(state.last_scheduled, iso(at('13:15:00')));
   assert.equal(state.last_attempt, iso(at('13:15:00') + 17));
   assert.equal(state.schedule_delay_ms, 17);
-  assert.equal(state.next_fetch, iso(at('13:30:00')));
+  assert.equal(state.next_fetch, iso(at('13:20:00')));
   assert.deepEqual(starts.map((ms) => ms - at('13:15:00')), [17, 1117, 2217, 3317]);
   assert.deepEqual(state.last_measurements.map((row) => row.requested_at), starts.map(iso));
   assert.equal(state.last_measurements[0].measured_at, iso(at('13:02:46')));

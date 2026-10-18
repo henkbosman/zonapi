@@ -44,7 +44,7 @@ test('Growatt 102 via HTTP 200 stopt de cyclus en bewaart de wachttijd over een 
     assert.equal(calls, 1);
     assert.equal(corrections, 0);
     assert.equal(failed.forecast_correction.status, 'incomplete');
-    assert.equal(Date.parse(poller.status().next_fetch), now + 900000);
+    assert.equal(Date.parse(poller.status().next_fetch), now + 300000);
     assert.match(poller.status().last_error, /code 102: FREQUENTLY_ACCESS/);
     assert.equal(repository.currentCloudInverters()[0].power_w, 123);
     assert.equal(repository.growattTimeline({ limit: 20, offset: 0, type: '', address: '', view: 'cloud' }).rows.length, 1);
@@ -55,17 +55,17 @@ test('Growatt 102 via HTTP 200 stopt de cyclus en bewaart de wachttijd over een 
     poller = createGrowattCloudPoller({ settings, panels, repository, clock: () => now, environment: {}, client, onMeasurements });
     assert.equal((await poller.poll()).reason, 'interval');
     assert.equal(calls, 1);
-    now += 900000;
+    now += 300000;
     assert.equal((await poller.poll()).reason, 'error');
     assert.equal(calls, 2);
-    assert.equal(Date.parse(poller.status().next_fetch), now + 1800000);
-    now += 1800000;
+    assert.equal(Date.parse(poller.status().next_fetch), now + 600000);
+    now += 600000;
     limited = false;
     assert.equal((await poller.poll()).reason, 'ok');
     assert.equal(repository.currentCloudInverters().length, 4);
     assert.equal(corrections, 1);
     assert.equal(poller.status().last_error, null);
-    assert.equal(Date.parse(poller.status().next_fetch), now + 900000);
+    assert.equal(Date.parse(poller.status().next_fetch), now + 300000);
   } finally { db.close(); rmSync(folder, { recursive: true, force: true }); }
 });
 
@@ -84,7 +84,7 @@ test('Growatt 102 als tekst respecteert langere Retry-After-seconden en HTTP-dat
       const poller = createGrowattCloudPoller({ settings, panels, repository, clock: () => now, environment: {}, client });
       assert.equal((await poller.poll()).reason, 'error');
       assert.equal(calls, 1);
-      assert.equal(Date.parse(poller.status().next_fetch), now + 1800000);
+      assert.equal(Date.parse(poller.status().next_fetch), now + 1200000);
       assert.equal((await poller.poll()).reason, 'interval');
       assert.equal(calls, 1);
     } finally { db.close(); }

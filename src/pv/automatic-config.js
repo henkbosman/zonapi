@@ -2,11 +2,15 @@
 export function automaticCorrectionConfig(settings) {
   const supplied = settings.pv?.automatic_correction === undefined ? {} : settings.pv.automatic_correction;
   if (!supplied || typeof supplied !== 'object' || Array.isArray(supplied)) throw new Error('pv.automatic_correction moet een object zijn');
-  const config = { enabled: true, mode: 'live_today_pattern', min_forecast_w: 100, max_factor: 3, max_skew_seconds: 300, ...supplied };
+  const config = { enabled: true, mode: 'live_today_pattern', min_forecast_w: 100, max_factor: 3, max_skew_seconds: 300,
+    sample_tolerance_seconds: 90, outlier_relative: 0.35, outlier_min_w: 200, ...supplied };
   if (typeof config.enabled !== 'boolean') throw new Error('pv.automatic_correction.enabled moet true of false zijn');
   if (!['live_today_pattern', 'pattern'].includes(config.mode)) throw new Error('pv.automatic_correction.mode moet live_today_pattern of pattern zijn');
   if (!Number.isFinite(config.min_forecast_w) || config.min_forecast_w <= 0 || config.min_forecast_w > 20000) throw new Error('pv.automatic_correction.min_forecast_w moet >0 en <=20000 zijn');
   if (!Number.isFinite(config.max_factor) || config.max_factor < 1 || config.max_factor > 10) throw new Error('pv.automatic_correction.max_factor moet 1..10 zijn');
   if (!Number.isInteger(config.max_skew_seconds) || config.max_skew_seconds < 0 || config.max_skew_seconds > 3600) throw new Error('pv.automatic_correction.max_skew_seconds moet 0..3600 zijn');
+  if (!Number.isInteger(config.sample_tolerance_seconds) || config.sample_tolerance_seconds < 0 || config.sample_tolerance_seconds > 149) throw new Error('pv.automatic_correction.sample_tolerance_seconds moet 0..149 zijn');
+  if (!Number.isFinite(config.outlier_relative) || config.outlier_relative <= 0 || config.outlier_relative > 2) throw new Error('pv.automatic_correction.outlier_relative moet >0 en <=2 zijn');
+  if (!Number.isFinite(config.outlier_min_w) || config.outlier_min_w < 0 || config.outlier_min_w > 20000) throw new Error('pv.automatic_correction.outlier_min_w moet 0..20000 zijn');
   return config;
 }

@@ -16,3 +16,12 @@ export function basePvAtTime(repository, settings, panels, at) {
   }
   return { power_w: covering.power_w, fetched_ms: covering.row.fetched_ms };
 }
+
+/** Leest de ongecorrigeerde voorspelling die eindigt op een kwartierklok; input: opslag, instellingen, panelen en bronklok; output: vermogen en oorspronkelijke bronperiode, met uurterugval. */
+export function basePvAtPeriodEnd(repository, settings, panels, at) {
+  const row = repository.forecast(at - 1, at).find((item) => item.start_ms < at && item.end_ms >= at);
+  if (!row) return null;
+  return { power_w: estimatePv(row, panels, settings.location.latitude, settings.location.longitude, getCalibrationFactor(settings)).power_w,
+    fetched_ms: row.fetched_ms, start: new Date(row.sample_start_ms ?? row.start_ms).toISOString(),
+    end: new Date(row.sample_end_ms ?? row.end_ms).toISOString(), source_resolution_minutes: row.source_resolution_minutes ?? (row.end_ms - row.start_ms) / 60000 };
+}

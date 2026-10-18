@@ -2,12 +2,12 @@ import { createHash } from 'node:crypto';
 import { automaticCorrectionConfig } from './automatic-config.js';
 import { correctionModelKey } from './correction-key.js';
 import { clockQuarter, quarterLabel } from './quarter.js';
-import { basePvAtTime } from './base-at-time.js';
+import { basePvAtTime, basePvAtPeriodEnd } from './base-at-time.js';
 import { refreshPvForecast } from './refresh-forecast.js';
 import { productionFreshnessMinutes } from '../production/freshness.js';
 
-/** Leert één actuele kwartiercorrectie van een volledige Growatt-meetronde; input: opslag, instellingen, panelen, configuratiefouten, meetrijen en ontvangsttijd; output: status, factor en kwartier, zonder stapeling of leren van onvolledige/te oude metingen. */
-export function learnPvCorrection(repository, settings, panels, panelErrors, rows, now) {
+/** Bewaart één gevalideerde correctie; input: opslag, model, voorbereide omvormerwaarden, ontvangsttijd en optionele kwartier-/venstermetadata; output: status/factor zonder stapeling. De dienst bereidt de drie meetmomenten voor via learnQuarterCorrection. */
+export function learnPvCorrection(repository, settings, panels, panelErrors, rows, now, options = {}) {
   const config = automaticCorrectionConfig(settings);
   if (!config.enabled) return { status: 'disabled' };
   if (panelErrors.length || !Number.isFinite(settings.location.latitude) || !Number.isFinite(settings.location.longitude)) return { status: 'configuration_incomplete' };
@@ -22,21 +22,24 @@ export function learnPvCorrection(repository, settings, panels, panelErrors, row
   const modelKey = correctionModelKey(settings, panels), pattern = repository.pvCorrectionPattern(modelKey);
   const latest = [...pattern].sort((a, b) => b.measured_ms - a.measured_ms)[0];
   if (latest && measuredMs < latest.measured_ms) return { status: 'older_measurement' };
-  const predicted = basePvAtTime(repository, settings, panels, measuredMs);
+  const target = options.target_ms ?? measuredMs;
+  const predicted = options.target_ms === undefined ? basePvAtTime(repository, settings, panels, measuredMs) : basePvAtPeriodEnd(repository, settings, panels, target);
   if (!predicted) return { status: 'forecast_unavailable' };
   if (now - predicted.fetched_ms > settings.weather.stale_after_hours * 3600000) return { status: 'forecast_stale' };
   if (predicted.power_w < config.min_forecast_w) return { status: 'low_forecast' };
   const measured = values.reduce((sum, row) => sum + row.power_w, 0);
   const factor = Math.round(Math.min(config.max_factor, measured / predicted.power_w) * 1000000) / 1000000;
   const signature = createHash('sha256').update(JSON.stringify({ values: values.map(({ serial, measured_ms, power_w }) => [serial, measured_ms, power_w]).sort(),
-    predicted_w: predicted.power_w, fetched_ms: predicted.fetched_ms, factor })).digest('hex');
-  const quarter = clockQuarter(measuredMs);
+    predicted_w: predicted.power_w, fetched_ms: predicted.fetched_ms, factor,
+    ...(options.sampling ? { target_ms: target, sampling: options.sampling } : {}) })).digest('hex');
+  const quarter = clockQuarter(target);
   if (pattern.find((row) => row.quarter_minute === quarter)?.signature === signature) return { status: 'unchanged', factor, time: quarterLabel(quarter) };
   const db = repository.database();
   db.exec('BEGIN IMMEDIATE');
   try {
     const result = repository.savePvCorrection({ model_key: modelKey, quarter_minute: quarter, factor, predicted_w: predicted.power_w,
-      measured_w: measured, measured_ms: measuredMs, updated_ms: now, signature });
+      measured_w: measured, measured_ms: measuredMs, updated_ms: now, signature,
+      sampling_json: options.sampling ? JSON.stringify({ ...options.sampling, forecast: { start: predicted.start, end: predicted.end, source_resolution_minutes: predicted.source_resolution_minutes } }) : null });
     if (result.changes) refreshPvForecast(repository, settings, panels, panelErrors, now, { transaction: false });
     db.exec('COMMIT');
     return { status: result.changes ? 'updated' : 'unchanged', factor, time: quarterLabel(quarter), correction_percent: Math.round((factor - 1) * 1000) / 10 };

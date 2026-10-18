@@ -1,6 +1,4 @@
-import { GROWATT_CLOUD_POLL_SECONDS } from '../growatt/cloud/config.js';
-
-/** Bepaalt de maximale meetleeftijd per bron; input: ingestelde minuten en bron; output: minuten, voor kwartiercloudmetingen minimaal één interval plus vijf minuten marge. */
+/** Bepaalt de maximale meetleeftijd per bron; input: ingestelde minuten en bron; output: minuten, met behoud van de marge voor vertraagd aangeleverde cloudmetingen. */
 export function productionFreshnessMinutes(minutes, source) {
-  return source === 'cloud' ? Math.max(minutes, GROWATT_CLOUD_POLL_SECONDS / 60 + 5) : minutes;
+  return source === 'cloud' ? Math.max(minutes, 20) : minutes;
 }

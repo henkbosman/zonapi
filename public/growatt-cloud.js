@@ -3,15 +3,27 @@ const fullTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam'
 /** Formatteert een webbrontijd; input: ISO-tijd of null; output: lokale datum/tijd of streepje. */
 function time(value) { return value ? fullTime.format(new Date(value)) : '—'; }
 
+/** Vat de driepuntscorrectie samen; input: correctieresultaat; output: kwartier, aantal gebruikte metingen of wachtreden. */
+function correctionText(result) {
+  if (!result) return '—';
+  if (result.status === 'waiting_for_samples') return `${result.received_samples}/3 ontvangen · wachten op ${result.missing_times.map(time).join(', ')}`;
+  if (['updated', 'unchanged'].includes(result.status) && result.sampling) return `${result.time} · ${result.sampling.used_samples}/3 metingen${result.sampling.ignored_times.length ? ' · 1 uitschieter genegeerd' : ''}`;
+  const labels = { disabled: 'Uitgeschakeld', incomplete: 'Meetronde onvolledig', stale: 'Metingen verouderd', low_forecast: 'Te weinig voorspelde opwek', forecast_unavailable: 'Voorspelling ontbreekt', forecast_stale: 'Voorspelling verouderd' };
+  return labels[result.status] ?? result.status;
+}
+
 /** Vult het compacte webbronoverzicht; input: niet-geheime cloudstatus; output: void. */
 export function renderGrowattCloud(cloud) {
   const labels = { disabled: 'Uitgeschakeld', configuration_incomplete: 'Configuratie ontbreekt', waiting: 'Wachten', ok: 'Actief', partial: 'Gedeeltelijk', error: 'Fout' };
   const values = { 'cloud-state': cloud.fetching ? 'Bezig' : labels[cloud.state] ?? cloud.state, 'cloud-token': cloud.configured ? 'Ingesteld' : 'Ontbreekt',
-    'cloud-server': cloud.base_url ?? '—', 'cloud-plant': cloud.plant_id ?? '—', 'cloud-interval': cloud.poll_schedule === 'quarter_hour' ? ':00 · :15 · :30 · :45' : cloud.poll_seconds ? `${cloud.poll_seconds / 60} min` : '—',
+    'cloud-server': cloud.base_url ?? '—', 'cloud-plant': cloud.plant_id ?? '—', 'cloud-interval': cloud.poll_schedule === 'five_minutes' ? ':00 · :05 · :10 · … · :55' : cloud.poll_seconds ? `${cloud.poll_seconds / 60} min` : '—',
     'cloud-attempt': time(cloud.last_attempt), 'cloud-success': time(cloud.last_success), 'cloud-next': time(cloud.next_fetch),
     'cloud-scheduled': time(cloud.last_scheduled), 'cloud-delay': Number.isFinite(cloud.schedule_delay_ms) ? `${cloud.schedule_delay_ms.toLocaleString('nl-NL')} ms` : '—',
+    'cloud-correction': correctionText(cloud.forecast_correction),
     'cloud-http': cloud.last_request?.http_status ?? '—', 'cloud-error': cloud.last_error ?? '—' };
   for (const [id, value] of Object.entries(values)) { const element = document.getElementById(id); if (element) element.textContent = value; }
+  const correction = document.getElementById('cloud-correction');
+  if (correction) correction.title = cloud.forecast_correction?.sampling?.samples.map((sample) => `${time(sample.time)} · ${Math.round(sample.power_w)} W${sample.used ? '' : ' · genegeerd'}`).join('\n') ?? '';
   document.getElementById('cloud-poll').disabled = !cloud.enabled || !cloud.configured || cloud.fetching;
   const list = document.getElementById('cloud-plants');
   list.replaceChildren();

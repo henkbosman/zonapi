@@ -13,7 +13,7 @@ import { startHttpServer } from './api/http-server.js';
 import { createGrowattCloudPoller } from './growatt/cloud/poller.js';
 import { growattCloudConfig } from './growatt/cloud/config.js';
 import { repairGrowattCloudTime } from './storage/repair-growatt-cloud-time.js';
-import { learnPvCorrection } from './pv/learn-correction.js';
+import { learnQuarterCorrection } from './pv/learn-quarter-correction.js';
 import { currentProductionRows } from './production/source.js';
 
 /** Verbindt afzonderlijke modules tot één lokale dienst; input: geen; output: gestart proces of fout. */
@@ -32,12 +32,12 @@ function main() {
   const backups = createBackupJob(db, join(root, 'data'));
   /** Leert na een lokale meting uit de geselecteerde volledige installatie; input: meting en ontvangsttijd; output: void. */
   function correctLocalForecast(measurement, at) {
-    if (cloudConfig.source !== 'cloud') learnPvCorrection(repository, settings, panels, panelErrors, currentProductionRows(repository, settings, at), at);
+    if (cloudConfig.source !== 'cloud') learnQuarterCorrection(repository, settings, panels, panelErrors, currentProductionRows(repository, settings, at), at);
   }
 
   /** Leert na een complete cloudcyclus uit de geselecteerde bron; input: cyclusmetingen en ontvangsttijd; output: correctiestatus. */
   function correctCloudForecast(rows, at) {
-    return learnPvCorrection(repository, settings, panels, panelErrors, cloudConfig.source === 'auto' ? currentProductionRows(repository, settings, at) : rows, at);
+    return learnQuarterCorrection(repository, settings, panels, panelErrors, cloudConfig.source === 'auto' ? currentProductionRows(repository, settings, at) : rows, at);
   }
 
   const growatt = startGrowattServer(settings.growatt, repository, correctLocalForecast);

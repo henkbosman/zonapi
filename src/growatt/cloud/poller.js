@@ -4,10 +4,10 @@ import { createGrowattCloudClient } from './client.js';
 import { redactCloud } from './redact.js';
 import { localDay } from '../../weather/local-day.js';
 import { offlineSunTimes } from '../../weather/solar-position.js';
-import { CLOUD_QUARTER_MS, nextQuarter, quarterAtOrAfter, restoredQuarter } from './schedule.js';
+import { CLOUD_POLL_MS, nextPollSlot, pollSlotAtOrAfter, restoredPollSlot } from './schedule.js';
 import { productionFreshnessMinutes } from '../../production/freshness.js';
 
-/** Maakt de Growatt-webbron op vaste klokkwartieren; input: instellingen, panelen, opslag en optionele klok/omgeving/client/timers/callback; output: {poll,start,stop,status} met persistente foutwachttijd. */
+/** Maakt de Growatt-webbron op vaste vijfminutenmomenten; input: instellingen, panelen, opslag en optionele klok/omgeving/client/timers/callback; output: {poll,start,stop,status} met persistente foutwachttijd. */
 export function createGrowattCloudPoller({ settings, panels, repository, clock = () => Date.now(), environment = process.env, client, onMeasurements, timers = { setTimeout, clearTimeout } }) {
   const config = growattCloudConfig(settings);
   const token = growattCloudToken(config, environment);
@@ -15,7 +15,7 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
   const fingerprint = createHash('sha256').update(JSON.stringify([config.base_url, config.plant_id, config.device_type, token, configured])).digest('hex');
   let state = repository.diagnosticState('growatt', 'cloud') ?? {};
   if (state.fingerprint !== fingerprint) state = { fingerprint, failures: 0 };
-  state.next_ms = restoredQuarter(state, clock());
+  state.next_ms = restoredPollSlot(state, clock());
   let timer = null, pending = null, controller = null, stopping = false, running = false;
   const api = client ?? createGrowattCloudClient(config, token, { clock, onCall: repository.saveGrowattCloudCall });
 
@@ -52,11 +52,11 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
     const started = clock();
     controller = new AbortController();
     state.last_attempt_ms = started;
-    state.last_slot_ms = Math.floor(started / CLOUD_QUARTER_MS) * CLOUD_QUARTER_MS;
+    state.last_slot_ms = Math.floor(started / CLOUD_POLL_MS) * CLOUD_POLL_MS;
     state.last_scheduled_ms = state.last_slot_ms;
     state.last_schedule_delay_ms = started - state.last_slot_ms;
     state.last_measurements = [];
-    state.next_ms = nextQuarter(started);
+    state.next_ms = nextPollSlot(started);
     persist();
     const errors = [];
     const observations = [];
@@ -96,9 +96,9 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
     }
     state.failures = errors.length ? (state.failures ?? 0) + 1 : 0;
     const finished = clock();
-    const backoff = Math.min(3600000, CLOUD_QUARTER_MS * 2 ** Math.min(5, state.failures - 1));
+    const backoff = Math.min(3600000, CLOUD_POLL_MS * 2 ** Math.min(5, state.failures - 1));
     state.retry_not_before_ms = errors.length ? Math.max(started + backoff, finished + retryMs) : 0;
-    state.next_ms = Math.max(nextQuarter(Math.max(started, finished)), quarterAtOrAfter(state.retry_not_before_ms));
+    state.next_ms = Math.max(nextPollSlot(Math.max(started, finished)), pollSlotAtOrAfter(state.retry_not_before_ms));
     state.last_error = errors.length ? errors.join(' · ').slice(0, 1500) : null;
     state.status = errors.length ? (measurements ? 'partial' : 'error') : 'ok';
     state.last_measurement_count = measurements;
@@ -117,18 +117,18 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
     if (pending) return result('busy');
     const now = clock();
     if (now < state.next_ms) return result('interval');
-    // Een korte timervertraging mag; gemiste kwartieren worden nooit later in het kwartier ingehaald.
-    if (now % CLOUD_QUARTER_MS >= 60000) {
-      state.next_ms = nextQuarter(now);
+    // Een korte timervertraging mag; gemiste vijfminutenmomenten worden nooit later in het vijfminutenvak ingehaald.
+    if (now % CLOUD_POLL_MS >= 60000) {
+      state.next_ms = nextPollSlot(now);
       persist();
       return result('interval');
     }
     if (config.daylight_only) {
       const day = localDay(now), sun = sunTimes(day);
-      if (!sun) { state.next_ms = nextQuarter(now); persist(); return result('sun_times'); }
+      if (!sun) { state.next_ms = nextPollSlot(now); persist(); return result('sun_times'); }
       if (now < sun.sunrise_ms || now >= sun.sunset_ms) {
         const nextDay = now < sun.sunrise_ms ? day : new Date(Date.parse(`${day}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
-        state.next_ms = Math.max(nextQuarter(now), quarterAtOrAfter(sunTimes(nextDay)?.sunrise_ms ?? nextQuarter(now)));
+        state.next_ms = Math.max(nextPollSlot(now), pollSlotAtOrAfter(sunTimes(nextDay)?.sunrise_ms ?? nextPollSlot(now)));
         persist();
         return result('daylight');
       }
@@ -137,8 +137,8 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
       const serials = new Set(configured.map((item) => item.serial));
       const fresh = repository.currentInverters().filter((item) => (!serials.size || serials.has(item.serial)) && now >= item.measured_ms && now - item.measured_ms <= settings.growatt.fresh_minutes * 60000);
       if (fresh.length === settings.growatt.expected_inverters) {
-        state.last_slot_ms = Math.floor(now / CLOUD_QUARTER_MS) * CLOUD_QUARTER_MS;
-        state.next_ms = nextQuarter(now);
+        state.last_slot_ms = Math.floor(now / CLOUD_POLL_MS) * CLOUD_POLL_MS;
+        state.next_ms = nextPollSlot(now);
         persist();
         return result('local_fresh');
       }
@@ -156,7 +156,7 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
       state: config.source === 'shinelink' ? 'disabled' : !token ? 'configuration_incomplete' : state.status ?? 'waiting',
       last_error: config.source === 'shinelink' ? null : !token ? 'API-token ontbreekt' : state.last_error ?? null,
       last_attempt: iso(state.last_attempt_ms), last_success: iso(state.last_success_ms), next_fetch: config.source === 'shinelink' || !token ? null : iso(state.next_ms),
-      last_scheduled: Number.isFinite(state.last_attempt_ms) ? iso(state.last_scheduled_ms ?? Math.floor(state.last_attempt_ms / CLOUD_QUARTER_MS) * CLOUD_QUARTER_MS) : null,
+      last_scheduled: Number.isFinite(state.last_attempt_ms) ? iso(state.last_scheduled_ms ?? Math.floor(state.last_attempt_ms / CLOUD_POLL_MS) * CLOUD_POLL_MS) : null,
       schedule_delay_ms: state.last_schedule_delay_ms ?? null,
       last_measurements: (state.last_measurements ?? []).map((row) => ({ serial: row.serial,
         requested_at: iso(row.requested_ms), measured_at: iso(row.measured_ms), received_at: iso(row.received_ms),
@@ -166,7 +166,7 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
       last_request: repository.diagnosticState('growatt', 'cloud_last_request') };
   }
 
-  /** Plant één timer op het volgende klokkwartier; input: geen; output: void, zonder relatieve intervalverschuiving. */
+  /** Plant één timer op het volgende vijfminutenmoment; input: geen; output: void, zonder relatieve intervalverschuiving. */
   function arm() {
     if (timer !== null) timers.clearTimeout(timer);
     timer = null;
@@ -179,12 +179,12 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
     try { const result = await poll(); if (!result.attempted) arm(); }
     catch (error) {
       console.error('Growatt cloud:', redactCloud(error.message, token));
-      state.next_ms = nextQuarter(clock());
+      state.next_ms = nextPollSlot(clock());
       arm();
     }
   }
 
-  /** Start ophalen op :00, :15, :30 en :45; input: geen; output: void, herhaald starten maakt geen extra timer. */
+  /** Start ophalen op :00, :05, :10, … en :55; input: geen; output: void, herhaald starten maakt geen extra timer. */
   function start() {
     if (running || stopping) return;
     running = true;
