@@ -21,7 +21,10 @@ export function renderPvCorrection(element, correction) {
     ? `Correctie ${correction.latest.correction_percent > 0 ? '+' : ''}${correction.latest.correction_percent.toLocaleString('nl-NL')}%${correction.latest.start ? ` · Blok ${time.format(new Date(correction.latest.start))}–${time.format(new Date(correction.latest.end))}` : ''} · Blokken vandaag ${correction.learned_blocks_today ?? correction.learned_quarters}/${correction.total_blocks_in_day ?? 96}${sampling ? ` · ${sampling.used_samples}/3 metingen${sampling.ignored_times.length ? ' · 1 uitschieter genegeerd' : ''}` : ''}`
     : `Correctie: ${correction?.status === 'disabled' ? 'uitgeschakeld' : correctionAttemptText(attempt)}`;
   const details = [];
-  if (correction?.latest?.start) details.push(`Correctie geldt alleen voor ${correction.latest.date} ${time.format(new Date(correction.latest.start))}–${time.format(new Date(correction.latest.end))}`);
+  if (correction?.latest?.start) {
+    details.push(`Gemeten blok: ${correction.latest.date} ${time.format(new Date(correction.latest.start))}–${time.format(new Date(correction.latest.end))}`);
+    details.push('Voor toekomstige dagen gebruikt ieder klokkwartier zijn eigen laatst gemeten factor, op de weerverwachting van die dag.');
+  }
   if (sampling) details.push(...sampling.samples.map((sample) => `${time.format(new Date(sample.time))}: ${Math.round(sample.power_w)} W${sample.used ? '' : ' (genegeerd)'}`));
   if (attempt) {
     details.push(`Laatste poging: ${time.format(new Date(attempt.attempted_at))} · ${correctionAttemptText(attempt)}`);

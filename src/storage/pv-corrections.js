@@ -1,4 +1,6 @@
-/** Bewaart onafhankelijke gedateerde blokcorrecties en het oudere patroonarchief; input: SQLite; output: opslagmethoden los van diagnostische logs. */
+import { clockQuarter } from '../pv/quarter.js';
+
+/** Bewaart onafhankelijke blokcorrecties en selecteert hun referenties per klokkwartier; input: SQLite; output: opslagmethoden los van diagnostische logs. */
 export function createPvCorrectionStore(db) {
   const save = db.prepare(`INSERT INTO pv_correction_pattern(model_key,quarter_minute,factor,predicted_w,measured_w,measured_ms,updated_ms,signature,sampling_json)
     VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(model_key,quarter_minute) DO UPDATE SET factor=excluded.factor,predicted_w=excluded.predicted_w,
@@ -21,13 +23,25 @@ export function createPvCorrectionStore(db) {
     },
     /** Leest uitsluitend het exact bedoelde kwartier; input: modelhash en eindtijd; output: correctierij of undefined. */
     pvBlockCorrection(modelKey, end) { return db.prepare('SELECT * FROM pv_block_corrections WHERE model_key=? AND end_ms=?').get(modelKey, end); },
+    /** Kiest de nieuwste gemeten dag per Nederlands klokkwartier; input: modelhash en peiltijd; output: maximaal 96 lichte referenties zonder historische weer-/groepswaarden. */
+    pvBlockCorrectionPattern(modelKey, now) {
+      const byQuarter = new Map();
+      const rows = db.prepare(`SELECT start_ms,end_ms,factor,measured_ms,updated_ms FROM pv_block_corrections
+        WHERE model_key=? AND end_ms<=? AND measured_ms<=? AND updated_ms<=? ORDER BY end_ms DESC`).iterate(modelKey, now, now, now);
+      for (const row of rows) {
+        const quarter = clockQuarter(row.end_ms);
+        if (!byQuarter.has(quarter)) byQuarter.set(quarter, { ...row, quarter_minute: quarter });
+        if (byQuarter.size === 96) break;
+      }
+      return [...byQuarter.values()];
+    },
     /** Leest de laatste beschikbare gedateerde correctie; input: modelhash en peiltijd; output: correctierij of undefined. */
     latestPvBlockCorrection(modelKey, now) {
-      return db.prepare('SELECT * FROM pv_block_corrections WHERE model_key=? AND measured_ms<=? AND updated_ms<=? ORDER BY end_ms DESC LIMIT 1').get(modelKey, now, now);
+      return db.prepare('SELECT * FROM pv_block_corrections WHERE model_key=? AND end_ms<=? AND measured_ms<=? AND updated_ms<=? ORDER BY end_ms DESC LIMIT 1').get(modelKey, now, now, now);
     },
     /** Telt opgeslagen onafhankelijke blokken; input: modelhash en peiltijd; output: aantal. */
     countPvBlockCorrections(modelKey, now) {
-      return db.prepare('SELECT COUNT(*) AS count FROM pv_block_corrections WHERE model_key=? AND measured_ms<=? AND updated_ms<=?').get(modelKey, now, now).count;
+      return db.prepare('SELECT COUNT(*) AS count FROM pv_block_corrections WHERE model_key=? AND end_ms<=? AND measured_ms<=? AND updated_ms<=?').get(modelKey, now, now, now).count;
     },
     /** Bewaart alleen dit gedateerde kwartier; input: correctierij; output: SQLite-resultaat. */
     savePvBlockCorrection(row) {

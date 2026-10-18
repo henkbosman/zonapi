@@ -9,7 +9,7 @@ export function automaticCorrectionConfig(settings) {
   if (config.sample_tolerance_seconds === 90) config.sample_tolerance_seconds = 150;
   if (typeof config.enabled !== 'boolean') throw new Error('pv.automatic_correction.enabled moet true of false zijn');
   if (!['per_block', 'live_today_pattern', 'pattern'].includes(config.mode)) throw new Error('pv.automatic_correction.mode moet per_block zijn');
-  // Oude instellingen blijven leesbaar; alle correcties zijn voortaan aan één gedateerd blok gebonden.
+  // Oude instellingen blijven leesbaar; elk klokkwartier behoudt zijn eigen onafhankelijke factor.
   config.mode = 'per_block';
   if (!Number.isFinite(config.min_forecast_w) || config.min_forecast_w <= 0 || config.min_forecast_w > 20000) throw new Error('pv.automatic_correction.min_forecast_w moet >0 en <=20000 zijn');
   if (!Number.isFinite(config.max_factor) || config.max_factor < 1 || config.max_factor > 10) throw new Error('pv.automatic_correction.max_factor moet 1..10 zijn');

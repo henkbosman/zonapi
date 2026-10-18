@@ -1,18 +1,21 @@
 ZonAPI
-Versie: 2026-10-18-Blokcorrecties1
+Versie: 2026-10-18-Dagcorrecties1
 
-Elke correctie geldt uitsluitend voor het eigen gedateerde kwartierblok.
-Voorbeeld: de correctie van 14:15 geldt voor 14:00–14:15 op die datum.
-Andere blokken gebruiken hun eigen correctie of de basisvoorspelling.
+Herstelt de correcties in Morgen/Overmorgen en het startadvies per dag.
+Ieder klokkwartier gebruikt op toekomstige dagen de eigen laatst gemeten
+factor, toegepast op de actuele weerverwachting van die voorspelde dag.
+Voorbeeld: 14:00–14:15 met factor 0.8 corrigeert alleen dat klokkwartier.
+De buurkwartieren gebruiken hun eigen factor of de basisvoorspelling.
 
-- Geen doorwerking van de laatste factor naar latere blokken of andere dagen.
-- Onafhankelijke opslag in pv_block_corrections met begin- en eindtijd.
-- Automatische migratie naar databaseschema 6.
-- Herstel van eerder overgenomen factoren in afgeleide voorspellingen.
-- Eigen tijdvak en aantal gecorrigeerde blokken zichtbaar op het dashboard.
+- Dagvoorspellingen, startadviezen en PV-cache gebruiken hetzelfde model.
+- Zowel het volledig gedekte startmoment als Meeste zon rekent met correcties.
+- Basislast, reserve en actieve apparaten blijven onderdeel van het advies.
+- De koppeling volgt Nederlandse kloktijden, ook bij zomer-/wintertijd.
+- Historische blokken en oorspronkelijke metingen blijven bewaard.
+- Bestaande instellingen en databaseschema 6 blijven bruikbaar.
 
-Deze versie bevat ook Correctie-Fix1, de Database-pagina, de lichte
-basisvoorspelling en de losse HomeWizard-apparaten.
+Deze versie bevat ook Blokcorrecties1, Correctie-Fix1, de Database-pagina,
+de lichte basisvoorspelling en de losse HomeWizard-apparaten.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
 Bewaar je eigen config/ en data/.

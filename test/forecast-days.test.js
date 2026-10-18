@@ -8,8 +8,9 @@ import { startHttpServer } from '../src/api/http-server.js';
 import { forecastDaysResponse } from '../src/api/forecast-days.js';
 import { learnPvCorrection } from '../src/pv/learn-correction.js';
 import { localDay } from '../src/weather/local-day.js';
+import { clockQuarter } from '../src/pv/quarter.js';
 
-test('API geeft drie dagen met eigen zonuren en corrigeert alleen het eigen gedateerde blok, ook rond wintertijd', async (context) => {
+test('API corrigeert op alle drie dagen hetzelfde Nederlandse klokkwartier met de eigen dagverwachting, ook rond wintertijd', async (context) => {
   let now = Date.parse('2026-10-24T10:00:00Z');
   context.mock.method(Date, 'now', () => now);
   const { settings: defaults } = loadConfiguration();
@@ -46,11 +47,18 @@ test('API geeft drie dagen met eigen zonuren en corrigeert alleen het eigen geda
       assert.equal(day.sunset, new Date(repository.getSun(dates[index]).sunset_ms).toISOString());
       assert.ok(day.slots.length > 20);
       const future = day.slots.filter((slot) => Date.parse(slot.start) > now);
-      assert.ok(future.every((slot) => slot.power_w === 400 + index * 80 && slot.base_power_w === 400 + index * 80));
-      assert.ok(future.every((slot) => slot.automatic_correction_factor === 1));
+      for (const slot of future) {
+        const factor = index > 0 && clockQuarter(Date.parse(slot.end)) === clockQuarter(now) ? 0.5 : 1;
+        assert.equal(slot.base_power_w, 400 + index * 80);
+        assert.equal(slot.power_w, (400 + index * 80) * factor);
+        assert.equal(slot.automatic_correction_factor, factor);
+      }
     }
     const corrected = result.days.flatMap((day) => day.slots).filter((slot) => slot.automatic_correction_factor !== 1);
-    assert.equal(corrected.length, 1); assert.equal(corrected[0].end, new Date(now).toISOString()); assert.equal(corrected[0].power_w, 200);
+    assert.equal(corrected.length, 3);
+    assert.deepEqual(corrected.map((slot) => slot.power_w), [200, 240, 280]);
+    assert.deepEqual(corrected.map((slot) => slot.end), ['2026-10-24T10:00:00.000Z', '2026-10-25T11:00:00.000Z', '2026-10-26T11:00:00.000Z']);
+    assert.ok(corrected.every((slot) => slot.correction_reference_end === new Date(now).toISOString()));
     assert.deepEqual(await (await fetch(`${base}/api/v1/forecast/day`)).json(), result.days[0]);
     assert.deepEqual(await (await fetch(`${base}/api/v1/forecast/day?date=2026-10-26`)).json(), result.days[2]);
     for (const value of ['2026-02-30', '2026-13-01', '2026-1-01', 'morgen']) assert.equal((await fetch(`${base}/api/v1/forecast/day?date=${value}`)).status, 400);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfiguration, validateSettings } from '../src/config/load.js';
@@ -65,15 +65,20 @@ test('per_block is de standaard; bestaande modi worden zonder configuratieaanpas
   assert.equal(correctionModelKey(f.settings, reordered), correctionModelKey(f.settings, f.panels));
 });
 
-test('14:15-correctie wijzigt uitsluitend 14:00–14:15 in model en cache; volgende dag en buurblokken blijven exact gelijk', (t) => {
+test('14:15-correctie wijzigt het eigen blok en hetzelfde klokkwartier op toekomstige dagen; buurblokken blijven exact gelijk', (t) => {
   const f = fixture(t), before = f.repository.pv(f.target - 2 * quarter, f.target + 2 * 86400000).map((row) => ({ ...row }));
   assert.equal(f.learn(600).factor, 0.6);
   assert.equal(f.value(target).power_w, 600); assert.equal(f.value(target).correction_source, 'block');
-  for (const end of [target - quarter, target + quarter, target + 2 * quarter, target + 86400000, target + 2 * 86400000]) {
+  for (const end of [target - quarter, target + quarter, target + 2 * quarter, target + 86400000 - quarter, target + 86400000 + quarter]) {
     assert.equal(f.value(end).power_w, 1000); assert.equal(f.value(end).correction_factor, 1); assert.equal(f.value(end).correction_source, 'none');
   }
+  for (const end of [target + 86400000, target + 2 * 86400000]) {
+    assert.equal(f.value(end).power_w, 600); assert.equal(f.value(end).correction_factor, 0.6); assert.equal(f.value(end).correction_source, 'same_clock_quarter');
+  }
   const after = f.repository.pv(f.target - 2 * quarter, f.target + 2 * 86400000);
-  assert.deepEqual(after.filter((row) => row.end_ms !== target), before.filter((row) => row.end_ms !== target));
+  const unaffected = (row) => clockQuarter(row.end_ms) !== clockQuarter(target);
+  assert.deepEqual(after.filter(unaffected), before.filter(unaffected));
+  assert.ok(after.filter((row) => !unaffected(row)).every((row) => row.correction_factor === 0.6));
   const own = after.filter((row) => row.end_ms === target);
   assert.equal(own.reduce((sum, row) => sum + row.power_w, 0), 600);
   assert.ok(own.every((row) => row.correction_factor === 0.6));
@@ -98,9 +103,11 @@ test('een nieuwere correctie in een ander blok verhindert het later verwerken va
   assert.equal(f.blocks().length, 2); assert.equal(f.value(target).power_w, 600); assert.equal(f.value(target + quarter).power_w, 800);
 });
 
-test('nulopwek is een geldige eigen correctie en zet geen enkel later blok op nul', (t) => {
+test('nulopwek blijft beperkt tot het eigen klokkwartier, ook op toekomstige dagen', (t) => {
   const f = fixture(t); assert.equal(f.learn(0).factor, 0);
   assert.equal(f.value(target).power_w, 0); assert.equal(f.value(target + quarter).power_w, 1000);
+  assert.equal(f.value(target + 86400000).power_w, 0);
+  assert.equal(f.value(target + 86400000 + quarter).power_w, 1000);
   assert.equal(f.learn(800, target, f.now + 1000).factor, 0.8);
   assert.equal(f.value(target).power_w, 800); assert.equal(f.value(target + quarter).power_w, 1000);
 });
@@ -113,15 +120,23 @@ test('dezelfde kloktijd op de volgende dag krijgt een eigen correctierij en bewa
   assert.equal(f.learn(900, next).status, 'updated');
   assert.equal(f.blocks().length, 2); assert.equal(f.value(target).power_w, 600); assert.equal(f.value(next).power_w, 900);
   assert.equal(f.value(next + quarter).power_w, 1000);
+  assert.equal(f.value(next + 86400000).power_w, 900);
+  // Ook een later ontvangen bijwerking van gisteren vervangt niet de nieuwere referentiedag.
+  const old = f.blocks()[0];
+  f.repository.savePvBlockCorrection({ ...old, factor: 0.2, measured_w: 200, measured_ms: f.now, updated_ms: f.now, signature: 'late-old-block' });
+  refreshPvForecast(f.repository, f.settings, f.panels, [], f.now);
+  assert.equal(f.value(next + 86400000).power_w, 900);
 });
 
 test('uitschakelen of wijzigen van het paneelmodel past bestaande blokfactoren niet toe op andere waarden', (t) => {
   const f = fixture(t); f.learn(600);
   f.settings.pv.automatic_correction = { enabled: false };
   assert.equal(f.learn(800).status, 'disabled'); assert.equal(f.blocks().length, 1); assert.equal(f.value(target).power_w, 1000);
+  assert.equal(f.value(target + 86400000).power_w, 1000);
   f.settings.pv = { calibration_factor: 1.5 };
   assert.equal(f.value(target).power_w, 1500); assert.equal(f.value(target + quarter).power_w, 1500);
   assert.equal(createPvForecastModel(f.repository, f.settings, f.panels, f.now).status().learned_blocks, 0);
+  assert.equal(f.value(target + 86400000).power_w, 1500);
 });
 
 test('handmatige kalibratie en AC-limieten blijven gelden binnen het eigen blok', (t) => {
@@ -161,9 +176,12 @@ test('nieuwe weerdata behoudt de eigen correctiereferentie, zonder de omliggende
     rows: f.repository.forecastCandidates(target - 2 * 3600000, target + 72 * 3600000).map((row) => ({ ...row, ghi: 250, dhi: 250, fetched_ms: f.now })), sun: [] }) });
   assert.equal((await weather.refresh()).reason, 'ok'); assert.equal(f.value(target).power_w, 800); assert.equal(f.value(target).base_power_w, 1000);
   assert.equal(f.value(target + quarter).power_w, 2000); assert.equal(f.value(target + quarter).correction_factor, 1);
+  assert.equal(f.value(target + 86400000).base_power_w, 2000); assert.equal(f.value(target + 86400000).power_w, 1600);
+  assert.equal(f.repository.pv(target + 86400000 - quarter, target + 86400000).reduce((sum, row) => sum + row.power_w, 0), 1600);
   assert.equal(f.learn(800, target, f.now + 1000).factor, 0.4);
   assert.equal(f.value(target).power_w, 800); assert.equal(f.value(target).base_power_w, 2000);
   assert.equal(f.value(target + quarter).power_w, 2000);
+  assert.equal(f.value(target + 86400000).power_w, 800);
 });
 
 test('uurterugval wordt voor één eigen correctie gesplitst; de drie overige kwartieren blijven ongecorrigeerd', (t) => {
@@ -185,13 +203,14 @@ test('gelijke kloktijden op andere dagen en beide wintertijduren blijven aparte 
   const status = createPvForecastModel(f.repository, f.settings, f.panels, f.now).status();
   assert.equal(status.total_blocks_in_day, 100); assert.equal(status.quarters.filter((row) => row.factor !== null).length, 2);
   assert.equal(f.value(first + 86400000).power_w, 1000);
+  assert.equal(f.value(first + 3600000 + 86400000).power_w, 900);
 });
 
 test('herstart, logging uit en logs wissen behouden de onafhankelijke gedateerde correcties', (t) => {
   const folder = mkdtempSync(join(tmpdir(), 'zonapi-block-restart-')); t.after(() => rmSync(folder, { recursive: true, force: true }));
   const f = fixture(t, { path: join(folder, 'data.sqlite') }); f.learn(600); f.repository.setLogging('growatt', false); f.repository.clearGrowattDiagnostics();
   f.db.close(); f.db = openDatabase(join(folder, 'data.sqlite')); f.repository = createRepository(f.db);
-  assert.equal(f.value(target).power_w, 600); assert.equal(f.value(target + quarter).power_w, 1000); assert.equal(f.value(target + 86400000).power_w, 1000);
+  assert.equal(f.value(target).power_w, 600); assert.equal(f.value(target + quarter).power_w, 1000); assert.equal(f.value(target + 86400000).power_w, 600);
   assert.equal(f.repository.loggingStatus('growatt').enabled, false);
   const display = {}; renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
   assert.match(display.textContent, /Blok 14:00–14:15/); assert.match(display.textContent, /Blokken vandaag 1\/96/);
@@ -205,13 +224,118 @@ test('API, daggrafiek, cache en startadvies gebruiken dezelfde onafhankelijke bl
   const beforeAdvice = await get('/api/v1/appliances/wasmachine/advice'), beforeDaily = await get('/api/v1/appliances/daily');
   f.learn(800);
   const forecast = await get('/api/v1/forecast?hours=72');
-  assert.ok(forecast.slots.every((row) => row.power_w === 4000 && row.base_power_w === 4000 && row.automatic_correction_factor === 1));
+  for (const row of forecast.slots) {
+    const corrected = clockQuarter(Date.parse(row.end)) === clockQuarter(target);
+    assert.equal(row.base_power_w, 4000); assert.equal(row.power_w, corrected ? 800 : 4000);
+    assert.equal(row.automatic_correction_factor, corrected ? 0.2 : 1);
+  }
   const day = await get('/api/v1/forecast/day'), own = day.slots.filter((row) => Date.parse(row.end) === target);
   assert.equal(own.length, 1); assert.equal(own[0].power_w, 800); assert.equal(own[0].automatic_correction_factor, 0.2);
   assert.ok(day.slots.filter((row) => Date.parse(row.end) !== target).every((row) => row.power_w === 4000));
-  assert.deepEqual(await get('/api/v1/appliances/wasmachine/advice'), beforeAdvice); assert.deepEqual(await get('/api/v1/appliances/daily'), beforeDaily);
+  assert.deepEqual(await get('/api/v1/appliances/wasmachine/advice'), beforeAdvice);
+  assert.deepEqual((await get('/api/v1/appliances/daily')).days[0], beforeDaily.days[0]);
   const corrections = await get('/api/v1/pv/corrections');
-  assert.equal(corrections.scope, 'dated_block'); assert.equal(corrections.latest.start, new Date(target - quarter).toISOString());
+  assert.equal(corrections.scope, 'independent_quarters'); assert.equal(corrections.future_day_policy, 'same_clock_quarter');
+  assert.equal(corrections.latest.start, new Date(target - quarter).toISOString());
   assert.equal(corrections.latest.end, new Date(target).toISOString()); assert.equal(corrections.learned_blocks_today, 1);
   assert.equal((await get('/api/v1/database/rows?table=pv_block_corrections')).total_rows, 1);
+});
+
+test('een klokkwartier blijft beschikbaar uit oudere meetdagen, zonder een onbekend buurkwartier te vullen', (t) => {
+  const f = fixture(t); f.learn(600);
+  f.now += 2 * 86400000;
+  const next = target + 3 * 86400000;
+  assert.equal(f.value(next).power_w, 600);
+  assert.equal(f.value(next).correction_reference_end, new Date(target).toISOString());
+  assert.equal(f.value(next - quarter).correction_factor, 1);
+  assert.equal(f.value(next + quarter).correction_factor, 1);
+  refreshPvForecast(f.repository, f.settings, f.panels, [], f.now);
+  assert.equal(f.repository.pv(next - quarter, next).reduce((sum, row) => sum + row.power_w, 0), 600);
+});
+
+test('een toekomstig uurvak krijgt uitsluitend op het overeenkomstige kwartier de factor op zijn eigen nieuwe basis', (t) => {
+  const f = fixture(t), next = target + 86400000, start = next - quarter;
+  f.db.prepare('DELETE FROM forecast WHERE start_ms>=? AND start_ms<?').run(start, start + 3600000);
+  f.repository.saveForecast({ source: 'open-meteo', model: 'best_match', start_ms: start, end_ms: start + 3600000,
+    ghi: 250, dni: 0, dhi: 250, fetched_ms: f.now });
+  f.learn(600);
+  const model = createPvForecastModel(f.repository, f.settings, f.panels, f.now);
+  const rows = model.prepare(f.repository.forecast(start, start + 3600000));
+  assert.deepEqual(rows.map((row) => model.estimate(row).power_w), [1200, 2000, 2000, 2000]);
+  assert.ok(rows.every((row) => row.source_resolution_minutes === 60 && row.sample_start_ms === start));
+  const cache = f.repository.pv(start, next);
+  assert.equal(cache.reduce((sum, row) => sum + row.power_w, 0), 1200);
+  assert.equal(cache.reduce((sum, row) => sum + row.base_power_w, 0), 2000);
+});
+
+test('toekomstige klokkwartieren volgen Nederlandse wintertijd in plaats van een UTC-verschuiving van 24 uur', (t) => {
+  const source = Date.parse('2026-10-24T12:15:00Z'), next = Date.parse('2026-10-25T13:15:00Z');
+  const f = fixture(t, { center: source }); f.learn(600);
+  assert.equal(clockQuarter(source), clockQuarter(next));
+  assert.equal(f.value(next).power_w, 600);
+  assert.equal(f.value(source + 86400000).power_w, 1000);
+  assert.equal(f.value(next + 86400000).power_w, 600);
+  assert.equal(f.repository.pv(next - quarter, next).reduce((sum, row) => sum + row.power_w, 0), 600);
+});
+
+test('het kwartier tot middernacht hoort bij de kalenderdag waarop het begint', (t) => {
+  const end = Date.parse('2026-10-18T22:00:00Z'), f = fixture(t, { center: end }); f.learn(600);
+  assert.equal(clockQuarter(end), 0);
+  // Morgen 23:45–00:00 gebruikt dezelfde factor; vandaag blijft een ongemeten blok zelfstandig.
+  assert.equal(f.value(end + 2 * 86400000).power_w, 600);
+  assert.equal(f.value(end + 86400000).power_w, 1000);
+  assert.equal(f.value(end + 2 * 86400000 - quarter).power_w, 1000);
+});
+
+test('metingen of bijwerkingen uit de toekomst mogen geen factor leveren aan het voorspelmodel', (t) => {
+  const f = fixture(t); f.learn(600);
+  const source = f.blocks()[0], next = target + 86400000;
+  for (const [index, changes] of [{ measured_ms: f.now + 1 }, { updated_ms: f.now + 1 }, { start_ms: next - quarter, end_ms: next }].entries()) {
+    const end = changes.end_ms ?? target - (index + 1) * 86400000;
+    f.repository.savePvBlockCorrection({ ...source, start_ms: end - quarter, end_ms: end, factor: 0.1, signature: `invalid-future-${index}`, ...changes });
+  }
+  assert.equal(f.value(next).power_w, 600);
+  assert.equal(f.value(next).correction_source, 'same_clock_quarter');
+});
+
+test('daggrafieken en dagelijks startadvies gebruiken dezelfde factoren inclusief baseload, reserve en beste gedeeltelijke zonmoment', async (t) => {
+  const f = fixture(t), folder = mkdtempSync(join(tmpdir(), 'zonapi-future-advice-'));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  for (const [id, power] of [['klein', 800], ['groot', 1600]]) writeFileSync(join(folder, `${id}.json`), JSON.stringify({
+    id, name: id, steps: [{ duration_minutes: 15, power_w: power }] }));
+  writeFileSync(join(folder, 'fases.json'), JSON.stringify({ id: 'fases', name: 'Fases',
+    steps: [{ duration_minutes: 15, power_w: 1600 }, { duration_minutes: 15, power_w: 400 }] }));
+  f.settings.advice.baseload_w = 100; f.settings.advice.reserve_w = 100;
+  for (let index = 0; index < 3; index++) {
+    const end = target + index * 86400000;
+    f.repository.saveSun(`2026-10-${18 + index}`, end - quarter, end + quarter, 'test', f.now);
+  }
+  t.mock.method(Date, 'now', () => f.now);
+  const server = startHttpServer({ ...f, profilesDirectory: folder, panelErrors: [], weather: { status: () => ({}) }, homewizard: { status: () => ({}) } });
+  await once(server, 'listening'); t.after(() => new Promise((resolve) => server.close(resolve)));
+  const get = async (path) => {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`);
+    assert.equal(response.status, 200); return response.json();
+  };
+  const before = await get('/api/v1/appliances/daily');
+  f.learn(400);
+  const after = await get('/api/v1/appliances/daily'), graphs = await get('/api/v1/forecast/days');
+  assert.deepEqual(after.days[0], before.days[0]);
+  for (const index of [1, 2]) {
+    const end = target + index * 86400000, find = (response, id) => response.days[index].appliances.find((item) => item.id === id);
+    const small = find(after, 'klein'), large = find(after, 'groot');
+    assert.equal(find(before, 'klein').earliest_start, new Date(end - quarter).toISOString());
+    assert.equal(small.status, 'ok'); assert.equal(small.earliest_start, new Date(end).toISOString());
+    assert.equal(small.best_start, new Date(end).toISOString()); assert.equal(small.best.solar_share_percent, 100);
+    assert.equal(large.status, 'ok'); assert.equal(large.earliest_start, null);
+    assert.equal(large.best_start, new Date(end).toISOString()); assert.equal(large.best.solar_share_percent, 50);
+    assert.equal(find(before, 'fases').best.solar_share_percent, 60);
+    const phases = find(after, 'fases');
+    assert.equal(phases.best.solar_share_percent, 30); assert.equal(phases.best.energy_wh, 500); assert.equal(phases.best.solar_wh, 150);
+    const corrected = graphs.days[index].slots.find((row) => Date.parse(row.end) === end);
+    assert.equal(corrected.power_w, 400); assert.equal(corrected.base_power_w, 1000);
+    assert.equal(corrected.automatic_correction_factor, 0.4); assert.equal(corrected.correction_source, 'same_clock_quarter');
+    assert.equal(corrected.correction_reference_end, new Date(target).toISOString());
+    assert.equal(graphs.days[index].slots.find((row) => Date.parse(row.end) === end + quarter).power_w, 1000);
+  }
 });

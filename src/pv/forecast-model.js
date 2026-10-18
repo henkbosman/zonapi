@@ -9,13 +9,16 @@ import { localDayRange } from '../weather/local-calendar.js';
 
 const quarterMs = 900000;
 
-/** Maakt een voorspelsnapshot met onafhankelijke gedateerde kwartiercorrecties; input: opslag, instellingen, panelen en peiltijd; output: voorbereiden, schatten en status. */
+/** Maakt een voorspelsnapshot met onafhankelijke kwartiercorrecties en hergebruik per klokkwartier op toekomstige dagen; input: opslag, instellingen, panelen en peiltijd; output: voorbereiden, schatten en status. */
 export function createPvForecastModel(repository, settings, panels, now) {
   const config = automaticCorrectionConfig(settings), modelKey = correctionModelKey(settings, panels);
   const factor = getCalibrationFactor(settings);
   const blocks = repository.pvBlockCorrections(modelKey, now - 27 * 3600000, now + (settings.weather.forecast_days + 1) * 86400000)
-    .filter((row) => row.measured_ms <= now && row.updated_ms <= now).map((row) => ({ ...row, factor: Math.min(config.max_factor, row.factor) }));
+    .filter((row) => row.end_ms <= now && row.measured_ms <= now && row.updated_ms <= now).map((row) => ({ ...row, factor: Math.min(config.max_factor, row.factor) }));
   const byEnd = new Map(blocks.map((row) => [row.end_ms, row]));
+  const byClock = new Map(repository.pvBlockCorrectionPattern(modelKey, now)
+    .map((row) => [row.quarter_minute, { ...row, factor: Math.min(config.max_factor, row.factor) }]));
+  const today = localDay(now);
   const savedLatest = repository.latestPvBlockCorrection(modelKey, now);
   const latest = savedLatest ? { ...savedLatest, factor: Math.min(config.max_factor, savedLatest.factor) } : null;
   const active = config.enabled && latest !== null;
@@ -30,7 +33,7 @@ export function createPvForecastModel(repository, settings, panels, now) {
   /** Splitst de bron zodat één kwartier nooit de factor van zijn buur krijgt; input: bronvakken; output: onafhankelijke kwartierdelen. */
   function prepare(rows) { return active ? splitForecastQuarters(rows) : rows; }
 
-  /** Rekent uitsluitend met de factor van het eigen gedateerde blok; input: effectief weertijdvak; output: basis en gecorrigeerde groepswaarden. */
+  /** Gebruikt de eigen gemeten correctie of op toekomstige dagen de factor van hetzelfde klokkwartier; input: effectief weertijdvak; output: eigen basis, gecorrigeerde groepen en correctieherkomst. */
   function estimate(row) {
     let base = estimatePv(row, panels, settings.location.latitude, settings.location.longitude, factor);
     const block = active ? byEnd.get(Math.ceil(row.end_ms / quarterMs) * quarterMs) : null;
@@ -53,10 +56,16 @@ export function createPvForecastModel(repository, settings, panels, now) {
         base = { groups, power_w: Math.round(groups.reduce((sum, group) => sum + group.power_w, 0) * 10) / 10 };
       }
     }
-    return { ...applyPvCorrection(base, panels, own ? block.factor : 1), correction_source: own ? 'block' : 'none' };
+    // Alleen de factor wordt hergebruikt: de instraling en paneelgroepen blijven van de voorspelde dag zelf.
+    const reference = own ? block : active && localDay(row.start_ms) > today
+      ? byClock.get(clockQuarter(Math.ceil(row.end_ms / quarterMs) * quarterMs)) : null;
+    return { ...applyPvCorrection(base, panels, reference?.factor ?? 1),
+      correction_source: own ? 'block' : reference ? 'same_clock_quarter' : 'none',
+      correction_reference_start: reference ? new Date(reference.start_ms).toISOString() : null,
+      correction_reference_end: reference ? new Date(reference.end_ms).toISOString() : null };
   }
 
-  /** Beschrijft het eigen blok zonder klokpatroon of terugval op de laatste factor; input: geen; output: status met expliciete datums en tijdvakgrenzen. */
+  /** Beschrijft gemeten blokken en de werkwijze voor toekomstige dagen; input: geen; output: status met expliciete datums en tijdvakgrenzen. */
   function status() {
     const sampling = (row) => { try { return row?.sampling_json ? JSON.parse(row.sampling_json) : null; } catch { return null; } };
     const describe = (row, start, end) => ({ date: localDay(start), start: new Date(start).toISOString(), end: new Date(end).toISOString(),
@@ -67,10 +76,11 @@ export function createPvForecastModel(repository, settings, panels, now) {
     const day = localDay(now), range = localDayRange(day), quarters = [];
     for (let start = range.start_ms; start < range.end_ms; start += quarterMs) quarters.push(describe(byEnd.get(start + quarterMs), start, start + quarterMs));
     const learnedToday = quarters.filter((row) => row.factor !== null).length;
-    return { enabled: config.enabled, mode: config.mode, scope: 'dated_block', status: !config.enabled ? 'disabled' : active ? 'active' : 'learning', model_key: modelKey,
+    return { enabled: config.enabled, mode: config.mode, scope: 'independent_quarters', future_day_policy: 'same_clock_quarter',
+      status: !config.enabled ? 'disabled' : active ? 'active' : 'learning', model_key: modelKey,
       min_forecast_w: config.min_forecast_w, max_factor: config.max_factor, max_skew_seconds: config.max_skew_seconds,
       sample_tolerance_seconds: config.sample_tolerance_seconds, outlier_relative: config.outlier_relative, outlier_min_w: config.outlier_min_w,
-      day, learned_blocks: repository.countPvBlockCorrections(modelKey, now), learned_blocks_today: learnedToday,
+      day, learned_blocks: repository.countPvBlockCorrections(modelKey, now), learned_blocks_today: learnedToday, learned_clock_quarters: byClock.size,
       learned_quarters: learnedToday, total_blocks_in_day: quarters.length, last_attempt: lastAttempt,
       latest: latest ? describe(latest, latest.start_ms, latest.end_ms) : null, quarters };
   }
