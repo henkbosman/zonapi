@@ -3,6 +3,13 @@ import { forecastLinePoints, lineValueAt, canConnectPoints, clockAxisTicks } fro
 
 const timeLabel = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit' });
 const preciseTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const baseColor = '#efd7a2';
+
+/** Toont de automatische afwijking ten opzichte van de basisvoorspelling; input: percentage; output: tekst met teken. */
+function correctionLabel(percent) {
+  const rounded = Math.round(percent * 10) / 10;
+  return `${rounded > 0 ? '+' : ''}${rounded.toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%`;
+}
 
 /** Bouwt een veilig SVG-element; input: tag en attributen; output: SVG-element. */
 function node(tag, attributes = {}) {
@@ -19,18 +26,19 @@ function label(svg, content, x, y, anchor = 'middle') {
 }
 
 /** Plaatst meetpunten op één tijdas en onderbreekt lijnen na een meetgat; input: SVG, punten, projecties, kleur, maximale tussentijd; output: void. */
-function drawLine(svg, points, x, y, color, maxGapMs) {
+function drawLine(svg, points, x, y, color, maxGapMs, { base = false } = {}) {
   if (!points.length) return;
   let path = '';
   for (let i = 0; i < points.length; i++) {
     const point = points[i];
     path += `${canConnectPoints(points[i - 1], point, maxGapMs) ? 'L' : 'M'}${x(point.ms).toFixed(1)},${y(point.value).toFixed(1)} `;
   }
-  svg.append(node('path', { d: path.trim(), fill: 'none', stroke: color, 'stroke-width': 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  svg.append(node('path', { d: path.trim(), fill: 'none', stroke: color, 'stroke-width': base ? 2 : 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
   for (const point of points) {
     if (point.synthetic) continue;
-    const circle = node('circle', { cx: x(point.ms), cy: y(point.value), r: points.length === 1 ? 5 : 3.5, fill: color,
-      'data-time': new Date(point.ms).toISOString(), 'data-point-kind': point.count ? 'measurement' : 'interval_mean' });
+    const circle = node('circle', { cx: x(point.ms), cy: y(point.value), r: points.length === 1 ? 5 : base ? 2.5 : 3.5, fill: color,
+      'data-time': new Date(point.ms).toISOString(), 'data-point-kind': point.count ? 'measurement' : 'interval_mean',
+      'data-series': point.count ? 'measured' : base ? 'base_forecast' : 'forecast' });
     const title = node('title');
     if (point.count) {
       const span = point.measuredFrom && point.measuredFrom !== point.ms ? ` · Metingen ${preciseTime.format(new Date(point.measuredFrom))}–${preciseTime.format(new Date(point.ms))}` : '';
@@ -39,7 +47,8 @@ function drawLine(svg, points, x, y, color, maxGapMs) {
       circle.setAttribute('data-interval-start', new Date(point.interval_start_ms).toISOString());
       circle.setAttribute('data-interval-end', new Date(point.interval_end_ms).toISOString());
       const source = point.source_resolution_minutes > (point.interval_end_ms - point.interval_start_ms) / 60000 ? ` · bron ${point.source_resolution_minutes} min` : '';
-      title.textContent = `${timeLabel.format(new Date(point.ms))} · ${Math.round(point.value)} W · Gemiddelde ${timeLabel.format(new Date(point.sample_start_ms))}–${timeLabel.format(new Date(point.sample_end_ms))}${source}`;
+      const correction = !base && Number.isFinite(point.correction_factor) ? ` · Correctie ${correctionLabel((point.correction_factor - 1) * 100)}` : '';
+      title.textContent = `${timeLabel.format(new Date(point.ms))} · ${Math.round(point.value)} W${base ? ' · Zonder correctie' : ''}${correction} · Gemiddelde ${timeLabel.format(new Date(point.sample_start_ms))}–${timeLabel.format(new Date(point.sample_end_ms))}${source}`;
     }
     circle.append(title);
     svg.append(circle);
@@ -62,12 +71,16 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
       measuredFrom: Date.parse(point.measured_from ?? point.time) }))
     .sort((a, b) => a.ms - b.ms);
   const forecast = forecastLinePoints(slots, start, end);
+  const baseForecast = forecastLinePoints(slots.map((slot) => ({ ...slot, power_w: slot.base_power_w })), start, end);
+  const correction = forecastLinePoints(slots.map((slot) => ({ ...slot,
+    power_w: Number.isFinite(slot.power_w) ? slot.automatic_correction_factor : null })), start, end)
+    .map((point) => ({ ...point, value: (point.value - 1) * 100 }));
   const width = Math.max(280, container.clientWidth || 780), height = 360;
   const svg = node('svg', { viewBox: `0 0 ${width} ${height}`, width, height, preserveAspectRatio: 'xMinYMin meet', role: 'group',
     'aria-label': forecastOnly ? 'Voorspelde zonopbrengst tussen zonsopkomst en zonsondergang' : 'Gemeten en voorspelde zonopbrengst tussen zonsopkomst en zonsondergang' });
   const left = 52, right = width - 18, top = 24, bottom = height - 48;
   const hasBaseload = Number.isFinite(baseloadW) && baseloadW >= 0;
-  const maxPower = Math.max(500, Math.ceil(Math.max(hasBaseload ? baseloadW : 0, ...measured.map((point) => point.value), ...forecast.map((point) => point.value)) / 500) * 500);
+  const maxPower = Math.max(500, Math.ceil(Math.max(hasBaseload ? baseloadW : 0, ...measured.map((point) => point.value), ...forecast.map((point) => point.value), ...baseForecast.map((point) => point.value)) / 500) * 500);
   const x = (ms) => left + (right - left) * (ms - start) / (end - start);
   const y = (value) => bottom - (bottom - top) * value / maxPower;
   for (let i = 0; i <= 3; i++) {
@@ -82,6 +95,7 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
   for (const ms of clockAxisTicks(start, end, right - left)) {
     label(svg, timeLabel.format(new Date(ms)), x(ms), height - 12, ms === start ? 'start' : ms === end ? 'end' : 'middle');
   }
+  drawLine(svg, baseForecast, x, y, baseColor, 75 * 60000, { base: true });
   drawLine(svg, measured, x, y, '#137771', Infinity);
   drawLine(svg, forecast, x, y, '#e6a321', 75 * 60000);
   if (hasBaseload) {
@@ -98,6 +112,8 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
   attachTimeCursor(svg, { start, end, left, right, top, bottom, width, formatTime: (ms) => preciseTime.format(new Date(ms)), labelWidth: 82, stepMs: 900000 }, [
     ...(forecastOnly ? [] : [{ label: 'Gemeten', color: '#137771', valueAt: (ms) => lineValueAt(measured, ms, Infinity) }]),
     { label: 'Voorspelling', color: '#996200', valueAt: (ms) => lineValueAt(forecast, ms, 75 * 60000) },
+    ...(baseForecast.length ? [{ label: 'Zonder correctie', color: '#8c7445', valueAt: (ms) => lineValueAt(baseForecast, ms, 75 * 60000) }] : []),
+    ...(correction.length ? [{ label: 'Correctie', color: '#996200', valueAt: (ms) => lineValueAt(correction, ms, 75 * 60000), formatValue: correctionLabel }] : []),
     ...(hasBaseload ? [{ label: 'Basislast', color: '#c64040', valueAt: () => baseloadW }] : [])
   ]);
   container.append(svg);

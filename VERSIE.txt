@@ -1,0 +1,15 @@
+ZonAPI - dashboard- en database-update
+Versie: 2026-10-18-Database
+
+In deze versie:
+- Database-pagina met tabelkeuze via popup, kolomfilters, sortering en paginering.
+- Lichtgele voorspelling zonder automatische correctie in alle Zonopbrengst-grafieken.
+- Correctiepercentage bij de mouseover.
+- Losse HomeWizard-apparaten onder Apparaten, inclusief aan/uitstatus en vermogen.
+- Gevraagde Growatt-teksten en Aandachtspunten verwijderd.
+
+Herkenningsbestand: zonapi/public/database.html
+Backend: zonapi/src/api/database-browser.js
+
+Bestaande installatie: stop ZonAPI, vervang src/ en public/ uit dit pakket en herstart.
+Bewaar je eigen config/ en data/.

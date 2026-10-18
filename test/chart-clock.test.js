@@ -80,11 +80,11 @@ test('Open-Meteo-klok blijft van JSON via SQLite en dag-API tot SVG op kwartiere
   assert.equal(fallback.sample_start, iso(at('13:00:00')));
   assert.equal(fallback.source_resolution_minutes, 60);
   drawProductionChart(view.container, { ...day, points: [] }, day.slots);
-  const svg = view.container.children[0], dots = svg.children.filter((node) => node.tagName === 'circle');
+  const svg = view.container.children[0], dots = svg.children.filter((node) => node.attributes['data-series'] === 'forecast');
   assert.deepEqual(dots.map((dot) => dot.attributes['data-time']), ['13:00:00', '13:15:00', '13:30:00', '14:00:00'].map((time) => iso(at(time))));
   assert.ok(dots.every((dot) => Date.parse(dot.attributes['data-time']) % quarter === 0));
   const selected = dots.find((dot) => dot.attributes['data-time'] === quarterSlot.time);
-  assert.match(selected.children[0].textContent, /15:15 · 120 W · Gemiddelde 15:00–15:15/);
+  assert.match(selected.children[0].textContent, /15:15 · 120 W · Correctie 0% · Gemiddelde 15:00–15:15/);
   const line = svg.children.find((node) => node.tagName === 'path');
   assert.match(line.attributes.d, /^M52\.0,/);
   assert.match(line.attributes.d, /L832\.0,/);
@@ -119,7 +119,7 @@ test('Growatt kan op het kwartier worden opgevraagd terwijl de echte blauwe meet
   assert.equal(state.last_measurements[0].received_at, iso(starts[0] + 250));
   renderGrowattCloud(state);
   assert.equal(view.nodes.get('cloud-delay').textContent, '17 ms');
-  assert.match(view.nodes.get('cloud-measurement-times').children[0].textContent, /opgevraagd .*15:15:00.*gemeten .*15:02:46/);
+  assert.equal(view.nodes.has('cloud-measurement-times'), false);
   const server = startHttpServer({ ...f, panelErrors: [], growattCloud: cloud,
     weather: { status: () => ({ sunrise: f.sunrise, sunset: f.sunset }) }, homewizard: { status: () => ({}) } });
   await once(server, 'listening');

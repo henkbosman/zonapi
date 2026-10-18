@@ -28,7 +28,7 @@ export function forecastLinePoints(slots, start, end) {
     const from = Date.parse(slot.start), to = Date.parse(slot.end);
     if (!Number.isFinite(slot.power_w) || slot.power_w < 0 || !Number.isFinite(from) || !Number.isFinite(to) || to <= from) continue;
     const ms = to;
-    const point = { ms, value: slot.power_w, interval_start_ms: from, interval_end_ms: to,
+    const point = { ms, value: slot.power_w, correction_factor: slot.automatic_correction_factor, interval_start_ms: from, interval_end_ms: to,
       sample_start_ms: Date.parse(slot.sample_start ?? slot.start), sample_end_ms: Date.parse(slot.sample_end ?? slot.end),
       source_resolution_minutes: slot.source_resolution_minutes ?? (to - from) / 60000 };
     samples.set(ms, point);

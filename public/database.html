@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ZonAPI · Database</title>
+  <link rel="stylesheet" href="/dashboard.css">
+  <link rel="stylesheet" href="/growatt.css">
+  <link rel="stylesheet" href="/database.css">
+  <script src="/database.js" type="module"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="mark">☀</span><span>ZonAPI</span></div>
+    <nav class="navigation" aria-label="Pagina's"><a href="/dashboard">Overzicht</a><a href="/growatt">Growatt</a><a href="/weather">Weer</a><a href="/homewizard">HomeWizard</a><a href="/database" aria-current="page">Database</a></nav>
+    <span class="connection" id="connection" aria-live="polite">Tabellen ophalen…</span>
+  </header>
+  <main class="layout growatt-layout database-layout">
+    <section class="intro">
+      <p class="eyebrow">Opgeslagen gegevens</p>
+      <h1>Database</h1>
+      <p class="database-intro">Kies een tabel om alle records te bekijken. Sorteer via een kolomnaam of zoek met de filters onder de kolomnamen.</p>
+    </section>
+    <section class="full-card">
+      <div class="timeline-heading">
+        <div><h2 id="table-name">Kies een tabel</h2><p class="database-summary" id="record-count" aria-live="polite">Er is nog geen tabel geselecteerd.</p></div>
+        <div class="log-actions"><button type="button" id="choose-table" class="refresh-button" aria-haspopup="dialog" disabled>Tabel kiezen</button><button type="button" id="refresh-now" class="refresh-button">Vernieuwen</button></div>
+      </div>
+      <div class="database-toolbar">
+        <label>Records per pagina <select id="page-size" disabled><option value="50">50</option></select></label>
+        <button type="button" id="clear-filters" class="refresh-button" disabled>Filters wissen</button>
+        <span class="database-hint">Filters zoeken naar tekst, getallen of NULL. Alle ingevulde filters gelden samen.</span>
+      </div>
+      <div class="table-scroll database-scroll" tabindex="0" role="region" aria-label="Databasegegevens">
+        <table class="data-table database-table" id="database-table" aria-busy="false">
+          <caption class="visually-hidden" id="table-caption">Databasegegevens</caption>
+          <thead id="database-head"></thead><tbody id="database-rows"><tr><td class="empty-row">Selecteer een tabel via Tabel kiezen.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="timeline-pager database-pager">
+        <button type="button" id="first-page" aria-label="Eerste pagina" disabled>Eerste</button>
+        <button type="button" id="previous-page" disabled>Vorige</button>
+        <form id="page-form"><label for="page-number">Pagina</label><input id="page-number" type="number" min="1" value="1" aria-label="Paginanummer" disabled><span id="page-total">van 1</span><button type="submit" id="go-page" disabled>Ga</button></form>
+        <button type="button" id="next-page" disabled>Volgende</button>
+        <button type="button" id="last-page" aria-label="Laatste pagina" disabled>Laatste</button>
+      </div>
+    </section>
+  </main>
+  <dialog id="table-dialog" class="table-dialog" aria-labelledby="table-dialog-title">
+    <div class="timeline-heading"><h2 id="table-dialog-title">Tabel kiezen</h2><button type="button" class="refresh-button" id="close-dialog" aria-label="Tabelkeuze sluiten">Sluiten</button></div>
+    <label class="table-search-label" for="table-search">Zoek een tabel</label><input id="table-search" type="search" placeholder="Tabelnaam…" autocomplete="off">
+    <div id="table-options" class="table-options"></div>
+    <p class="database-summary" id="table-options-count" aria-live="polite"></p>
+  </dialog>
+</body>
+</html>

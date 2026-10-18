@@ -32,15 +32,6 @@ export function renderGrowattCloud(cloud) {
     item.textContent = `${plant.name} · ${plant.plant_id}`;
     list.append(item);
   }
-  const measurements = document.getElementById('cloud-measurement-times');
-  if (measurements) {
-    measurements.replaceChildren();
-    for (const row of cloud.last_measurements ?? []) {
-      const item = document.createElement('p');
-      item.textContent = `${row.serial} · opgevraagd ${time(row.requested_at)} · gemeten ${time(row.measured_at)} · ontvangen ${time(row.received_at)}`;
-      measurements.append(item);
-    }
-  }
 }
 
 /** Verbindt de handmatige cloudophaling aan de Growatt-pagina; input: vernieuwfunctie; output: void, interval en terugval blijven op de server gelden. */

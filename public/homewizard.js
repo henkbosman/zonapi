@@ -2,6 +2,7 @@ import { setupDiagnosticControls } from './diagnostic-controls.js';
 
 const timeFormat = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const deviceNames = { p1: 'P1', kwh: 'kWh-meter' };
+const activityNames = { running: 'Aan', starting: 'Start wordt herkend', idle: 'Uit', waiting: 'Wacht op meting', unavailable: 'Niet beschikbaar' };
 let offset = 0;
 let refreshId = 0;
 let current = null;
@@ -40,21 +41,33 @@ function renderStatus(data) {
   const body = element('#devices'); body.replaceChildren();
   for (const device of data.devices) {
     const meter = device.measurement;
-    const state = !device.configured ? 'Niet ingesteld' : device.error ? 'Fout' : meter?.fresh ? 'Actief' : 'Geen recente meting';
-    element(`#${device.device}-state`).textContent = state;
-    element(`#${device.device}-time`).textContent = time(meter?.measured_at);
+    const state = !device.configured ? 'Niet ingesteld' : device.error ? 'Fout' : device.activity ? activityNames[device.activity.state] : meter?.fresh ? 'Actief' : 'Geen recente meting';
+    deviceNames[device.device] = device.name ?? deviceNames[device.device] ?? device.device;
+    if (device.kind !== 'socket') {
+      element(`#${device.device}-state`).textContent = state;
+      element(`#${device.device}-time`).textContent = time(meter?.measured_at);
+    }
     const row = addRow(body, [deviceNames[device.device], device.host ?? '—', device.api, state, number(meter?.net_power_w, 'W'),
       number(meter?.import_kwh, 'kWh', 3), number(meter?.export_kwh, 'kWh', 3), time(meter?.measured_at),
       number(device.latest_call?.duration_ms, 'ms'), device.configured ? device.error ?? '—' : '—']);
     if (device.error && device.configured) row.classList.add('timeline-error');
   }
+  const filter = element('#device-filter'), selected = filter.value;
+  filter.replaceChildren();
+  for (const device of [{ device: 'all', name: 'Alles' }, ...data.devices]) {
+    const option = document.createElement('option'); option.value = device.device; option.textContent = device.name ?? deviceNames[device.device]; filter.append(option);
+  }
+  if (selected !== 'all' && !data.devices.some((device) => device.device === selected)) {
+    const option = document.createElement('option'); option.value = selected; option.textContent = deviceNames[selected] ?? selected; filter.append(option);
+  }
+  filter.value = selected;
 }
 
 /** Toont de gefilterde polltijdlijn; input: HomeWizard-overzicht; output: void. */
 function renderCalls(data) {
   const body = element('#meter-calls'); body.replaceChildren();
   for (const call of data.calls.rows) {
-    const row = addRow(body, [time(call.attempted_ms), deviceNames[call.device], call.status, number(call.duration_ms, 'ms'), number(call.measurement?.net_power_w, 'W'), call.detail ?? '—']);
+    const row = addRow(body, [time(call.attempted_ms), deviceNames[call.device] ?? call.device, call.status, number(call.duration_ms, 'ms'), number(call.measurement?.net_power_w, 'W'), call.detail ?? '—']);
     if (call.status === 'error') row.classList.add('timeline-error');
     const cell = document.createElement('td'), button = document.createElement('button');
     button.type = 'button'; button.textContent = 'Bekijk'; button.dataset.callId = String(call.id);

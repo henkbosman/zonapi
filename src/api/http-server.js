@@ -22,6 +22,7 @@ import { createActiveDemand } from '../appliances/active-demand.js';
 import { currentProductionRows, productionHistory } from '../production/source.js';
 import { growattCloudConfig } from '../growatt/cloud/config.js';
 import { createPvForecastModel } from '../pv/forecast-model.js';
+import { databaseCatalog, databaseRows } from './database-browser.js';
 
 const staticFiles = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
@@ -29,6 +30,9 @@ const staticFiles = new Map([
   ['/growatt', ['growatt.html', 'text/html; charset=utf-8']],
   ['/weather', ['weather.html', 'text/html; charset=utf-8']],
   ['/homewizard', ['homewizard.html', 'text/html; charset=utf-8']],
+  ['/database', ['database.html', 'text/html; charset=utf-8']],
+  ['/database.js', ['database.js', 'text/javascript; charset=utf-8']],
+  ['/database.css', ['database.css', 'text/css; charset=utf-8']],
   ['/homewizard.js', ['homewizard.js', 'text/javascript; charset=utf-8']],
   ['/diagnostic-controls.js', ['diagnostic-controls.js', 'text/javascript; charset=utf-8']],
   ['/chart-cursor.js', ['chart-cursor.js', 'text/javascript; charset=utf-8']],
@@ -102,6 +106,8 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
         return response.end(readFileSync(join(root, 'public', file)));
       }
       const now = Date.now();
+      if (url.pathname === '/api/v1/database/tables') return sendJson(response, 200, databaseCatalog(repository.database()));
+      if (url.pathname === '/api/v1/database/rows') return sendJson(response, 200, databaseRows(repository.database(), url.searchParams));
       const forecastRows = (hours) => repository.forecast(now, now + hours * 3600000);
       if (url.pathname === '/api/v1/forecast') return sendJson(response, 200, forecastResponse(forecastRows(hoursParam(url.searchParams.get('hours'), 72)), panels, panelErrors, settings.location, now, settings.weather.stale_after_hours, getCalibrationFactor(settings), createPvForecastModel(repository, settings, panels, now)));
       if (url.pathname === '/api/v1/pv/corrections') return sendJson(response, 200, createPvForecastModel(repository, settings, panels, now).status());
@@ -117,7 +123,10 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
         return call ? sendJson(response, 200, { ...call, attempted_at: new Date(call.attempted_ms).toISOString() }) : sendJson(response, 404, { error: 'Verzoek niet gevonden' });
       }
       if (url.pathname === '/api/v1/weather') return sendJson(response, 200, weatherOverview(repository, settings, weather, now, weatherCallParams(url.searchParams)));
-      if (url.pathname === '/api/v1/homewizard') return sendJson(response, 200, homeWizardOverview(repository, settings, homewizard, now, homeWizardCallParams(url.searchParams)));
+      if (url.pathname === '/api/v1/homewizard') {
+        const { profiles, errors } = loadProfiles(profilesDirectory);
+        return sendJson(response, 200, { ...homeWizardOverview(repository, settings, homewizard, now, homeWizardCallParams(url.searchParams), [...profiles.values()]), profile_errors: errors });
+      }
       if (url.pathname === '/api/v1/growatt/timeline') return sendJson(response, 200, growattTimeline(repository, growattTimelineParams(url.searchParams)));
       if (/^\/api\/v1\/growatt\/frames\/[1-9]\d*$/.test(url.pathname)) {
         const id = Number(url.pathname.split('/')[5]);

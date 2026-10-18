@@ -168,3 +168,31 @@ test('lege daggrafiek behoudt de zonuren, ook voor zonsopkomst en na zonsonderga
     }
   } finally { globalThis.document = before; }
 });
+
+test('lichte basisvoorspelling bepaalt mede de schaal en correctiepercentages blijven zichtbaar bij punten en cursor', () => {
+  const before = globalThis.document;
+  globalThis.document = { createElementNS: (_, tag) => element(tag), createElement: (tag) => element(tag) };
+  try {
+    const container = element('div'), start = Date.parse('2026-10-14T10:00:00Z');
+    const slots = [0.5, 1, 1.5].map((factor, index) => ({ start: new Date(start + index * 900000).toISOString(),
+      end: new Date(start + (index + 1) * 900000).toISOString(), power_w: Math.min(1500, 2000 * factor), base_power_w: 2000,
+      automatic_correction_factor: factor }));
+    drawProductionChart(container, { sunrise: new Date(start).toISOString(), sunset: new Date(start + 2700000).toISOString(), now: new Date(start).toISOString(), points: [] }, slots, { forecastOnly: true, baseloadW: 400 });
+    const svg = container.children[0], paths = svg.children.filter((child) => child.tagName === 'path');
+    assert.equal(paths[0].attributes.stroke, '#efd7a2'); assert.equal(paths[0].attributes['stroke-width'], '2');
+    assert.equal(paths[1].attributes.stroke, '#e6a321'); assert.match(paths[0].attributes.d, /,24\.0/);
+    const dots = svg.children.filter((child) => child.attributes['data-series'] === 'forecast');
+    assert.match(dots[0].children[0].textContent, /Correctie -50%/);
+    assert.match(dots[2].children[0].textContent, /Correctie \+50%/);
+    const target = svg.children.find((child) => child.attributes.role === 'slider');
+    target.listeners.focus(); target.listeners.keydown({ key: 'End', preventDefault() {} });
+    assert.match(target.attributes['aria-valuetext'], /Zonder correctie: 2.000 W/);
+    assert.match(target.attributes['aria-valuetext'], /Correctie: \+50%/);
+    target.listeners.keydown({ key: 'ArrowLeft', preventDefault() {} });
+    assert.match(target.attributes['aria-valuetext'], /Correctie: 0%/);
+    target.listeners.keydown({ key: 'ArrowLeft', preventDefault() {} });
+    assert.match(target.attributes['aria-valuetext'], /Correctie: -50%/);
+    const baseDots = svg.children.filter((child) => child.attributes['data-series'] === 'base_forecast');
+    assert.equal(baseDots.length, 3); assert.match(baseDots[0].children[0].textContent, /Zonder correctie/);
+  } finally { globalThis.document = before; }
+});

@@ -260,3 +260,36 @@ test('het dashboardendpoint levert echte socketactiviteit naast onafhankelijke n
     assert.equal((await fetch(`${base}/api/v1/appliances/wasmachine/advice`)).status, 200);
   } finally { await new Promise((resolve) => server.close(resolve)); f.close(); }
 });
+
+test('HomeWizard-overzicht bevat ingestelde apparaten met actuele socketstatus en doorzoekbare eigen logs', async () => {
+  const f = fixture(true), configured = { ...profile('wasmachine', { start_delay_seconds: 0 }), name: 'Wasmachine boven' };
+  f.write(configured); f.write(profile('droger')); f.write({ ...profile('vaatwasser'), homewizard: { host: '' } });
+  const at = Date.now();
+  const sockets = createSocketPoller(f.settings, f.repository, f.directory, async (device) => {
+    if (device === 'socket:droger') throw new Error('Socket niet bereikbaar');
+    return normalizeMeter(device, 'v1', { active_power_w: 1600, total_power_import_kwh: 42 }, at);
+  }, () => at);
+  const { panels, panel_errors: panelErrors } = loadConfiguration();
+  const server = startHttpServer({ settings: { ...f.settings, http: { host: '127.0.0.1', port: 0 } }, panels, panelErrors,
+    repository: f.repository, profilesDirectory: f.directory, weather: { status: () => ({}) }, homewizard: { status: () => ({}) } });
+  await once(server, 'listening'); const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    await sockets.poll();
+    const data = await (await fetch(`${base}/api/v1/homewizard`)).json();
+    assert.equal(data.devices.length, 4); assert.equal(data.net_power_w, null);
+    const washer = data.devices.find((device) => device.device === 'socket:wasmachine');
+    assert.equal(washer.name, 'Wasmachine boven'); assert.equal(washer.host, 'wasmachine.local');
+    assert.equal(washer.activity.state, 'running'); assert.equal(washer.measurement.net_power_w, 1600);
+    assert.equal(washer.measurement.import_kwh, 42); assert.equal(washer.measurement.fresh, true);
+    assert.equal(data.devices.find((device) => device.device === 'socket:droger').error, 'Socket niet bereikbaar');
+    const calls = await (await fetch(`${base}/api/v1/homewizard?device=socket:wasmachine`)).json();
+    assert.equal(calls.calls.rows.length, 1); assert.equal(calls.calls.rows[0].device, washer.device);
+    f.repository.clearHomeWizardDiagnostics();
+    assert.equal((await (await fetch(`${base}/api/v1/homewizard`)).json()).devices.find((device) => device.device === washer.device).activity.running, true);
+    f.write({ ...configured, homewizard: { host: 'nieuw.local' } });
+    const changed = (await (await fetch(`${base}/api/v1/homewizard`)).json()).devices.find((device) => device.device === washer.device);
+    assert.equal(changed.host, 'nieuw.local'); assert.equal(changed.activity.state, 'waiting');
+    assert.equal(changed.measurement, null); assert.equal(changed.latest_call, null);
+    assert.equal((await fetch(`${base}/api/v1/homewizard?device=socket:bad%3Bsql`)).status, 400);
+  } finally { await sockets.stop(); await new Promise((resolve) => server.close(resolve)); f.close(); }
+});

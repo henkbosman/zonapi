@@ -7,7 +7,7 @@ function node(tag, attributes) {
   return element;
 }
 
-/** Voegt een aanwijsbare tijd- en waardecursor toe; input: SVG, tijd-/plotgrenzen en optionele {label,color,valueAt}[]-reeksen; output: void. */
+/** Voegt een aanwijsbare tijd- en waardecursor toe; input: SVG, tijd-/plotgrenzen en {label,color,valueAt,formatValue?}[]; output: void. */
 export function attachTimeCursor(svg, { start, end, left, right, top, bottom, width,
   formatTime = (ms) => timeFormat.format(new Date(ms)), ariaLabel = 'Tijd in zonopbrengstgrafiek', stepMs = 5 * 60000, labelWidth = 56 }, series = []) {
   const cursor = node('g', { visibility: 'hidden', 'pointer-events': 'none', 'data-chart-cursor': '' });
@@ -16,11 +16,11 @@ export function attachTimeCursor(svg, { start, end, left, right, top, bottom, wi
   const text = node('text', { y: bottom + 18, fill: '#fff', 'font-size': 12, 'text-anchor': 'middle' });
   cursor.append(line, background, text);
   const values = node('g', { 'data-chart-values': '' });
-  const boxWidth = Math.min(204, right - left - 10);
+  const boxWidth = Math.min(224, right - left - 10);
   const box = node('rect', { width: boxWidth, height: 14 + series.length * 23, rx: 8, fill: '#fff', stroke: '#dce8e3', 'stroke-width': 1.2 });
   values.append(box);
   const rows = series.map((item) => {
-    const row = node('text', { fill: item.color, 'font-size': 13, 'font-weight': 600 });
+    const row = node('text', { fill: item.color, 'font-size': boxWidth < 204 ? 12 : 13, 'font-weight': 600 });
     values.append(row);
     return row;
   });
@@ -42,7 +42,7 @@ export function attachTimeCursor(svg, { start, end, left, right, top, bottom, wi
     for (const [index, item] of series.entries()) {
       const value = item.valueAt(time);
       rows[index].setAttribute('x', boxX + 12); rows[index].setAttribute('y', top + 31 + index * 23);
-      rows[index].textContent = `${item.label}: ${Number.isFinite(value) ? `${Math.round(value).toLocaleString('nl-NL')} W` : '—'}`;
+      rows[index].textContent = `${item.label}: ${Number.isFinite(value) ? item.formatValue ? item.formatValue(value) : `${Math.round(value).toLocaleString('nl-NL')} W` : '—'}`;
     }
     target.setAttribute('aria-valuenow', Math.round(time));
     target.setAttribute('aria-valuetext', [text.textContent, ...rows.map((row) => row.textContent)].join(', '));
