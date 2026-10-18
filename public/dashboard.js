@@ -1,4 +1,5 @@
 import { setupProductionDayCharts } from './dashboard-production-days.js';
+import { renderPvCorrection } from './pv-correction-status.js';
 import { renderDailyAdvice } from './dashboard-daily-advice.js';
 import { setupApplianceCharts } from './dashboard-appliance-charts.js';
 
@@ -85,11 +86,7 @@ async function refresh() {
     const forecast = forecasts.days[0];
     renderStatus(status);
     renderProductionDays(forecasts.days, production, status.baseload?.power_w ?? null);
-    const correction = forecast.automatic_correction;
-    const sampling = correction?.latest?.sampling;
-    $('#pv-correction').textContent = correction?.status === 'active'
-      ? `Correctie ${correction.latest.correction_percent > 0 ? '+' : ''}${correction.latest.correction_percent.toLocaleString('nl-NL')}% · Patroon ${correction.learned_quarters}/96${sampling ? ` · ${sampling.used_samples}/3 metingen${sampling.ignored_times.length ? ' · 1 uitschieter genegeerd' : ''}` : ''}` : '';
-    $('#pv-correction').title = sampling ? sampling.samples.map((sample) => `${dutchTime.format(new Date(sample.time))}: ${Math.round(sample.power_w)} W${sample.used ? '' : ' (genegeerd)'}`).join('\n') : '';
+    renderPvCorrection($('#pv-correction'), forecast.automatic_correction);
     const recent = production.points.at(-1);
     $('#chart-coverage').textContent = recent ? `${recent.active_inverters}/${recent.expected_inverters} omvormers` : '';
     const now = Date.parse(production.now);

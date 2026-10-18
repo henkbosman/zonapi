@@ -1,15 +1,15 @@
-ZonAPI - dashboard- en database-update
-Versie: 2026-10-18-Database
+ZonAPI
+Versie: 2026-10-18-Correctie-Fix1
 
-In deze versie:
-- Database-pagina met tabelkeuze via popup, kolomfilters, sortering en paginering.
-- Lichtgele voorspelling zonder automatische correctie in alle Zonopbrengst-grafieken.
-- Correctiepercentage bij de mouseover.
-- Losse HomeWizard-apparaten onder Apparaten, inclusief aan/uitstatus en vermogen.
-- Gevraagde Growatt-teksten en Aandachtspunten verwijderd.
+Herstel ontbrekende automatische correcties:
+- Geen gaten meer tussen de toegestane Growatt-meetklokken.
+- Bestaande standaard van 90 seconden wordt automatisch 150 seconden.
+- Correcties leren na herstart en na nieuwe weerdata uit beschikbare meetgegevens.
+- Wachtredenen en aantallen ontvangen metingen zichtbaar op het dashboard.
+- Laatste correctiepoging beschikbaar in de API en de database.
 
-Herkenningsbestand: zonapi/public/database.html
-Backend: zonapi/src/api/database-browser.js
+Deze versie bevat ook de Database-pagina, de lichte voorspelling zonder
+automatische correctie en de losse HomeWizard-apparaten.
 
-Bestaande installatie: stop ZonAPI, vervang src/ en public/ uit dit pakket en herstart.
+Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
 Bewaar je eigen config/ en data/.

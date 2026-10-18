@@ -6,8 +6,8 @@ import { forecastTimeline } from './forecast-timeline.js';
 import { getWeatherResolution } from './resolution.js';
 import { localDayRange } from './local-calendar.js';
 
-/** Maakt een weerscheduler voor alle uren met een lokaal dagquotum; input: instellingen, panelen, fouten, repository, optionele klok/bron; output: {tick,refresh,status,start,stop}. */
-export function createWeatherScheduler({ settings, panels, panelErrors, repository, clock = () => Date.now(), source = getIrradianceSource(settings.weather.source) }) {
+/** Maakt een weerscheduler voor alle uren met een lokaal dagquotum; input: instellingen, panelen, fouten, repository en optionele klok/bron/correctiecallback; output: {tick,refresh,status,start,stop}. */
+export function createWeatherScheduler({ settings, panels, panelErrors, repository, clock = () => Date.now(), source = getIrradianceSource(settings.weather.source), onForecast }) {
   let interval = null;
   let inFlight = false;
   let lastError = null;
@@ -69,6 +69,8 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
         forecast_rows: result.rows.length, sun_days: result.sun.length
       });
       lastError = null;
+      try { onForecast?.(clock()); }
+      catch (error) { repository.saveGrowattEvent(clock(), 'weather', 'forecast_correction_error', String(error.message ?? error).slice(0, 500)); }
     } catch (error) {
       repository.finishCall(id, 'error', {
         detail: String(error.message ?? error), request_url: error.request_url ?? null,

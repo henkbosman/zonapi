@@ -17,6 +17,9 @@ import { createGrowattCloudPoller } from '../src/growatt/cloud/poller.js';
 import { growattCloudConfig } from '../src/growatt/cloud/config.js';
 import { startHttpServer } from '../src/api/http-server.js';
 import { renderGrowattCloud } from '../public/growatt-cloud.js';
+import { createPvCorrectionLearner } from '../src/pv/correction-learner.js';
+import { createWeatherScheduler } from '../src/weather/scheduler.js';
+import { renderPvCorrection } from '../public/pv-correction-status.js';
 
 const five = 300000, quarter = 900000, minute = 60000;
 const target = Date.parse('2026-10-18T07:15:00Z'); // 09:15 in Nederland.
@@ -139,8 +142,22 @@ test('kleine klokafwijkingen worden aan nabije vijfminutenmomenten gekoppeld en 
   assert.equal(result.sampling.samples[1].inverters[0].measured_at, iso(target - 10000));
 });
 
-test('te grote klokafwijking of onderlinge spreiding maakt een meetmoment onbruikbaar', (t) => {
-  for (const [automatic, skew] of [[{}, [91000, 0, 0, 0]], [{ max_skew_seconds: 10 }, [0, 0, 0, 11000]]]) {
+test('de oude standaard van 90 seconden blokkeert geen geldige Growatt-meetklok tussen vijfminutengrenzen', (t) => {
+  for (const automatic of [{}, { sample_tolerance_seconds: 90 }]) for (const offset of [-149000, -134000, -91000, 91000, 134000, 149000]) {
+    const f = fixture(t, { automatic });
+    f.trio([800, 820, 840], { skew: serials.map(() => offset) });
+    const before = f.repository.cloudInverterHistory(0, Infinity).map((row) => ({ ...row }));
+    const result = f.learn();
+    assert.equal(result.status, 'updated', `offset ${offset} met ${JSON.stringify(automatic)}`);
+    assert.equal(result.factor, 0.82); assert.equal(f.pattern().length, 1);
+    assert.deepEqual(result.sampling.samples.map((sample) => sample.time), [target - five, target, target + five].map(iso));
+    assert.equal(result.sampling.samples[1].inverters[0].measured_at, iso(target + offset));
+    assert.deepEqual(f.repository.cloudInverterHistory(0, Infinity).map((row) => ({ ...row })), before);
+  }
+});
+
+test('een expliciete strenge tijdsgrens of te grote onderlinge spreiding maakt een meetmoment onbruikbaar', (t) => {
+  for (const [automatic, skew] of [[{ sample_tolerance_seconds: 60 }, [61000, 0, 0, 0]], [{ max_skew_seconds: 10 }, [0, 0, 0, 11000]]]) {
     const f = fixture(t, { automatic }); f.trio([800, 820, 840], { skew });
     assert.equal(f.learn().status, 'waiting_for_samples');
     assert.equal(f.pattern().length, 0);
@@ -156,14 +173,27 @@ test('één bronmeting kan niet voor twee tijdstippen worden hergebruikt en de d
   assert.equal(result.complete.get(target).power_w, 200);
 });
 
+test('een meting precies halverwege twee klokgrenzen vult één moment en een ontbrekend buurmoment wordt nooit ingevuld', (t) => {
+  const config = automaticCorrectionConfig({});
+  const result = fiveMinuteSamples([{ serial: serials[0], power_w: 100, measured_ms: target + five / 2, received_ms: target + five }], [serials[0]], config, target + five);
+  assert.equal(result.complete.size, 1); assert.equal(result.complete.has(target + five), true); assert.equal(result.complete.has(target), false);
+  const f = fixture(t);
+  f.add(target - five, 800, { skew: serials.map(() => -134000) });
+  f.add(target + five, 840, { skew: serials.map(() => -134000) });
+  assert.equal(f.learn().status, 'waiting_for_samples'); assert.equal(f.pattern().length, 0);
+});
+
 test('filter- en klokgrenzen zijn optioneel, gevalideerd en instelbaar', (t) => {
   const f = fixture(t);
-  for (const automatic of [{ sample_tolerance_seconds: 150 }, { sample_tolerance_seconds: -1 }, { outlier_relative: 0 }, { outlier_relative: 3 }, { outlier_min_w: -1 }]) {
+  for (const automatic of [{ sample_tolerance_seconds: 151 }, { sample_tolerance_seconds: -1 }, { outlier_relative: 0 }, { outlier_relative: 3 }, { outlier_min_w: -1 }]) {
     assert.ok(validateSettings({ ...f.settings, pv: { automatic_correction: automatic } }).some((error) => error.startsWith('pv.automatic_correction')));
   }
   f.settings.pv.automatic_correction = { outlier_relative: 2, outlier_min_w: 20000 };
   f.trio([800, 2000, 820]);
   assert.equal(f.learn().sampling.used_samples, 3);
+  assert.equal(automaticCorrectionConfig({}).sample_tolerance_seconds, 150);
+  assert.equal(automaticCorrectionConfig({ pv: { automatic_correction: { sample_tolerance_seconds: 90 } } }).sample_tolerance_seconds, 150);
+  for (const limit of [0, 30, 60, 149, 150]) assert.equal(automaticCorrectionConfig({ pv: { automatic_correction: { sample_tolerance_seconds: limit } } }).sample_tolerance_seconds, limit);
 });
 
 test('dezelfde drie metingen worden niet opnieuw gestapeld en nieuwe weerdata gebruikt dezelfde ongecorrigeerde basis', (t) => {
@@ -288,4 +318,90 @@ test('vijfminutenopvragen met vertraagde Growatt-antwoorden sturen de driepuntsc
     assert.match(nodes.get('cloud-correction').textContent, /09:15 · 2\/3 metingen · 1 uitschieter genegeerd/);
   } finally { if (previous === undefined) delete globalThis.document; else globalThis.document = previous; }
   assert.equal(f.repository.countCalls('2026-10-18'), 0);
+});
+
+test('herstart leert direct uit opgeslagen afwijkende meetklokken en bewaart correctie en wachtstatus buiten de logs', async (t) => {
+  const f = fixture(t, { automatic: { sample_tolerance_seconds: 90 } });
+  f.trio([800, 2000, 820], { skew: serials.map(() => -134000) });
+  const learner = createPvCorrectionLearner({ ...f, panelErrors: [], clock: () => f.now });
+  const result = learner.learn();
+  assert.equal(result.status, 'updated'); assert.equal(result.factor, 0.81);
+  assert.equal(f.pattern().length, 1); assert.equal(JSON.parse(f.pattern()[0].sampling_json).used_samples, 2);
+  const cached = f.repository.pv(f.now, f.now + 3600000);
+  assert.ok(cached.length > 0); assert.ok(cached.every((row) => row.correction_factor === 0.81));
+  f.repository.clearGrowattDiagnostics(); f.repository.setLogging('growatt', false);
+  assert.equal(f.repository.diagnosticState('growatt', 'pv_correction').status, 'updated');
+  const server = startHttpServer({ ...f, panelErrors: [], weather: { status: () => ({}) }, homewizard: { status: () => ({}) } });
+  await once(server, 'listening'); t.after(() => new Promise((resolve) => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const corrections = await (await fetch(`${base}/api/v1/pv/corrections`)).json();
+  assert.equal(corrections.status, 'active'); assert.equal(corrections.last_attempt.status, 'updated');
+  assert.equal(corrections.sample_tolerance_seconds, 150);
+  const table = await (await fetch(`${base}/api/v1/database/rows?table=pv_correction_pattern`)).json();
+  assert.equal(table.total_rows, 1); assert.equal(table.rows[0][table.columns.findIndex((column) => column.name === 'factor')], 0.81);
+  const display = {};
+  renderPvCorrection(display, corrections); assert.match(display.textContent, /Correctie -19%/); assert.match(display.textContent, /2\/3 metingen/);
+  assert.equal((await fetch(`${base}/pv-correction-status.js`)).status, 200);
+  assert.equal(learner.learn().status, 'unchanged'); assert.equal(f.pattern().length, 1);
+});
+
+test('nieuwe weerdata hervat een eerder geblokkeerde correctie direct en pas na de weertransactie', async (t) => {
+  const f = fixture(t, { weather: false });
+  f.trio([800, 820, 840], { skew: serials.map(() => 134000) });
+  const learner = createPvCorrectionLearner({ ...f, panelErrors: [], clock: () => f.now });
+  assert.equal(learner.learn().status, 'forecast_unavailable'); assert.equal(f.pattern().length, 0);
+  let callbacks = 0;
+  const weather = createWeatherScheduler({ ...f, panelErrors: [], clock: () => f.now,
+    source: async () => ({ rows: [{ source: 'open-meteo', model: 'icon_d2', start_ms: target - quarter, end_ms: target,
+      ghi: 125, dni: 0, dhi: 125, fetched_ms: f.now }, { source: 'open-meteo', model: 'icon_d2', start_ms: target, end_ms: target + quarter,
+      ghi: 125, dni: 0, dhi: 125, fetched_ms: f.now }], sun: [] }),
+    onForecast: (at) => { callbacks++; assert.equal(at, f.now); assert.equal(learner.learn(null, at).status, 'updated'); } });
+  assert.equal((await weather.refresh()).reason, 'ok'); assert.equal(callbacks, 1);
+  assert.equal(f.pattern()[0].factor, 0.82); assert.equal(f.repository.diagnosticState('growatt', 'pv_correction').status, 'updated');
+  assert.equal(weather.status().last_error, null);
+});
+
+test('wachtredenen zijn zichtbaar op het dashboard, inclusief het aantal ontvangen omvormers per moment', (t) => {
+  const f = fixture(t), learner = createPvCorrectionLearner({ ...f, panelErrors: [], clock: () => f.now }), display = {};
+  assert.equal(learner.learn().status, 'incomplete');
+  renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
+  assert.match(display.textContent, /wachten op omvormers \(0\/4\)/);
+  f.add(target - five, 800); f.add(target, 820, { omit: [3] }); f.add(target + five, 840);
+  assert.equal(learner.learn().status, 'waiting_for_samples');
+  renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
+  assert.match(display.textContent, /wachten op meetpunten \(2\/3\)/); assert.match(display.title, /09:15: 3\/4 omvormers · onvolledig/);
+  assert.equal(f.pattern().length, 0);
+  f.add(target, 820, { received: f.now + 1 });
+  assert.equal(learner.learn().status, 'updated'); assert.equal(f.pattern().length, 1);
+  renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
+  assert.match(display.textContent, /Correctie -18%/);
+});
+
+test('strenge handmatige tijdsmarge, verouderde voorspelling en uitgeschakelde correctie worden verklaard zonder ongeldige correctierij', (t) => {
+  for (const reason of ['waiting_for_samples', 'forecast_stale', 'disabled', 'configuration_incomplete']) {
+    const f = fixture(t, { automatic: reason === 'waiting_for_samples' ? { sample_tolerance_seconds: 60 } : reason === 'disabled' ? { enabled: false } : {} });
+    f.trio([800, 820, 840], { skew: serials.map(() => -134000) });
+    if (reason === 'forecast_stale') f.settings.weather.stale_after_hours = 0.01;
+    const learner = createPvCorrectionLearner({ ...f, panelErrors: reason === 'configuration_incomplete' ? ['paneelverdeling ontbreekt'] : [], clock: () => f.now });
+    assert.equal(learner.learn().status, reason); assert.equal(f.pattern().length, 0);
+    const display = {}; renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
+    assert.ok(display.textContent.length > 15); assert.doesNotMatch(display.textContent, /undefined|NaN/);
+    if (reason === 'waiting_for_samples') {
+      assert.match(display.title, /12 metingen buiten de ingestelde tijdsmarge/);
+      assert.equal(f.repository.diagnosticState('growatt', 'pv_correction').diagnostics.rejected_timing, 12);
+    }
+    if (reason === 'forecast_stale') assert.match(display.textContent, /weersvoorspelling te oud/);
+    if (reason === 'disabled') assert.match(display.textContent, /uitgeschakeld/);
+  }
+});
+
+test('een mislukte correctie wordt bewaard en een nieuwe paneelconfiguratie neemt geen wachtreden van een ander model over', (t) => {
+  const f = fixture(t); f.trio();
+  const repository = { ...f.repository, savePvCorrection() { throw new Error('Testfout tijdens opslaan'); } };
+  const learner = createPvCorrectionLearner({ ...f, repository, panelErrors: [], clock: () => f.now });
+  assert.equal(learner.learn().status, 'error'); assert.equal(f.pattern().length, 0);
+  const display = {}; renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
+  assert.match(display.textContent, /fout bij berekenen/); assert.match(display.title, /Testfout tijdens opslaan/);
+  const changed = { ...f.panels, groups: f.panels.groups.map((group) => ({ ...group, wp_per_panel: 450 })) };
+  assert.equal(createPvForecastModel(f.repository, f.settings, changed, f.now).status().last_attempt, null);
 });

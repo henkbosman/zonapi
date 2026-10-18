@@ -14,6 +14,8 @@ export function createPvForecastModel(repository, settings, panels, now) {
   const byQuarter = new Map(pattern.map((row) => [row.quarter_minute, row]));
   const latest = [...pattern].sort((a, b) => b.measured_ms - a.measured_ms || b.updated_ms - a.updated_ms)[0] ?? null;
   const active = config.enabled && latest !== null;
+  const savedAttempt = repository.diagnosticState?.('growatt', 'pv_correction');
+  const lastAttempt = savedAttempt?.model_key === modelKey && Date.parse(savedAttempt.attempted_at) <= now ? savedAttempt : null;
   const past = new Map();
   for (const row of repository.pv(now - 27 * 3600000, now)) {
     if (!past.has(row.group_id)) past.set(row.group_id, []);
@@ -54,7 +56,7 @@ export function createPvForecastModel(repository, settings, panels, now) {
     return { enabled: config.enabled, mode: config.mode, status: !config.enabled ? 'disabled' : active ? 'active' : 'learning', model_key: modelKey,
       min_forecast_w: config.min_forecast_w, max_factor: config.max_factor, max_skew_seconds: config.max_skew_seconds,
       sample_tolerance_seconds: config.sample_tolerance_seconds, outlier_relative: config.outlier_relative, outlier_min_w: config.outlier_min_w,
-      learned_quarters: pattern.length,
+      learned_quarters: pattern.length, last_attempt: lastAttempt,
       latest: latest ? { time: quarterLabel(latest.quarter_minute), factor: latest.factor, correction_percent: Math.round((latest.factor - 1) * 1000) / 10,
         measured_at: new Date(latest.measured_ms).toISOString(), updated_at: new Date(latest.updated_ms).toISOString(), predicted_w: latest.predicted_w, measured_w: latest.measured_w, sampling: sampling(latest) } : null,
       quarters: Array.from({ length: 96 }, (_, index) => {

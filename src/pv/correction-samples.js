@@ -4,12 +4,14 @@ export const CORRECTION_QUARTER_MS = 900000;
 /** Verbindt echte meetklokken met nabije vijfminutenmomenten; input: bronrijen, verwachte serienummers, grenzen en peiltijd; output: volledige totalen en gedeeltelijke momentgroepen, zonder hergebruik van een meting. */
 export function fiveMinuteSamples(rows, serials, config, now) {
   const allowed = new Set(serials), buckets = new Map(), complete = new Map();
+  const rejectedTiming = new Set();
+  let rejectedSkew = 0;
   for (const row of rows) {
     if (!allowed.has(row.serial) || !Number.isFinite(row.power_w) || row.power_w < 0 || !Number.isFinite(row.measured_ms) || row.measured_ms > now) continue;
     if (Number.isFinite(row.received_ms) && row.received_ms > now) continue;
     const slot = Math.round(row.measured_ms / FIVE_MINUTES_MS) * FIVE_MINUTES_MS;
     const distance = Math.abs(row.measured_ms - slot);
-    if (distance > config.sample_tolerance_seconds * 1000) continue;
+    if (distance > config.sample_tolerance_seconds * 1000) { rejectedTiming.add(`${row.serial}:${row.measured_ms}`); continue; }
     if (!buckets.has(slot)) buckets.set(slot, new Map());
     const bucket = buckets.get(slot), previous = bucket.get(row.serial);
     if (!previous || distance < previous.distance || (distance === previous.distance && (row.received_ms ?? 0) >= (previous.row.received_ms ?? 0))) bucket.set(row.serial, { row, distance });
@@ -17,11 +19,12 @@ export function fiveMinuteSamples(rows, serials, config, now) {
   for (const [time, bucket] of buckets) {
     if (bucket.size !== serials.length) continue;
     const values = serials.map((serial) => bucket.get(serial).row), times = values.map((row) => row.measured_ms);
-    if (Math.max(...times) - Math.min(...times) > config.max_skew_seconds * 1000) continue;
+    if (Math.max(...times) - Math.min(...times) > config.max_skew_seconds * 1000) { rejectedSkew++; continue; }
     complete.set(time, { time, values, power_w: values.reduce((sum, row) => sum + row.power_w, 0),
       measured_from: Math.min(...times), measured_to: Math.max(...times) });
   }
-  return { buckets, complete };
+  return { buckets, complete, diagnostics: { rejected_timing: rejectedTiming.size, rejected_skew: rejectedSkew,
+    available_moments: buckets.size, complete_moments: complete.size } };
 }
 
 /** Herkent hoogstens één duidelijke uitschieter naast twee overeenkomende totalen; input: drie tijdsgeordende metingen en grenzen; output: gebruikte en genegeerde indices. Een brede trend zonder overeenkomend paar blijft intact. */

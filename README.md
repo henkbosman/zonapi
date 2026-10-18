@@ -249,9 +249,13 @@ Dezelfde factor geldt voor de daggrafiek, de drie-uurs-API, de opgeslagen PV-voo
 
 ### Automatisch corrigeren met Growatt
 
-Iedere kwartiercorrectie gebruikt drie volledige Growatt-totalen: **vijf minuten vóór, rond en vijf minuten na de Open-Meteo-bronklok**. Voor 09:15 zijn dat 09:10, 09:15 en 09:20. De echte meettijd uit Growatt bepaalt de koppeling, niet de tijd waarop de API is opgevraagd. De metingen worden per verwacht serienummer aan het dichtstbijzijnde vijfminutenmoment gekoppeld, standaard binnen 90 seconden. Per omvormer en moment telt alleen de dichtstbijzijnde meting mee; bij gelijke afstand krijgt de nieuwste ontvangen versie voorrang. Eén echte meettijd kan niet twee momenten vullen. Een ontbrekende of onvolledige installatie wordt niet aangevuld met oude waarden.
+Iedere kwartiercorrectie gebruikt drie volledige Growatt-totalen: **vijf minuten vóór, rond en vijf minuten na de Open-Meteo-bronklok**. Voor 09:15 zijn dat 09:10, 09:15 en 09:20. De echte meettijd uit Growatt bepaalt de koppeling, niet de tijd waarop de API is opgevraagd. De metingen worden per verwacht serienummer aan het dichtstbijzijnde vijfminutenmoment gekoppeld, standaard binnen 150 seconden. Dat is maximaal een halve stap, zodat een eigen vijfminutenklok van de omvormer geen gat veroorzaakt. Precies halverwege wordt het volgende moment gekozen. Per omvormer en moment telt alleen de dichtstbijzijnde meting mee; bij gelijke afstand krijgt de nieuwste ontvangen versie voorrang. Eén echte meettijd kan niet twee momenten vullen. Een ontbrekende of onvolledige installatie wordt niet aangevuld met oude waarden.
+
+**Herstel ontbrekende correcties:** de eerdere standaard van 90 seconden wees bijvoorbeeld een echte meting om 09:12:46 af, omdat die 134 seconden van 09:15 ligt. Hierdoor kon `pv_correction_pattern` leeg blijven terwijl er wel meetrondes binnenkwamen. De oude standaardwaarde `sample_tolerance_seconds: 90` wordt bij het lezen automatisch als 150 behandeld; je bestaande instellingenbestand hoeft niet te worden aangepast. Andere expliciete grenzen binnen 0–150 blijven gelden. De echte Growatt-tijden en de blauwe grafiekpunten worden hierbij niet gewijzigd.
 
 De correctie wacht tot alle drie momenten beschikbaar zijn. De correctie van 09:15 kan dus pas na ontvangst van de meting van 09:20 worden berekend. Loopt Growatt vijf minuten achter, dan is dat bijvoorbeeld bij de opvraag om 09:25. Na een nieuwe installatie of een meetgat kan langer moeten worden gewacht. De bestaande geldige factor blijft beschikbaar totdat een nieuw compleet venster kan worden geleerd. Bij lokale ShineLink-metingen wordt hetzelfde beleid na meetopslag gebruikt.
+
+Bij starten en na een geslaagde weeropvraag probeert ZonAPI ook direct een correctie uit de recent opgeslagen metingen te leren. Zo hoeft een beschikbaar venster na een herstart of aanvulling van ontbrekende weerdata niet op een volgende Growatt-ronde te wachten. Er worden hiervoor geen extra bronverzoeken gedaan. Dezelfde controle op volledige, recente meetgegevens en bruikbare weerdata blijft gelden.
 
 ZonAPI zoekt het meest overeenkomende paar binnen de drie totalen. De uitschietergrens is `max(outlier_min_w, outlier_relative × gemiddelde_van_dat_paar)`. Standaard moet de derde meting dus **meer dan 35% én meer dan 200 W** van dat paar afwijken. Bovendien mag het verschil tussen de twee overige waarden niet groter zijn dan de helft van die grens. Alleen dan wordt de derde voor de correctie genegeerd. Zonder voldoende overeenkomend paar blijven alle drie meetpunten behouden; een brede stijgende of dalende trend wordt niet automatisch tot één uitschieter teruggebracht. Dit is een beslisregel op basis van drie momentopnames. Ruwe meetgegevens en blauwe grafiekpunten blijven altijd bewaard.
 
@@ -274,7 +278,7 @@ De velden hieronder zijn optioneel; laat je bestaande `calibration_factor` staan
     "min_forecast_w": 100,
     "max_factor": 3,
     "max_skew_seconds": 300,
-    "sample_tolerance_seconds": 90,
+    "sample_tolerance_seconds": 150,
     "outlier_relative": 0.35,
     "outlier_min_w": 200
   }
@@ -287,11 +291,13 @@ De nieuwe filterinstellingen zijn optioneel en werken ook als ze ontbreken in je
 
 | Instelling | Standaard | Betekenis |
 | --- | --- | --- |
-| `sample_tolerance_seconds` | `90` | Maximale afstand van een echte meetklok tot het vijfminutenmoment; 0–149 seconden. |
+| `sample_tolerance_seconds` | `150` | Maximale afstand van een echte meetklok tot het vijfminutenmoment; 0–150 seconden. De oude standaard `90` wordt automatisch opgewaardeerd naar `150`. |
 | `outlier_relative` | `0.35` | Relatieve afwijkingsgrens ten opzichte van het overeenkomende paar; groter dan 0, maximaal 2. |
 | `outlier_min_w` | `200` | Minimale absolute afwijking in het totale installatievermogen; 0–20000 W. |
 
 Op het dashboard staan de laatste correctie, het aantal geleerde kwartieren en het aantal gebruikte metingen, bijvoorbeeld **2/3 metingen · 1 uitschieter genegeerd**. De tooltip noemt de drie tijdstippen en vermogens. `GET /api/v1/pv/corrections` toont alle 96 kwartieren, de laatste factor, basis-/meetvermogen en meet-/bijwerktijd. Bij `latest.sampling` en elk geleerd kwartier staan `target_time`, `samples`, `used_samples`, `ignored_times`, de filtergrenzen en de gebruikte bronperiode. De echte metingen per omvormer blijven in die onderbouwing staan. `measured_at` vermeldt de laatste meetgroep waaruit het venster is samengesteld; `sampling.target_time` is het Open-Meteo-kwartier. De voorspellingendpoints tonen per tijdvak `base_power_w`, `power_w`, `automatic_correction_factor` en `correction_source`. De Growatt-webstatus vermeldt de laatste uitkomst in `forecast_correction`; bij `waiting_for_samples` bevat die `required_times`, `missing_times` en `received_samples`.
+
+Zolang nog geen correctie bestaat, blijft de dashboardlegenda zichtbaar met de reden, bijvoorbeeld **Correctie: wachten op meetpunten (2/3)**, **wachten op omvormers (3/4)** of **weersvoorspelling ontbreekt**. De tooltip vermeldt de aantallen per vijfminutenmoment en eventuele afwijzing door de ingestelde tijdsmarge of onderlinge klokverschillen. De laatste poging staat los van het logboek in `diagnostic_state` bij `source='growatt'`, `name='pv_correction'` en is beschikbaar als `last_attempt` in de correctie-API. Deze status is geen geleerde correctierij; alleen een geldig venster schrijft naar `pv_correction_pattern`. Logging uitzetten of logs wissen verwijdert de status en het leerpatroon niet.
 
 ### Database-indeling
 

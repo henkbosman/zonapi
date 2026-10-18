@@ -43,6 +43,7 @@ const staticFiles = new Map([
   ['/dashboard.js', ['dashboard.js', 'text/javascript; charset=utf-8']],
   ['/dashboard-production-chart.js', ['dashboard-production-chart.js', 'text/javascript; charset=utf-8']],
   ['/dashboard-production-days.js', ['dashboard-production-days.js', 'text/javascript; charset=utf-8']],
+  ['/pv-correction-status.js', ['pv-correction-status.js', 'text/javascript; charset=utf-8']],
   ['/production-chart-series.js', ['production-chart-series.js', 'text/javascript; charset=utf-8']],
   ['/growatt.css', ['growatt.css', 'text/css; charset=utf-8']],
   ['/growatt.js', ['growatt.js', 'text/javascript; charset=utf-8']],
