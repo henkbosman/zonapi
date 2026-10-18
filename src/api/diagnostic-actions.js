@@ -1,6 +1,6 @@
 /** Verwerkt logbeheer voor de drie bronnen; input: methode, URL en repository; output: JSON-resultaat of null voor een andere route. */
 export function diagnosticAction(method, url, repository) {
-  const match = /^\/api\/v1\/(growatt|weather|homewizard)\/(logging|diagnostics)$/.exec(url.pathname);
+  const match = /^\/intern\/api\/v1\/(growatt|weather|homewizard)\/(logging|diagnostics)$/.exec(url.pathname);
   if (!match) return null;
   const [, source, action] = match;
   if (action === 'logging' && method === 'GET') return repository.loggingStatus(source);

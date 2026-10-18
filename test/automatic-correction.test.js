@@ -221,24 +221,24 @@ test('API, daggrafiek, cache en startadvies gebruiken dezelfde onafhankelijke bl
   const server = startHttpServer({ ...f, panelErrors: [], weather: { status: () => ({ sunrise: '2026-10-18T06:00:00Z', sunset: '2026-10-18T17:00:00Z' }) }, homewizard: { status: () => ({}) } });
   await once(server, 'listening'); t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`, get = async (path) => (await fetch(base + path)).json();
-  const beforeAdvice = await get('/api/v1/appliances/wasmachine/advice'), beforeDaily = await get('/api/v1/appliances/daily');
+  const beforeAdvice = await get('/intern/api/v1/appliances/wasmachine/advice'), beforeDaily = await get('/intern/api/v1/appliances/daily');
   f.learn(800);
-  const forecast = await get('/api/v1/forecast?hours=72');
+  const forecast = await get('/intern/api/v1/forecast?hours=72');
   for (const row of forecast.slots) {
     const corrected = clockQuarter(Date.parse(row.end)) === clockQuarter(target);
     assert.equal(row.base_power_w, 4000); assert.equal(row.power_w, corrected ? 800 : 4000);
     assert.equal(row.automatic_correction_factor, corrected ? 0.2 : 1);
   }
-  const day = await get('/api/v1/forecast/day'), own = day.slots.filter((row) => Date.parse(row.end) === target);
+  const day = await get('/intern/api/v1/forecast/day'), own = day.slots.filter((row) => Date.parse(row.end) === target);
   assert.equal(own.length, 1); assert.equal(own[0].power_w, 800); assert.equal(own[0].automatic_correction_factor, 0.2);
   assert.ok(day.slots.filter((row) => Date.parse(row.end) !== target).every((row) => row.power_w === 4000));
-  assert.deepEqual(await get('/api/v1/appliances/wasmachine/advice'), beforeAdvice);
-  assert.deepEqual((await get('/api/v1/appliances/daily')).days[0], beforeDaily.days[0]);
-  const corrections = await get('/api/v1/pv/corrections');
+  assert.deepEqual(await get('/intern/api/v1/appliances/wasmachine/advice'), beforeAdvice);
+  assert.deepEqual((await get('/intern/api/v1/appliances/daily')).days[0], beforeDaily.days[0]);
+  const corrections = await get('/intern/api/v1/pv/corrections');
   assert.equal(corrections.scope, 'independent_quarters'); assert.equal(corrections.future_day_policy, 'same_clock_quarter');
   assert.equal(corrections.latest.start, new Date(target - quarter).toISOString());
   assert.equal(corrections.latest.end, new Date(target).toISOString()); assert.equal(corrections.learned_blocks_today, 1);
-  assert.equal((await get('/api/v1/database/rows?table=pv_block_corrections')).total_rows, 1);
+  assert.equal((await get('/intern/api/v1/database/rows?table=pv_block_corrections')).total_rows, 1);
 });
 
 test('een klokkwartier blijft beschikbaar uit oudere meetdagen, zonder een onbekend buurkwartier te vullen', (t) => {
@@ -317,9 +317,9 @@ test('daggrafieken en dagelijks startadvies gebruiken dezelfde factoren inclusie
     const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`);
     assert.equal(response.status, 200); return response.json();
   };
-  const before = await get('/api/v1/appliances/daily');
+  const before = await get('/intern/api/v1/appliances/daily');
   f.learn(400);
-  const after = await get('/api/v1/appliances/daily'), graphs = await get('/api/v1/forecast/days');
+  const after = await get('/intern/api/v1/appliances/daily'), graphs = await get('/intern/api/v1/forecast/days');
   assert.deepEqual(after.days[0], before.days[0]);
   for (const index of [1, 2]) {
     const end = target + index * 86400000, find = (response, id) => response.days[index].appliances.find((item) => item.id === id);

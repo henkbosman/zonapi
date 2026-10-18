@@ -87,7 +87,7 @@ async function refresh() {
   const id = ++refreshId;
   const query = new URLSearchParams({ limit: '50', offset: String(offset), status: element('#status-filter').value, device: element('#device-filter').value });
   try {
-    const data = await request(`/api/v1/homewizard?${query}`);
+    const data = await request(`/intern/api/v1/homewizard?${query}`);
     if (id !== refreshId) return;
     current = data; renderStatus(data); renderCalls(data);
     element('#connection').textContent = `Bijgewerkt ${time(data.server_time)}`;
@@ -97,7 +97,7 @@ async function refresh() {
 /** Leest op verzoek de ingestelde lokale meters; input: geen; output: Promise<void>. */
 async function pollNow() {
   const button = element('#poll-now'); button.disabled = true;
-  try { await request('/api/v1/homewizard/poll', { method: 'POST' }); await refresh(); }
+  try { await request('/intern/api/v1/homewizard/poll', { method: 'POST' }); await refresh(); }
   catch (error) { element('#connection').textContent = `Fout: ${error.message}`; }
   finally { button.disabled = false; }
 }

@@ -286,12 +286,12 @@ test('vijfminutenopvragen met vertraagde Growatt-antwoorden sturen de driepuntsc
   await once(server, 'listening');
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const status = await (await fetch(`${base}/api/v1/pv/corrections`)).json();
+  const status = await (await fetch(`${base}/intern/api/v1/pv/corrections`)).json();
   assert.equal(status.latest.time, '09:15');
   assert.equal(status.latest.factor, 0.81);
   assert.equal(status.latest.sampling.used_samples, 2);
   assert.deepEqual(status.latest.sampling.ignored_times, [iso(target)]);
-  const forecast = await (await fetch(`${base}/api/v1/forecast?hours=3`)).json();
+  const forecast = await (await fetch(`${base}/intern/api/v1/forecast?hours=3`)).json();
   assert.ok(forecast.slots.every((slot) => slot.power_w === 1000 && slot.automatic_correction_factor === 1));
   const previous = globalThis.document, nodes = new Map();
   globalThis.document = { createElement: () => ({ textContent: '' }), getElementById(id) {
@@ -320,10 +320,10 @@ test('herstart leert direct uit opgeslagen afwijkende meetklokken en bewaart cor
   const server = startHttpServer({ ...f, panelErrors: [], weather: { status: () => ({}) }, homewizard: { status: () => ({}) } });
   await once(server, 'listening'); t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const corrections = await (await fetch(`${base}/api/v1/pv/corrections`)).json();
+  const corrections = await (await fetch(`${base}/intern/api/v1/pv/corrections`)).json();
   assert.equal(corrections.status, 'active'); assert.equal(corrections.last_attempt.status, 'updated');
   assert.equal(corrections.sample_tolerance_seconds, 150);
-  const table = await (await fetch(`${base}/api/v1/database/rows?table=pv_block_corrections`)).json();
+  const table = await (await fetch(`${base}/intern/api/v1/database/rows?table=pv_block_corrections`)).json();
   assert.equal(table.total_rows, 1); assert.equal(table.rows[0][table.columns.findIndex((column) => column.name === 'factor')], 0.81);
   const display = {};
   renderPvCorrection(display, corrections); assert.match(display.textContent, /Correctie -19%/); assert.match(display.textContent, /2\/3 metingen/);

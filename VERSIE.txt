@@ -1,21 +1,29 @@
 ZonAPI
-Versie: 2026-10-18-Dagcorrecties1
+Versie: 2026-10-18-InternExtern1
 
-Herstelt de correcties in Morgen/Overmorgen en het startadvies per dag.
-Ieder klokkwartier gebruikt op toekomstige dagen de eigen laatst gemeten
-factor, toegepast op de actuele weerverwachting van die voorspelde dag.
-Voorbeeld: 14:00–14:15 met factor 0.8 corrigeert alleen dat klokkwartier.
-De buurkwartieren gebruiken hun eigen factor of de basisvoorspelling.
+Scheidt het openbare dashboard van de volledige interne toepassing.
+Openbaar: /dashboard, benodigde bestanden en GET /api/v1/dashboard.
+Intern: /intern/growatt, /intern/weather, /intern/homewizard,
+/intern/database en alle volledige API-routes onder /intern/api/v1/.
+De oude adressen blijven niet als alias of redirect beschikbaar.
 
-- Dagvoorspellingen, startadviezen en PV-cache gebruiken hetzelfde model.
-- Zowel het volledig gedekte startmoment als Meeste zon rekent met correcties.
-- Basislast, reserve en actieve apparaten blijven onderdeel van het advies.
-- De koppeling volgt Nederlandse kloktijden, ook bij zomer-/wintertijd.
-- Historische blokken en oorspronkelijke metingen blijven bewaard.
-- Bestaande instellingen en databaseschema 6 blijven bruikbaar.
+- Openbare snapshot met uitsluitend de benodigde dashboardvelden.
+- Geen IP-adressen, serienummers, ruwe antwoorden of databasepaden daarin.
+- Dashboard zonder beheermenu; interne pagina's hebben hun eigen routes.
+- Ophalen, logging wijzigen en wissen werken alleen via interne routes.
+- Caddyfile voor zon.ferion.nl met achterliggende dienst 127.0.0.1:3002.
+- Caddy weigert /intern, overige routes en alle schrijfmethoden op dit domein.
+- Intern beheer via de directe dienst op de server of via een SSH-tunnel.
+- Databaseschema 6 en bestaande meetgegevens blijven bruikbaar.
 
-Deze versie bevat ook Blokcorrecties1, Correctie-Fix1, de Database-pagina,
-de lichte basisvoorspelling en de losse HomeWizard-apparaten.
+Deze versie bevat ook Dagcorrecties1, Blokcorrecties1, Correctie-Fix1,
+de Database-pagina, de lichte basisvoorspelling en HomeWizard-apparaten.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
-Bewaar je eigen config/ en data/.
+Behoud je eigen config/ en data/ en de bestaande HTTP-poort 3002.
+Vervang het siteblok voor zon.ferion.nl door de meegeleverde Caddyfile,
+valideer de configuratie en herlaad Caddy. Behoud andere siteblokken.
+Pas bestaande ESP32's en scripts aan naar /intern/api/v1/.
+
+216 tests slagen, inclusief echte HTTP-routes, gegevensafscherming,
+openbare schrijfverboden en het tekenen/verversen van het dashboard.

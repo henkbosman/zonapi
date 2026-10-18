@@ -79,20 +79,20 @@ test('Database-pagina en assets zijn bereikbaar; database-API laat alle paginaâ€
     weather: { status: () => ({}) }, homewizard: { status: () => ({}) } });
   await once(server, 'listening'); t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`;
-  for (const path of ['/database', '/database.js', '/database.css']) {
+  for (const path of ['/intern/database', '/intern/database.js', '/intern/database.css']) {
     const response = await fetch(base + path); assert.equal(response.status, 200);
     assert.match(response.headers.get('content-security-policy'), /script-src 'self'/);
   }
-  for (const path of ['/dashboard', '/growatt', '/weather', '/homewizard']) assert.match(await (await fetch(base + path)).text(), /href="\/database">Database/);
-  const html = await (await fetch(`${base}/database`)).text();
+  for (const path of ['/intern/growatt', '/intern/weather', '/intern/homewizard']) assert.match(await (await fetch(base + path)).text(), /href="\/intern\/database">Database/);
+  const html = await (await fetch(`${base}/intern/database`)).text();
   assert.match(html, /<dialog/); assert.match(html, /Records per pagina/);
   assert.doesNotMatch(await (await fetch(`${base}/dashboard`)).text(), /id="health"/);
-  const growatt = await (await fetch(`${base}/growatt`)).text();
+  const growatt = await (await fetch(`${base}/intern/growatt`)).text();
   assert.doesNotMatch(growatt, /De ronde start om de vijf minuten|cloud-measurement-times/);
-  assert.equal((await (await fetch(`${base}/api/v1/database/tables`)).json()).tables.some((table) => table.name === 'browser_test'), true);
-  const page = await (await fetch(`${base}/api/v1/database/rows?table=browser_test&page_size=100&page=2`)).json();
+  assert.equal((await (await fetch(`${base}/intern/api/v1/database/tables`)).json()).tables.some((table) => table.name === 'browser_test'), true);
+  const page = await (await fetch(`${base}/intern/api/v1/database/rows?table=browser_test&page_size=100&page=2`)).json();
   assert.equal(page.rows.length, 24); assert.equal(page.rows.at(-1)[0], 124);
-  assert.equal((await fetch(`${base}/api/v1/database/rows?table=missing`)).status, 400);
-  for (const method of ['POST', 'PUT', 'DELETE']) assert.equal((await fetch(`${base}/api/v1/database/rows?table=browser_test`, { method })).status, 405);
+  assert.equal((await fetch(`${base}/intern/api/v1/database/rows?table=missing`)).status, 400);
+  for (const method of ['POST', 'PUT', 'DELETE']) assert.equal((await fetch(`${base}/intern/api/v1/database/rows?table=browser_test`, { method })).status, 405);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM browser_test').get().count, 124);
 });

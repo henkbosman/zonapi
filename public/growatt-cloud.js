@@ -43,7 +43,7 @@ export function setupGrowattCloud(refresh) {
     busy = true;
     button.disabled = true;
     try {
-      const response = await fetch('/api/v1/growatt/cloud/poll', { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(120000) });
+      const response = await fetch('/intern/api/v1/growatt/cloud/poll', { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(120000) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? `HTTP ${response.status}`);
       await refresh();
@@ -59,7 +59,7 @@ export function setupGrowattCloud(refresh) {
 /** Toont één geschoond Growatt-webantwoord in het bestaande detailpaneel; input: verzoek-id; output: Promise<void> met JSON, HTTP-metadata of zichtbare fout. */
 export async function showGrowattCloudCall(id) {
   try {
-    const response = await fetch(`/api/v1/growatt/cloud/calls/${id}`, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+    const response = await fetch(`/intern/api/v1/growatt/cloud/calls/${id}`, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
     const row = await response.json();
     if (!response.ok) throw new Error(row.error ?? `HTTP ${response.status}`);
     document.getElementById('detail-title').textContent = `Webverzoek #${row.id}`;

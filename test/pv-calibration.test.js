@@ -70,14 +70,14 @@ test('daggrafiek en drie-uurs-API gebruiken dezelfde factor terwijl instraling e
   await once(server, 'listening');
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
-    for (const path of ['/api/v1/forecast?hours=3', '/api/v1/forecast/day']) {
+    for (const path of ['/intern/api/v1/forecast?hours=3', '/intern/api/v1/forecast/day']) {
       const response = await (await fetch(base + path)).json();
       assert.equal(response.status, 'ok');
       assert.equal(response.calibration_factor, 1.78);
       assert.ok(response.slots.length > 0);
       assert.ok(response.slots.every((slot) => slot.power_w === 370.2 && slot.ghi_w_m2 === 130));
     }
-    const irradiation = await (await fetch(`${base}/api/v1/irradiance?hours=3`)).json();
+    const irradiation = await (await fetch(`${base}/intern/api/v1/irradiance?hours=3`)).json();
     assert.ok(irradiation.slots.every((slot) => slot.ghi_w_m2 === 130 && slot.groups[0].gti_w_m2 === 130));
     assert.equal(repository.currentInverters()[0].power_w, 370);
     assert.equal(repository.lastCall(), null);

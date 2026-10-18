@@ -127,7 +127,7 @@ function fillMeta(container, values) {
 /** Leest en toont een geselecteerd pakket inclusief ruwe bytes; input: pakket-id; output: Promise<void>. */
 async function showFrame(id) {
   try {
-    const frame = await request(`/api/v1/growatt/frames/${id}`);
+    const frame = await request(`/intern/api/v1/growatt/frames/${id}`);
     element('#detail-title').textContent = `Pakket #${frame.id}`;
     fillMeta(element('#detail-meta'), [time(frame.received_at), frame.peer, `v${frame.protocol}`, frame.record_type, frame.label, frame.status, `${frame.size_bytes} bytes`]);
     fillMeta(element('#detail-announcement'), frame.announcement ? [`Adres ${frame.announcement.address}`, `Omvormer ${frame.announcement.inverter_serial}`, `Logger ${frame.announcement.datalogger_serial}`] : []);
@@ -176,9 +176,9 @@ async function refresh() {
   if (element('#type-filter').value) query.set('type', element('#type-filter').value);
   if (element('#address-filter').value) query.set('address', element('#address-filter').value);
   const results = await Promise.allSettled([
-    refreshSection('/api/v1/production/current', renderGrowattProduction, current),
-    refreshSection('/api/v1/growatt?limit=1', renderOverview, current),
-    refreshSection(`/api/v1/growatt/timeline?${query}`, renderTimeline, current)
+    refreshSection('/intern/api/v1/production/current', renderGrowattProduction, current),
+    refreshSection('/intern/api/v1/growatt?limit=1', renderOverview, current),
+    refreshSection(`/intern/api/v1/growatt/timeline?${query}`, renderTimeline, current)
   ]);
   if (current !== refreshNumber) return;
   const labels = ['Metingen', 'Bronstatus', 'Berichten'];

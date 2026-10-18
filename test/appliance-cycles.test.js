@@ -230,7 +230,7 @@ test('cyclus-API gebruikt echte socketpolls, blijft lokaal en serveert grafiekmo
   const url = `http://127.0.0.1:${server.address().port}`;
   try {
     for (let second = 0; second <= 40; second += 10) { at = base + second * 1000; power += 100; await poller.poll(); }
-    const response = await fetch(`${url}/api/v1/appliances/cycles`), body = await response.json();
+    const response = await fetch(`${url}/intern/api/v1/appliances/cycles`), body = await response.json();
     assert.equal(response.status, 200);
     assert.equal(body.appliances[0].current.points.length, 5);
     assert.equal(body.appliances[0].previous, null);

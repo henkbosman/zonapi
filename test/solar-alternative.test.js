@@ -186,8 +186,8 @@ test('API en dashboard gebruiken dezelfde beste gedeeltelijke cyclus uit de cach
   await once(server, 'listening');
   t.after(async () => { await new Promise((resolve) => server.close(resolve)); db.close(); rmSync(folder, { recursive: true, force: true }); });
   const base = `http://127.0.0.1:${server.address().port}`;
-  const daily = await (await fetch(`${base}/api/v1/appliances/daily`)).json();
-  const single = await (await fetch(`${base}/api/v1/appliances/wasmachine/advice`)).json();
+  const daily = await (await fetch(`${base}/intern/api/v1/appliances/daily`)).json();
+  const single = await (await fetch(`${base}/intern/api/v1/appliances/wasmachine/advice`)).json();
   const first = daily.days[0].appliances[0];
   assert.equal(first.status, 'ok');
   assert.equal(first.earliest_start, null);

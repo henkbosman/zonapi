@@ -82,8 +82,8 @@ test('dashboard-logschakelaars schrijven debug.json en behouden hun instelling m
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
     for (const source of ['growatt', 'weather', 'homewizard']) {
-      assert.equal((await (await fetch(`${base}/api/v1/${source}/logging`)).json()).enabled, false);
-      assert.equal((await (await fetch(`${base}/api/v1/${source}/logging?enabled=true`, { method: 'PUT' })).json()).enabled, true);
+      assert.equal((await (await fetch(`${base}/intern/api/v1/${source}/logging`)).json()).enabled, false);
+      assert.equal((await (await fetch(`${base}/intern/api/v1/${source}/logging?enabled=true`, { method: 'PUT' })).json()).enabled, true);
       assert.equal(JSON.parse(readFileSync(path, 'utf8')).logging[source], true);
     }
     const replacement = openDatabase(':memory:');

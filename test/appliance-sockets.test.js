@@ -247,17 +247,17 @@ test('het dashboardendpoint levert echte socketactiviteit naast onafhankelijke n
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
-    const appliances = await (await fetch(`${base}/api/v1/appliances`)).json();
+    const appliances = await (await fetch(`${base}/intern/api/v1/appliances`)).json();
     assert.equal(appliances.profiles.length, 1);
     assert.equal(appliances.profiles[0].activity.state, 'running');
     assert.equal(appliances.profiles[0].activity.power_w, 1400);
-    const status = await (await fetch(`${base}/api/v1/status`)).json();
+    const status = await (await fetch(`${base}/intern/api/v1/status`)).json();
     assert.equal(status.baseload.power_w, 400);
     assert.equal(status.homewizard.net_power_w, -10);
     assert.equal(status.homewizard.meters.length, 1);
-    const daily = await (await fetch(`${base}/api/v1/appliances/daily`)).json();
+    const daily = await (await fetch(`${base}/intern/api/v1/appliances/daily`)).json();
     assert.ok(daily.days.every((day) => day.appliances.length === 1));
-    assert.equal((await fetch(`${base}/api/v1/appliances/wasmachine/advice`)).status, 200);
+    assert.equal((await fetch(`${base}/intern/api/v1/appliances/wasmachine/advice`)).status, 200);
   } finally { await new Promise((resolve) => server.close(resolve)); f.close(); }
 });
 
@@ -275,21 +275,21 @@ test('HomeWizard-overzicht bevat ingestelde apparaten met actuele socketstatus e
   await once(server, 'listening'); const base = `http://127.0.0.1:${server.address().port}`;
   try {
     await sockets.poll();
-    const data = await (await fetch(`${base}/api/v1/homewizard`)).json();
+    const data = await (await fetch(`${base}/intern/api/v1/homewizard`)).json();
     assert.equal(data.devices.length, 4); assert.equal(data.net_power_w, null);
     const washer = data.devices.find((device) => device.device === 'socket:wasmachine');
     assert.equal(washer.name, 'Wasmachine boven'); assert.equal(washer.host, 'wasmachine.local');
     assert.equal(washer.activity.state, 'running'); assert.equal(washer.measurement.net_power_w, 1600);
     assert.equal(washer.measurement.import_kwh, 42); assert.equal(washer.measurement.fresh, true);
     assert.equal(data.devices.find((device) => device.device === 'socket:droger').error, 'Socket niet bereikbaar');
-    const calls = await (await fetch(`${base}/api/v1/homewizard?device=socket:wasmachine`)).json();
+    const calls = await (await fetch(`${base}/intern/api/v1/homewizard?device=socket:wasmachine`)).json();
     assert.equal(calls.calls.rows.length, 1); assert.equal(calls.calls.rows[0].device, washer.device);
     f.repository.clearHomeWizardDiagnostics();
-    assert.equal((await (await fetch(`${base}/api/v1/homewizard`)).json()).devices.find((device) => device.device === washer.device).activity.running, true);
+    assert.equal((await (await fetch(`${base}/intern/api/v1/homewizard`)).json()).devices.find((device) => device.device === washer.device).activity.running, true);
     f.write({ ...configured, homewizard: { host: 'nieuw.local' } });
-    const changed = (await (await fetch(`${base}/api/v1/homewizard`)).json()).devices.find((device) => device.device === washer.device);
+    const changed = (await (await fetch(`${base}/intern/api/v1/homewizard`)).json()).devices.find((device) => device.device === washer.device);
     assert.equal(changed.host, 'nieuw.local'); assert.equal(changed.activity.state, 'waiting');
     assert.equal(changed.measurement, null); assert.equal(changed.latest_call, null);
-    assert.equal((await fetch(`${base}/api/v1/homewizard?device=socket:bad%3Bsql`)).status, 400);
+    assert.equal((await fetch(`${base}/intern/api/v1/homewizard?device=socket:bad%3Bsql`)).status, 400);
   } finally { await sockets.stop(); await new Promise((resolve) => server.close(resolve)); f.close(); }
 });

@@ -223,7 +223,7 @@ test('HTTP-endpoints tonen kwartiermodel, gemengde resoluties en behouden één 
   await once(server, 'listening');
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
-    const result = await (await fetch(`${base}/api/v1/forecast/day`)).json();
+    const result = await (await fetch(`${base}/intern/api/v1/forecast/day`)).json();
     assert.equal(result.status, 'ok');
     assert.equal(result.resolution_minutes, 15);
     assert.equal(result.mixed_resolution, true);
@@ -231,10 +231,10 @@ test('HTTP-endpoints tonen kwartiermodel, gemengde resoluties en behouden één 
     assert.equal(result.calibration_factor, 1.78);
     assert.ok(result.slots.some((slot) => slot.model === 'icon_d2' && slot.resolution_minutes === 15 && slot.power_w === 890));
     assert.ok(result.slots.some((slot) => slot.model === 'best_match' && slot.source_resolution_minutes === 60 && slot.power_w === 178));
-    const irradiance = await (await fetch(`${base}/api/v1/irradiance?hours=3`)).json();
+    const irradiance = await (await fetch(`${base}/intern/api/v1/irradiance?hours=3`)).json();
     assert.ok(irradiance.slots.length);
     assert.ok(irradiance.slots.every((slot) => [15, 60].includes(slot.source_resolution_minutes)));
-    const overview = await (await fetch(`${base}/api/v1/weather`)).json();
+    const overview = await (await fetch(`${base}/intern/api/v1/weather`)).json();
     assert.deepEqual(overview.forecast.resolutions_minutes, [15, 60]);
     assert.equal(overview.status.preferred_resolution_minutes, 15);
     assert.equal(new URL(overview.request_url).searchParams.get('models'), 'best_match,icon_d2');

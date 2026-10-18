@@ -80,9 +80,7 @@ function renderStatus(status) {
 /** Haalt huidige gegevens, grafieken en apparaatadviezen op; input: geen; output: Promise<void>. */
 async function refresh() {
   try {
-    const [status, forecasts, profiles, production, daily, cycles] = await Promise.all([
-      json('/api/v1/status'), json('/api/v1/forecast/days'), json('/api/v1/appliances'), json('/api/v1/production/day'), json('/api/v1/appliances/daily'), json('/api/v1/appliances/cycles')
-    ]);
+    const { status, forecasts, profiles, production, daily, cycles } = await json('/api/v1/dashboard');
     const forecast = forecasts.days[0];
     renderStatus(status);
     renderProductionDays(forecasts.days, production, status.baseload?.power_w ?? null);

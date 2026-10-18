@@ -68,8 +68,8 @@ test('Growatt-pagina ververst webomvormers zonder herladen, ook bij een defecte 
     };
     globalThis.setInterval = (callback, milliseconds) => { assert.equal(milliseconds, 15000); interval = callback; return 1; };
     globalThis.fetch = (path, options) => {
-      if (timelineBroken && path.startsWith('/api/v1/growatt/timeline')) return Promise.resolve(Response.json({ error: 'testfout' }, { status: 503 }));
-      if (overviewBroken && path.startsWith('/api/v1/growatt?')) return Promise.resolve(Response.json({ error: 'testfout' }, { status: 500 }));
+      if (timelineBroken && path.startsWith('/intern/api/v1/growatt/timeline')) return Promise.resolve(Response.json({ error: 'testfout' }, { status: 503 }));
+      if (overviewBroken && path.startsWith('/intern/api/v1/growatt?')) return Promise.resolve(Response.json({ error: 'testfout' }, { status: 500 }));
       return before.fetch(new URL(path, base), options);
     };
     await import('../public/growatt.js');

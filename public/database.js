@@ -53,7 +53,7 @@ export function setupDatabasePage({ document: doc = globalThis.document, request
     state.busy = true; updateControls(); element('connection').textContent = 'Records ophalen…';
     element('record-count').textContent = 'Gegevens ophalen…';
     try {
-      const data = await request(`/api/v1/database/rows?${query}`, controller.signal);
+      const data = await request(`/intern/api/v1/database/rows?${query}`, controller.signal);
       if (id !== generation) return;
       state.page = data.page; state.pages = data.total_pages;
       const body = element('database-rows'); body.replaceChildren();
@@ -149,7 +149,7 @@ export function setupDatabasePage({ document: doc = globalThis.document, request
     invalidate(); const id = generation; controller = new AbortController();
     element('connection').textContent = 'Tabellen ophalen…';
     try {
-      const catalog = await request('/api/v1/database/tables', controller.signal);
+      const catalog = await request('/intern/api/v1/database/tables', controller.signal);
       if (id !== generation) return;
       state.tables = catalog.tables;
       const sizes = element('page-size'); sizes.replaceChildren();

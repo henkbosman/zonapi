@@ -86,7 +86,7 @@ async function refresh() {
   const id = ++refreshId;
   try {
     const query = new URLSearchParams({ limit: '50', offset: String(offset), status: element('#status-filter').value });
-    const data = await request(`/api/v1/weather?${query}`);
+    const data = await request(`/intern/api/v1/weather?${query}`);
     if (id !== refreshId) return;
     current = data;
     renderLogging(data.logging);
@@ -101,7 +101,7 @@ async function refresh() {
 async function fetchNow() {
   const button = element('#fetch-now'); button.disabled = true;
   try {
-    const result = await request('/api/v1/weather/refresh', { method: 'POST' });
+    const result = await request('/intern/api/v1/weather/refresh', { method: 'POST' });
     await refresh();
     if (!result.attempted) {
       const reasons = { quota: 'Daglimiet bereikt', paused: 'Weerbron gepauzeerd', busy: 'Verzoek loopt al', interval: 'Nog niet gepland', location: 'Locatie ontbreekt' };

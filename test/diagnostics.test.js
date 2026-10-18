@@ -84,29 +84,29 @@ test('HomeWizard toont lokale informatie en fouten, logbeheer behoudt metingen e
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
-    assert.equal((await fetch(`${base}/homewizard`)).status, 200);
-    assert.equal((await fetch(`${base}/homewizard.js`)).status, 200);
-    assert.equal((await fetch(`${base}/diagnostic-controls.js`)).status, 200);
-    assert.equal((await fetch(`${base}/api/v1/homewizard/poll`, { method: 'POST' })).status, 200);
-    const overview = await (await fetch(`${base}/api/v1/homewizard`)).json();
+    assert.equal((await fetch(`${base}/intern/homewizard`)).status, 200);
+    assert.equal((await fetch(`${base}/intern/homewizard.js`)).status, 200);
+    assert.equal((await fetch(`${base}/intern/diagnostic-controls.js`)).status, 200);
+    assert.equal((await fetch(`${base}/intern/api/v1/homewizard/poll`, { method: 'POST' })).status, 200);
+    const overview = await (await fetch(`${base}/intern/api/v1/homewizard`)).json();
     assert.equal(overview.calls.rows.length, 2);
     assert.equal(overview.devices[0].error, 'HomeWizard time-out');
     assert.equal(overview.devices[1].measurement.net_power_w, -50);
     assert.equal(overview.selected_device, 'kwh');
     assert.equal(overview.net_power_w, -50);
     assert.equal(overview.devices[1].request_url, 'http://192.168.2.221/api/v1/data');
-    assert.equal((await (await fetch(`${base}/api/v1/homewizard?status=error&device=p1`)).json()).calls.rows.length, 1);
+    assert.equal((await (await fetch(`${base}/intern/api/v1/homewizard?status=error&device=p1`)).json()).calls.rows.length, 1);
     for (const source of ['homewizard', 'weather', 'growatt']) {
-      assert.equal((await (await fetch(`${base}/api/v1/${source}/logging?enabled=false`, { method: 'PUT' })).json()).enabled, false);
-      assert.equal((await (await fetch(`${base}/api/v1/${source}/logging`)).json()).enabled, false);
+      assert.equal((await (await fetch(`${base}/intern/api/v1/${source}/logging?enabled=false`, { method: 'PUT' })).json()).enabled, false);
+      assert.equal((await (await fetch(`${base}/intern/api/v1/${source}/logging`)).json()).enabled, false);
     }
-    await fetch(`${base}/api/v1/homewizard/poll`, { method: 'POST' });
+    await fetch(`${base}/intern/api/v1/homewizard/poll`, { method: 'POST' });
     assert.equal(repository.recentHomeWizardCalls({ status: 'all', device: 'all', limit: 10, offset: 0 }).rows.length, 2);
-    assert.equal((await (await fetch(`${base}/api/v1/homewizard/diagnostics`, { method: 'DELETE' })).json()).calls_deleted, 2);
+    assert.equal((await (await fetch(`${base}/intern/api/v1/homewizard/diagnostics`, { method: 'DELETE' })).json()).calls_deleted, 2);
     assert.equal(repository.currentMeters().length, 1);
     assert.equal(repository.history('kwh', 0, Date.now(), 10).length, 2);
     assert.equal(repository.diagnosticState('homewizard', 'p1').status, 'error');
-    assert.equal((await fetch(`${base}/api/v1/homewizard?device=unknown`)).status, 400);
-    assert.equal((await fetch(`${base}/api/v1/weather/logging?enabled=yes`, { method: 'PUT' })).status, 400);
+    assert.equal((await fetch(`${base}/intern/api/v1/homewizard?device=unknown`)).status, 400);
+    assert.equal((await fetch(`${base}/intern/api/v1/weather/logging?enabled=yes`, { method: 'PUT' })).status, 400);
   } finally { await new Promise((resolve) => server.close(resolve)); db.close(); }
 });

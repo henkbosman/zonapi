@@ -115,15 +115,15 @@ test('webantwoord wordt eerst goed opgeslagen en daarna ongewijzigd via API en o
   const before = globalThis.document;
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
-    const current = await (await fetch(`${base}/api/v1/production/current`)).json();
+    const current = await (await fetch(`${base}/intern/api/v1/production/current`)).json();
     assert.equal(current.power_w, 1000);
     assert.equal(current.status, 'ok');
     assert.ok(current.inverters.every((row) => row.measured_at === '2026-10-16T14:02:46.000Z' && row.fresh));
-    const day = await (await fetch(`${base}/api/v1/production/day`)).json();
+    const day = await (await fetch(`${base}/intern/api/v1/production/day`)).json();
     assert.deepEqual(day.points.map((point) => [point.time, point.power_w]), [['2026-10-16T14:02:46.000Z', 1000]]);
-    const overview = await (await fetch(`${base}/api/v1/growatt`)).json();
+    const overview = await (await fetch(`${base}/intern/api/v1/growatt`)).json();
     assert.deepEqual(overview.production.inverters, current.inverters);
-    const history = await (await fetch(`${base}/api/v1/history?metric=inverter&source=cloud`)).json();
+    const history = await (await fetch(`${base}/intern/api/v1/history?metric=inverter&source=cloud`)).json();
     assert.ok(history.rows.every((row) => row.measured_ms === Date.parse('2026-10-16T14:02:46Z')));
     const { nodes, document } = tableDocument();
     globalThis.document = document;

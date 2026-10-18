@@ -1,0 +1,31 @@
+# Alleen het openbare dashboard; beheer is bereikbaar via de directe dienst
+# op http://127.0.0.1:3002/intern (op de server zelf of via een SSH-tunnel).
+# Vervang het bestaande siteblok voor zon.ferion.nl door dit blok.
+# Gebruik voor dit domein geen extra algemene reverse_proxy.
+zon.ferion.nl {
+	encode zstd gzip
+
+	@intern path /intern /intern/*
+	handle @intern {
+		respond "Geen toegang" 403
+	}
+
+	@dashboard {
+		method GET
+		path / /dashboard
+		path /dashboard.css /dashboard.js
+		path /dashboard-production-days.js /dashboard-production-chart.js
+		path /dashboard-daily-advice.js /dashboard-appliance-charts.js
+		path /appliance-cycle-chart.js /chart-cursor.js
+		path /production-chart-series.js /pv-correction-status.js
+		path /api/v1/dashboard
+	}
+
+	handle @dashboard {
+		reverse_proxy 127.0.0.1:3002
+	}
+
+	handle {
+		respond "Geen toegang" 403
+	}
+}

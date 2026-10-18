@@ -82,15 +82,15 @@ test('Growatt-pagina en API tonen pakketmetadata, ruwe inhoud en ontvangerfouten
   await once(server, 'listening');
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
-    const page = await fetch(`${base}/growatt`);
+    const page = await fetch(`${base}/intern/growatt`);
     assert.equal(page.status, 200);
     const html = await page.text();
     assert.match(html, /Berichten en logs verwijderen/);
     assert.match(html, /id="db-path"/);
     assert.equal(page.headers.get('cache-control'), 'no-store');
     const dashboard = await (await fetch(`${base}/dashboard`)).text();
-    assert.match(dashboard, /href="\/growatt"/);
-    const overview = await (await fetch(`${base}/api/v1/growatt?limit=1`)).json();
+    assert.doesNotMatch(dashboard, /href="\/(?:intern\/)?growatt"/);
+    const overview = await (await fetch(`${base}/intern/api/v1/growatt?limit=1`)).json();
     assert.equal(overview.summary.frames_total, 2);
     assert.equal(overview.frames.length, 1);
     assert.equal(overview.frames[0].status, 'bad_crc');
@@ -98,20 +98,20 @@ test('Growatt-pagina en API tonen pakketmetadata, ruwe inhoud en ontvangerfouten
     assert.equal(Object.hasOwn(overview.frames[0], 'raw_hex'), false);
     assert.deepEqual(overview.problems.map((item) => item.status), ['socket_error', 'bad_crc']);
     assert.equal(overview.problems[1].frame_id, badId);
-    const timeline = await (await fetch(`${base}/api/v1/growatt/timeline?limit=1`)).json();
+    const timeline = await (await fetch(`${base}/intern/api/v1/growatt/timeline?limit=1`)).json();
     assert.equal(timeline.rows.length, 1);
     assert.equal(timeline.rows[0].status, 'socket_error');
     assert.equal(timeline.has_more, true);
-    const older = await (await fetch(`${base}/api/v1/growatt/timeline?limit=1&offset=1`)).json();
+    const older = await (await fetch(`${base}/intern/api/v1/growatt/timeline?limit=1&offset=1`)).json();
     assert.equal(older.rows[0].status, 'bad_crc');
     assert.equal(older.rows[0].source, 'packet');
-    const detail = await (await fetch(`${base}/api/v1/growatt/frames/${id}`)).json();
+    const detail = await (await fetch(`${base}/intern/api/v1/growatt/frames/${id}`)).json();
     assert.equal(detail.raw_hex, raw.toString('hex'));
     assert.equal(detail.record_type, '0016');
     assert.equal(detail.measurement, null);
     assert.equal(detail.announcement, null);
-    assert.equal((await fetch(`${base}/api/v1/growatt/frames/999`)).status, 404);
-    assert.equal((await fetch(`${base}/api/v1/growatt?limit=101`)).status, 400);
+    assert.equal((await fetch(`${base}/intern/api/v1/growatt/frames/999`)).status, 404);
+    assert.equal((await fetch(`${base}/intern/api/v1/growatt?limit=101`)).status, 400);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     db.close();
@@ -137,13 +137,13 @@ test('API toont een mislukte Growatt-binding naast het werkelijke databasepad', 
   await once(server, 'listening');
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
-    const growatt = await (await fetch(`${base}/api/v1/growatt`)).json();
+    const growatt = await (await fetch(`${base}/intern/api/v1/growatt`)).json();
     assert.equal(growatt.listener.listening, false);
     assert.equal(growatt.listener.last_error.code, 'EADDRINUSE');
     assert.equal(growatt.listener.port, growattPort);
     assert.equal(growatt.database_path, null);
     assert.equal(growatt.summary.frames_total, 0);
-    const status = await (await fetch(`${base}/api/v1/status`)).json();
+    const status = await (await fetch(`${base}/intern/api/v1/status`)).json();
     assert.equal(status.growatt.listener.last_error.code, 'EADDRINUSE');
     assert.equal(status.growatt.database_path, null);
     const live = growattOverview(repository, { growatt: { host: '127.0.0.1', port: growattPort, expected_inverters: 4, fresh_minutes: 20 } }, panels, Date.now(), 1, { server: occupied });
@@ -169,28 +169,28 @@ test('live tijdlijn toont oudere xx04-metingen naast verbindingsfouten en vernie
   await once(server, 'listening');
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
-    const first = await (await fetch(`${base}/api/v1/growatt`)).json();
+    const first = await (await fetch(`${base}/intern/api/v1/growatt`)).json();
     assert.equal(first.summary.frames_total, 0);
     const measurementId = repository.saveFrame(now - 3000, 'local', 6, '5004', 'decoded:T06NNNNX:clock_fallback', Buffer.alloc(585));
     repository.saveFrame(now - 3500, 'local', 6, '5104', 'decoded:T06NNNNX', Buffer.alloc(585));
     for (let i = 0; i < 120; i++) repository.saveFrame(now - 2000 + i, 'local', 6, '5103', 'announcement', Buffer.alloc(20));
     repository.saveGrowattEvent(now, 'local:1029', 'timeout', '120 s');
-    const refreshed = await fetch(`${base}/api/v1/growatt?limit=1`);
+    const refreshed = await fetch(`${base}/intern/api/v1/growatt?limit=1`);
     assert.equal(refreshed.headers.get('cache-control'), 'no-store');
     assert.equal((await refreshed.json()).summary.frames_total, 122);
-    const all = await (await fetch(`${base}/api/v1/growatt/timeline?limit=3`)).json();
+    const all = await (await fetch(`${base}/intern/api/v1/growatt/timeline?limit=3`)).json();
     assert.deepEqual(all.rows.map((row) => row.source), ['event', 'packet', 'packet']);
-    const everyMeasurement = await (await fetch(`${base}/api/v1/growatt/timeline?type=xx04`)).json();
+    const everyMeasurement = await (await fetch(`${base}/intern/api/v1/growatt/timeline?type=xx04`)).json();
     assert.deepEqual(everyMeasurement.rows.map((row) => row.record_type), ['5004', '5104']);
-    const filtered = await (await fetch(`${base}/api/v1/growatt/timeline?type=xx04&address=50`)).json();
+    const filtered = await (await fetch(`${base}/intern/api/v1/growatt/timeline?type=xx04&address=50`)).json();
     assert.equal(filtered.rows.length, 1);
     assert.equal(filtered.rows[0].id, measurementId);
     assert.equal(filtered.rows[0].record_type, '5004');
-    const errors = await (await fetch(`${base}/api/v1/growatt/timeline?view=errors`)).json();
+    const errors = await (await fetch(`${base}/intern/api/v1/growatt/timeline?view=errors`)).json();
     assert.deepEqual(errors.rows.map((row) => row.status), ['timeout']);
-    const eventsAndType = await (await fetch(`${base}/api/v1/growatt/timeline?view=events&type=xx04`)).json();
+    const eventsAndType = await (await fetch(`${base}/intern/api/v1/growatt/timeline?view=events&type=xx04`)).json();
     assert.deepEqual(eventsAndType.rows, []);
-    assert.equal((await fetch(`${base}/api/v1/growatt/timeline?type=xxzz`)).status, 400);
+    assert.equal((await fetch(`${base}/intern/api/v1/growatt/timeline?type=xxzz`)).status, 400);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     db.close();

@@ -22,7 +22,7 @@ export function setupDiagnosticControls(source, refresh, afterClear = () => {}) 
     toggle.disabled = true;
     clear.disabled = true;
     try {
-      const response = await fetch(`/api/v1/${source}/${action}`, { cache: 'no-store', signal: AbortSignal.timeout(15000), ...options });
+      const response = await fetch(`/intern/api/v1/${source}/${action}`, { cache: 'no-store', signal: AbortSignal.timeout(15000), ...options });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
       if (action.startsWith('logging')) render(body);

@@ -257,7 +257,7 @@ test('HTTP- en dashboardadvies wijzigen na socketstart en herstellen na stop zon
   await once(server, 'listening');
   const url = `http://127.0.0.1:${server.address().port}`;
   try {
-    const path = '/api/v1/appliances/wasmachine/advice';
+    const path = '/intern/api/v1/appliances/wasmachine/advice';
     assert.equal((await (await fetch(url + path)).json()).can_start_now, true);
     repository.saveApplianceSocketState({ appliance_id: running.id, config_key: socketConfigKey(socketConfig(running)), updated_ms: at,
       state: { running: true, started_ms: at - 5 * minute, measured_ms: at, power_w: 1000, pending_start_ms: null, pending_stop_ms: null, error: null } });
@@ -265,7 +265,7 @@ test('HTTP- en dashboardadvies wijzigen na socketstart en herstellen na stop zon
     assert.equal(active.can_start_now, false);
     assert.equal(active.now.solar_share_percent, 20);
     assert.equal(active.active_appliances[0].id, running.id);
-    const daily = await (await fetch(url + '/api/v1/appliances/daily')).json();
+    const daily = await (await fetch(url + '/intern/api/v1/appliances/daily')).json();
     assert.equal(daily.days[0].appliances.find((item) => item.id === target.id).can_start_now, false);
     assert.equal(daily.active_appliances[0].id, running.id);
     const saved = repository.applianceSocketState(running.id);

@@ -5,25 +5,58 @@ Node.js-dienst voor een Growatt ShineLanBox, een optionele Growatt-webbron, loka
 ## Wat is al werkend en wat vereist controle?
 
 - Alle softwareonderdelen, database, scheduler, HomeWizard v1/v2, API, dashboard en machineberekening zijn aanwezig. Integratietests gebruiken synthetische weer- en Growatt-pakketten.
-- De Growatt-decoder gebruikt de generieke offsets uit [Grott](https://github.com/johanmeijer/grott/blob/master/grottconf.py). De ACK-volgorde, tijdopdracht en de interpretatie van de automatische `xx03`/`xx04`-rapporten zijn ook vergeleken met de onafhankelijke [growatt-protocol](https://github.com/FezVrasta/growatt-datalogger/blob/main/packages/growatt-protocol/README.md)- en [shine2mqtt](https://github.com/bremme/shine2mqtt/blob/main/docs/protocol.md)-implementaties. Bij de aangesloten ShineLanBox 7.0.0.4 zijn volgens de live-observatie `xx04`-berichten voor drie van de vier MIC 2000TL-X-omvormers ontvangen. Onbekende layouts worden in de eigen SQLite-database bewaard en als `unknown_layout` getoond. Controleer in `/growatt` het serienummer en vermogen per omvormer en vergelijk met de eigen metingen.
-- De voorbeeldconfiguratie bevat lege locatie- en meteradressen; vul daarvoor je eigen instellingen in. Een ingestelde Open-Meteo-locatie en paneelverdeling zijn direct te controleren op `/weather`.
+- De Growatt-decoder gebruikt de generieke offsets uit [Grott](https://github.com/johanmeijer/grott/blob/master/grottconf.py). De ACK-volgorde, tijdopdracht en de interpretatie van de automatische `xx03`/`xx04`-rapporten zijn ook vergeleken met de onafhankelijke [growatt-protocol](https://github.com/FezVrasta/growatt-datalogger/blob/main/packages/growatt-protocol/README.md)- en [shine2mqtt](https://github.com/bremme/shine2mqtt/blob/main/docs/protocol.md)-implementaties. Bij de aangesloten ShineLanBox 7.0.0.4 zijn volgens de live-observatie `xx04`-berichten voor drie van de vier MIC 2000TL-X-omvormers ontvangen. Onbekende layouts worden in de eigen SQLite-database bewaard en als `unknown_layout` getoond. Controleer in `/intern/growatt` het serienummer en vermogen per omvormer en vergelijk met de eigen metingen.
+- De voorbeeldconfiguratie bevat lege locatie- en meteradressen; vul daarvoor je eigen instellingen in. Een ingestelde Open-Meteo-locatie en paneelverdeling zijn direct te controleren op `/intern/weather`.
 
 ## Snel starten op Arch Linux
 
 1. Installeer Node.js **24 of nieuwer** (`node --version`). Er zijn geen npm-pakketten of cloudopslag nodig; SQLite gebruikt `node:sqlite`.
 2. Kopieer deze hele map naar de server. Pas **`config/settings.json`**, **`config/panels.json`** en desgewenst de drie bestanden in **`config/appliances/`** aan. De voorbeeldpanelen bevatten bewust geen verzonnen Wp, hellingshoek of verdeling over omvormers.
-3. Start in de projectmap met `npm start` of `node src/main.js`. Open eerst `http://127.0.0.1:8080/dashboard`. De database en dagelijkse back-ups verschijnen in `data/`.
-4. Stel `http.host` en `growatt.host` in op het **LAN-IP van deze Arch Linux-server**, bijvoorbeeld `192.168.1.20`, en herstart. Laat uitsluitend lokale apparaten bij de twee poorten. Plaats de API niet achter een publiek bereikbare website/proxy.
-5. Voor de lokale bron stel je in de ShineLanBox-serverinstellingen **ditzelfde lokale IP en poort 5279** in. Een DNS-omleiding is niet nodig. Controleer `GET /api/v1/status` op ontvangen/gedecodeerde Growatt-pakketten en vier omvormers. Voor de tijdelijke cloudbron laat je de ShineLanBox juist weer naar de normale Growatt-server verzenden en schakel je de hieronder beschreven webbron in.
+3. Start in de projectmap met `npm start` of `node src/main.js`. Open eerst `http://127.0.0.1:3002/dashboard`. De database en dagelijkse back-ups verschijnen in `data/`.
+4. Voor Caddy op dezelfde server blijft `http.host` op `127.0.0.1` en staat `http.port` op `3002`. Stel voor de lokale Growatt-ontvanger `growatt.host` in op het **LAN-IP van deze server**. Publiceer alleen het dashboard via de meegeleverde Caddyfile; de volledige API en beheerpagina's staan onder `/intern` en worden daar geblokkeerd.
+5. Voor de lokale bron stel je in de ShineLanBox-serverinstellingen **ditzelfde lokale IP en poort 5279** in. Een DNS-omleiding is niet nodig. Controleer `GET /intern/api/v1/status` op ontvangen/gedecodeerde Growatt-pakketten en vier omvormers. Voor de tijdelijke cloudbron laat je de ShineLanBox juist weer naar de normale Growatt-server verzenden en schakel je de hieronder beschreven webbron in.
 6. Vul voor P1 en kWh-meter de **eigen LAN-IP-adressen** in bij `homewizard.p1.host` en `homewizard.kwh.host`. De API leest beide onafhankelijk maar telt ze nooit bij elkaar op: het is volgens jouw informatie hetzelfde eenfasige netmeetpunt. De standaardvolgorde voor een verse actuele netmeting is P1, daarna kWh; verander `net_meter_priority` als gewenst.
 
 Herstart na wijzigingen van `settings.json`, `panels.json` en `layouts/*.json`. Apparatenprofielen uit `config/appliances/*.json` worden opnieuw ingelezen bij elke API-aanvraag. Het dashboard maakt zichzelf elke 30 seconden opnieuw actueel.
+
+## Dashboard extern, beheer intern
+
+De openbare pagina's `/` en `/dashboard` tonen uitsluitend het dashboard. Hun JavaScript leest één `GET /api/v1/dashboard`-snapshot. Die wordt met expliciet toegestane velden opgebouwd. Apparaat-IP's, serienummers, model-/configuratiesleutels, databasepaden, ruwe antwoorden, omvormerdetails en volledige configuratie- of foutmeldingen worden niet gepubliceerd. De zichtbare kwartiercorrecties, drie meettotalen, basislast, actuele apparaten, startadviezen en cyclusgrafieken blijven beschikbaar. Een fout in de openbare route geeft een algemene melding.
+
+Growatt, Weer, HomeWizard en Database staan op `/intern/growatt`, `/intern/weather`, `/intern/homewizard` en `/intern/database`. Ook hun scripts, stylesheets en alle volledige API-routes staan onder `/intern`. Het openbare dashboard heeft geen beheermenu. De oude adressen zoals `/growatt`, `/database` en `/api/v1/status` geven geen toegang meer. Alle bedieningsacties, waaronder ophalen, logbeheer en wissen, werken alleen via `/intern/api/v1/...`.
+
+De meegeleverde [Caddyfile](Caddyfile) is ingesteld voor **zon.ferion.nl → 127.0.0.1:3002**. Vervang daarmee het bestaande siteblok voor dit domein; behoud de overige domeinen en globale Caddy-instellingen. De configuratie laat alleen de expliciete dashboardpaden met methode GET door. `/intern`, `/intern/*`, oude API-adressen, overige bestanden en schrijfmethoden krijgen via het domein HTTP 403. Verzoeken blijven hun volledige pad houden; er wordt geen prefix gestript.
+
+Controleer en herlaad Caddy op je eigen server:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo systemctl reload caddy
+```
+
+Voorbeeldcontroles, na installatie:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://zon.ferion.nl/dashboard
+curl -s -o /dev/null -w '%{http_code}\n' https://zon.ferion.nl/intern/database
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/intern/database
+```
+
+Verwachte codes: **200, 403, 200**. De code en tests zijn lokaal gecontroleerd; Caddy moet op de doelserver met bovenstaand commando worden gevalideerd.
+
+De interne routes hebben geen eigen inlogscherm. Ze blijven bereikbaar via de directe dienst op de server: `http://127.0.0.1:3002/intern`. Vanuit een andere computer kun je een SSH-tunnel gebruiken:
+
+```bash
+ssh -N -L 13002:127.0.0.1:3002 gebruiker@server
+```
+
+Open daarna `http://127.0.0.1:13002/intern`. Met deze Caddyfile is `/intern` via het publieke domein ook voor lokale bezoekers geblokkeerd. Een bestaande rechtstreekse LAN-toegang werkt alleen als ZonAPI daarvoor expliciet luistert; voorkom dat die poort vanaf internet toegankelijk is. Vertrouw voor toegang tot intern beheer niet op door de bezoeker aangeleverde proxyheaders. Zonder aanvullende authenticatie is het openbare dashboard voor iedereen met het adres bereikbaar.
 
 ### Bestaande installatie bijwerken
 
 Stop de Node-dienst en kopieer `src/` en `public/` uit het archief naar de bestaande installatie. Behoud de eigen `config/settings.json`, `config/debug.json`, `config/panels.json`, `config/appliances/` en database in `data/`. Start daarna Node opnieuw. Ontbreekt `config/debug.json`, dan wordt het automatisch aangemaakt met alle logboeken uitgeschakeld. De bestaande database en kwartiercorrecties blijven in gebruik.
 
-Het losse dashboardupdatearchief bevat uitsluitend `src/`, `public/`, `test/` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
+Het losse dashboardupdatearchief bevat `src/`, `public/`, `test/`, `Caddyfile`, `VERSIE.txt` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
 
 Deze update haalt Growatt op vaste vijfminutenmomenten op. Iedere Open-Meteo-kwartiercorrectie gebruikt drie volledige meetmomenten op vijf minuten vóór, rond en vijf minuten na de bronklok, met herkenning van één duidelijke uitschieter. Het apparaatadvies met Meeste zon, de actieve apparaten, cyclusgrafieken, rode basislastlijn en socketherkenning blijven beschikbaar. Bestaande instellingen blijven geldig: zonder `growatt.production_source` wordt uitsluitend de lokale ShineLink-bron gebruikt. Zonder `weather.resolution_minutes` worden kwartierwaarden opgehaald. Een oude `weather.forecast_days` van `2` wordt bij het laden verhoogd tot `3`.
 
@@ -42,7 +75,7 @@ Alle loginstellingen staan in **`config/debug.json`**:
 }
 ```
 
-Zet per bron `true` om te loggen en `false` om logging uit te zetten. Bestandswijzigingen worden direct gelezen, zonder herstart. Op `/growatt`, `/weather` en `/homewizard` schrijft **Logging aan / Logging uit** dezelfde instelling naar `debug.json`. Het bestand bepaalt ook na een databasevervanging de actieve logschakelaars. De vroegere `logging`-instelling in `settings.json` wordt niet meer gebruikt. Bij een onleesbaar of ongeldig debugbestand tijdens bedrijf stopt de diagnoseopslag; de logstatus geeft de configuratiefout terug.
+Zet per bron `true` om te loggen en `false` om logging uit te zetten. Bestandswijzigingen worden direct gelezen, zonder herstart. Op `/intern/growatt`, `/intern/weather` en `/intern/homewizard` schrijft **Logging aan / Logging uit** dezelfde instelling naar `debug.json`. Het bestand bepaalt ook na een databasevervanging de actieve logschakelaars. De vroegere `logging`-instelling in `settings.json` wordt niet meer gebruikt. Bij een onleesbaar of ongeldig debugbestand tijdens bedrijf stopt de diagnoseopslag; de logstatus geeft de configuratiefout terug.
 
 De verwijderknop wist het bijbehorende logboek. Omvormer- en HomeWizard-metingen, instralingshistorie, voorspellingen, kwartiercorrecties en het gebruikte weerquotum blijven bewaard. De actuele bronstatus blijft ook met logging uit beschikbaar.
 
@@ -70,15 +103,15 @@ Als geen startmoment de hele cyclus voor 100% uit zonne-energie kan dekken, toon
 
 Een starttijd die aan het ingestelde `min_solar_share` voldoet, blijft staan. Is die grens bijvoorbeeld 70% en bestaat er geen optie van 100%, dan kan daarnaast **Meeste zon: 14:10 · 85%** verschijnen. Als beide tijden gelijk zijn, wordt het tijdstip eenmaal getoond. Bij nul bruikbare zonne-energie, ontbrekende of verouderde gegevens verschijnt geen alternatief. Een draaiend apparaat blijft vandaag **Bezig** tonen. Voor deze toevoeging zijn geen configuratiewijzigingen of extra bronverzoeken nodig.
 
-Op `/homewizard` staan host, lokale API-versie, laatste meetwaarden, import-/exporttellers, responstijd en fout per meter. Onder **Apparaten** verschijnen ook alle apparaten met een ingestelde Energy Socket, met hun profielnaam, eigen IP-adres, actuele aan-/uitstatus en vermogen. De verzoekentijdlijn kan op meter of afzonderlijke socket en op resultaat worden gefilterd. Sockets blijven apart van de netto netmeting. **Nu ophalen** leest de ingestelde lokale netmeters; sockets volgen hun bestaande achtergrondinterval. Autorisatieheaders en tokens worden niet gelogd.
+Op `/intern/homewizard` staan host, lokale API-versie, laatste meetwaarden, import-/exporttellers, responstijd en fout per meter. Onder **Apparaten** verschijnen ook alle apparaten met een ingestelde Energy Socket, met hun profielnaam, eigen IP-adres, actuele aan-/uitstatus en vermogen. De verzoekentijdlijn kan op meter of afzonderlijke socket en op resultaat worden gefilterd. Sockets blijven apart van de netto netmeting. **Nu ophalen** leest de ingestelde lokale netmeters; sockets volgen hun bestaande achtergrondinterval. Autorisatieheaders en tokens worden niet gelogd.
 
 ### Database bekijken
 
-Open **Database** in de navigatie of ga naar `/database`. Via **Tabel kiezen** opent een doorzoekbare popup met alle toepassingstabellen in de huidige database. De volledige inhoud is per pagina beschikbaar, inclusief alle kolommen, lange tekstvelden en binaire velden als `0x…`-hextekst. `NULL` en een lege tekstwaarde (`""`) worden afzonderlijk getoond. Grote gehele getallen worden zonder precisieverlies weergegeven.
+Open **Database** in de navigatie of ga naar `/intern/database`. Via **Tabel kiezen** opent een doorzoekbare popup met alle toepassingstabellen in de huidige database. De volledige inhoud is per pagina beschikbaar, inclusief alle kolommen, lange tekstvelden en binaire velden als `0x…`-hextekst. `NULL` en een lege tekstwaarde (`""`) worden afzonderlijk getoond. Grote gehele getallen worden zonder precisieverlies weergegeven.
 
 Klik op een kolomnaam voor oplopende of aflopende sortering. De invoervelden onder iedere kolom zoeken letterlijk naar een deel van de waarde; meerdere filters gelden samen. `%` en `_` zijn gewone zoektekens. Met **Records per pagina** kies je 10, 25, 50, 100, 250 of 500 records. Gebruik de paginaknoppen of voer een paginanummer in om alle resultaten te bereiken. **Filters wissen** herstelt de ongefilterde inhoud en **Vernieuwen** haalt de actuele pagina op. De pagina leest uitsluitend; er zijn geen schrijf- of verwijderacties.
 
-De bijbehorende leesendpoints zijn `GET /api/v1/database/tables` en `GET /api/v1/database/rows?table=forecast&page=1&page_size=50`. Optionele parameters zijn `sort` (kolomnaam), `direction=asc|desc` en `filters` (een JSON-lijst met objecten zoals `{"column":"source","value":"open-meteo"}`). Tabellen en kolommen worden tegen het actuele schema gecontroleerd. Filterwaarden worden als parameters doorgegeven. Hiervoor zijn geen configuratiewijziging, extra bronverzoeken of databasemigratie nodig.
+De bijbehorende leesendpoints zijn `GET /intern/api/v1/database/tables` en `GET /intern/api/v1/database/rows?table=forecast&page=1&page_size=50`. Optionele parameters zijn `sort` (kolomnaam), `direction=asc|desc` en `filters` (een JSON-lijst met objecten zoals `{"column":"source","value":"open-meteo"}`). Tabellen en kolommen worden tegen het actuele schema gecontroleerd. Filterwaarden worden als parameters doorgegeven. Hiervoor zijn geen configuratiewijziging, extra bronverzoeken of databasemigratie nodig.
 
 ### Energy Socket per apparaat
 
@@ -104,7 +137,7 @@ Pas na **5 minuten aaneengesloten 5 W of lager** wordt het apparaat weer **Niet 
 
 Bij een mislukte of te oude socketmeting toont het dashboard **Socket niet bereikbaar**, met de fout als toelichting. Het presenteert dan geen actuele aan/uitstatus. De geldigheid is minimaal 2 minuten, of drie pollintervallen als dat langer is. Na een langdurige meetonderbreking wordt de start opnieuw vastgesteld. Een korte serverherstart behoudt een recent herkend programma; IP- of grenswijzigingen beginnen met nieuwe herkenning.
 
-`GET /api/v1/appliances` bevat per profiel `activity` met `configured`, `state`, `running`, `power_w`, `measured_at`, `started_at`, `stopped_at` en `error`. Apparaatverbruik komt in een eigen statustabel en wordt nooit als extra netmeter bij P1/kWh opgeteld. De laatste status overschrijft één rij per apparaat. Daarnaast worden de begrensde cyclusmetingen hieronder bewaard, ook als debuglogging uitstaat. Met HomeWizard-logging aan verschijnen de aanvragen als `socket:<apparaat-id>` in de bestaande begrensde verzoekentijdlijn. Logs wissen laat de actuele apparaatstatus en cyclusgrafieken staan.
+`GET /intern/api/v1/appliances` bevat per profiel `activity` met `configured`, `state`, `running`, `power_w`, `measured_at`, `started_at`, `stopped_at` en `error`. Apparaatverbruik komt in een eigen statustabel en wordt nooit als extra netmeter bij P1/kWh opgeteld. De laatste status overschrijft één rij per apparaat. Daarnaast worden de begrensde cyclusmetingen hieronder bewaard, ook als debuglogging uitstaat. Met HomeWizard-logging aan verschijnen de aanvragen als `socket:<apparaat-id>` in de bestaande begrensde verzoekentijdlijn. Logs wissen laat de actuele apparaatstatus en cyclusgrafieken staan.
 
 ### Apparaatgrafieken per cyclus
 
@@ -118,7 +151,7 @@ Een volledige referentie is pas beschikbaar nadat ZonAPI een cyclus vanaf een re
 
 De database bewaart per apparaat maximaal **de lopende cyclus plus de twee laatst afgesloten cycli**. Onderbroken cycli tellen mee in die twee; alleen volledige, normaal afgesloten cycli kunnen referentie zijn. Oudere cycli en hun meetpunten worden automatisch verwijderd. Een startkandidaat die niet bevestigd wordt, verdwijnt eveneens. Iedere cyclus is begrensd op 24 uur en 20.000 meetpunten. Zo groeit deze historie niet onbeperkt. De cyclusopslag en socketstatus worden samen in één transactie bijgewerkt; logging is hiervan onafhankelijk.
 
-`GET /api/v1/appliances/cycles` geeft per apparaat `current`, `previous`, `live`, `elapsed_seconds` en `activity`. Meetpunten bevatten `elapsed_seconds` en `power_w`; de cyclusmetadata bevat de echte start/eindtijd, duur, maximale meetpauze en `complete`. `previous` is `null` zolang er geen bruikbare voorafgaande cyclus is. De bestaande JSON-verbruiksprofielen blijven de bron voor het te starten apparaat. Voor de resterende vraag van al draaiende apparaten wordt bij voorkeur de eerder gemeten cyclus gebruikt, zoals hieronder beschreven.
+`GET /intern/api/v1/appliances/cycles` geeft per apparaat `current`, `previous`, `live`, `elapsed_seconds` en `activity`. Meetpunten bevatten `elapsed_seconds` en `power_w`; de cyclusmetadata bevat de echte start/eindtijd, duur, maximale meetpauze en `complete`. `previous` is `null` zolang er geen bruikbare voorafgaande cyclus is. De bestaande JSON-verbruiksprofielen blijven de bron voor het te starten apparaat. Voor de resterende vraag van al draaiende apparaten wordt bij voorkeur de eerder gemeten cyclus gebruikt, zoals hieronder beschreven.
 
 ### Startadvies bij actieve apparaten
 
@@ -134,7 +167,7 @@ Duurt het apparaat langer dan zijn vorige cyclus of JSON-profiel, dan blijft het
 
 Op de apparaatkaart staat **Rekening gehouden met: ...** voor andere actieve apparaten. Bij de tekst staat als toelichting de geschatte resterende duur. De bestaande minimale zonnedekking over de volledige cyclus, basislast en reserve blijven gelden. De adviezen worden opnieuw berekend met de opgeslagen socketmetingen; hiervoor zijn geen extra HomeWizard-, Growatt- of weerverzoeken nodig.
 
-`GET /api/v1/appliances/daily` bevat bovenaan `active_appliances`; het losse `/api/v1/appliances/<id>/advice`-endpoint bevat de meegerekende andere apparaten bij dezelfde naam. Per apparaat staan onder meer `source` (`previous_cycle`, `profile` of `current_power`), `fresh`, `expected_end`, `remaining_minutes` en `overrun`. Het eigen advies kan ook `already_active` en `busy_until` bevatten. Voor dashboard en ESP32 geldt dezelfde berekening. Er zijn geen nieuwe instellingen nodig; de bestaande socket-IP's en JSON-profielen worden gebruikt.
+`GET /intern/api/v1/appliances/daily` bevat bovenaan `active_appliances`; het losse `/intern/api/v1/appliances/<id>/advice`-endpoint bevat de meegerekende andere apparaten bij dezelfde naam. Per apparaat staan onder meer `source` (`previous_cycle`, `profile` of `current_power`), `fresh`, `expected_end`, `remaining_minutes` en `overrun`. Het eigen advies kan ook `already_active` en `busy_until` bevatten. Voor dashboard en ESP32 geldt dezelfde berekening. Er zijn geen nieuwe instellingen nodig; de bestaande socket-IP's en JSON-profielen worden gebruikt.
 
 Een startadvies voor een nog niet gestart apparaat reserveert zelf geen vermogen voor de andere adviezen. Pas bij herkend verbruik telt het apparaat als actieve belasting mee. Het model gebruikt de basislast als achtergrondverbruik; kies een vaste basislast exclusief de apparaten die afzonderlijk worden meegerekend.
 
@@ -170,11 +203,11 @@ De bronkeuze is:
 
 De ShineLanBox moet voor actuele cloudmetingen weer naar de **normale Growatt-server** wijzen. ZonAPI leest dan de daar ontvangen metingen; het fungeert niet als proxy. Om later terug te schakelen, wijs je de ShineLanBox weer naar `192.168.2.210:5279` en kies je `shinelink` of `auto`.
 
-Vul de vier serienummers in `config/panels.json` in als je die kent. Zonder opgegeven serienummers herkent ZonAPI de installatie en omvormers automatisch. Bij meerdere installaties toont `/growatt` de namen en IDs; kies er dan één met `cloud.plant_id`. Laat voor automatische herkenning alle omvormerserienummers leeg. Er wordt geen willekeurige installatie gekozen. Voor deze MIC-omvormers is het gebruikelijke type `min`; `inv` is beschikbaar voor de klassieke inverterfamilie.
+Vul de vier serienummers in `config/panels.json` in als je die kent. Zonder opgegeven serienummers herkent ZonAPI de installatie en omvormers automatisch. Bij meerdere installaties toont `/intern/growatt` de namen en IDs; kies er dan één met `cloud.plant_id`. Laat voor automatische herkenning alle omvormerserienummers leeg. Er wordt geen willekeurige installatie gekozen. Voor deze MIC-omvormers is het gebruikelijke type `min`; `inv` is beschikbaar voor de klassieke inverterfamilie.
 
 ZonAPI start de Growatt-opvraagronde op vaste Nederlandse vijfminutenmomenten: **ieder uur om :00, :05, :10, :15, …, :55**, ook zonder dashboard- of ESP32-verzoeken. De duur van een antwoord verschuift de volgende ronde niet. Na starten of herstarten wordt op het volgende vijfminutenmoment gewacht; gemiste rondes worden niet ingehaald en lopende rondes overlappen niet. Een bestaand `poll_seconds: 900` hoeft niet aangepast te worden: de effectieve waarde is voortaan altijd 300 seconden. Het oude veld blijft geldig voor bestaande configuraties (300–86400 seconden). Er zijn geen nieuwe instellingen nodig om deze planning te gebruiken.
 
-Op `/growatt` staan **Gepland opvragen** en **Startvertraging ronde** in milliseconden. Per omvormer staan de werkelijke HTTP-opvraagtijd, de meettijd uit het antwoord en de ontvangsttijd naast elkaar. In de cloudstatus heten deze velden `last_scheduled`, `schedule_delay_ms` en `last_measurements` (`requested_at`, `measured_at`, `received_at`, `age_at_receipt_seconds`). Dit maakt timervertraging en oudere Growatt-data afzonderlijk controleerbaar, ook als debuglogging uitstaat. De omvormers worden achtereenvolgens gelezen met de ingestelde pauze; het tweede tot en met vierde verzoek begint daardoor enkele seconden na het vijfminutenmoment. Het volgende geplande moment schuift niet op.
+Op `/intern/growatt` staan **Gepland opvragen** en **Startvertraging ronde** in milliseconden. Per omvormer staan de werkelijke HTTP-opvraagtijd, de meettijd uit het antwoord en de ontvangsttijd naast elkaar. In de cloudstatus heten deze velden `last_scheduled`, `schedule_delay_ms` en `last_measurements` (`requested_at`, `measured_at`, `received_at`, `age_at_receipt_seconds`). Dit maakt timervertraging en oudere Growatt-data afzonderlijk controleerbaar, ook als debuglogging uitstaat. De omvormers worden achtereenvolgens gelezen met de ingestelde pauze; het tweede tot en met vierde verzoek begint daardoor enkele seconden na het vijfminutenmoment. Het volgende geplande moment schuift niet op.
 
 Bij fouten wordt minimaal vijf minuten tussen pogingen gehouden; herhaalde fouten verhogen de wachttijd naar 10, 20, 40 en maximaal 60 minuten. HTTP `Retry-After` kan een langere wachttijd opleggen. De volgende poging valt op het eerste toegestane vijfminutenmoment. Growatt-codes `102` (`FREQUENTLY_ACCESS`) en `501` stoppen de hele opvraagcyclus, ook bij HTTP `200`. De wachttijd blijft bewaard over herstarts, ook bij de overgang van de oude kwartierplanning. **Nu ophalen** behoudt zowel de klokplanning als de foutwachttijd. Met `daylight_only: true` worden buiten de lokale zonuren momenten overgeslagen; na zonsopkomst wordt op het eerste vijfminutenmoment opgehaald. Bij `auto` wordt een ronde overgeslagen als alle lokale ShineLink-metingen actueel zijn.
 
@@ -186,13 +219,13 @@ Cloudmetingen bewaren `pac` in watt en `eacToday`/`eacTotal` in kWh. De meettijd
 
 Bij starten herstelt ZonAPI bestaande cloudmetingen die met de vroegere `calendar`-voorkeur zijn opgeslagen, voor zover het oorspronkelijke webantwoord nog in het logboek staat. Herstel gebeurt vóór de automatische logopschoning en vereist een overeenkomst van serienummer, oude meettijd, ontvangstvenster, vermogen en energietellers. Alle vastgestelde verschuivingen worden in één transactie verwerkt; bij gelijke nieuwe meettijd behoudt de nieuwste ontvangen meting voorrang. ShineLink-metingen, ruwe webantwoorden en metingen zonder bijpassend bronantwoord blijven behouden. Er worden geen vaste uren bij de opgeslagen geschiedenis opgeteld.
 
-Op `/growatt` staan webbronstatus, de vijfminutenplanning, vorige/volgende poging, de laatste fout en de **Kwartiercorrectie**. Die laatste toont hoeveel van de drie meetmomenten zijn gebruikt of welke nog ontbreken. De tabel **Omvormers** leest iedere 15 seconden rechtstreeks `/api/v1/production/current` en toont de ingestelde lokale of webbron, met vermogen, energietellers, meettijd en ontvangsttijd per omvormer. De tabel wordt onafhankelijk van de bronstatus en berichtenlijst bijgewerkt. De knop **Vernieuwen** leest dezelfde actuele databasewaarden; een Growatt-webverzoek volgt de vijfminutenplanning. Kies **Toon → Web-API** voor de verzoeken of **Fouten** voor alle fouten. **Bekijk** toont HTTP-metadata en het geschoonde JSON-antwoord. De bestaande Growatt-logschakelaar en verwijderknop gelden ook voor deze verzoeken. Historische cloud- en ShineLink-metingen blijven behouden.
+Op `/intern/growatt` staan webbronstatus, de vijfminutenplanning, vorige/volgende poging, de laatste fout en de **Kwartiercorrectie**. Die laatste toont hoeveel van de drie meetmomenten zijn gebruikt of welke nog ontbreken. De tabel **Omvormers** leest iedere 15 seconden rechtstreeks `/intern/api/v1/production/current` en toont de ingestelde lokale of webbron, met vermogen, energietellers, meettijd en ontvangsttijd per omvormer. De tabel wordt onafhankelijk van de bronstatus en berichtenlijst bijgewerkt. De knop **Vernieuwen** leest dezelfde actuele databasewaarden; een Growatt-webverzoek volgt de vijfminutenplanning. Kies **Toon → Web-API** voor de verzoeken of **Fouten** voor alle fouten. **Bekijk** toont HTTP-metadata en het geschoonde JSON-antwoord. De bestaande Growatt-logschakelaar en verwijderknop gelden ook voor deze verzoeken. Historische cloud- en ShineLink-metingen blijven behouden.
 
 Bij systemd kun je optioneel `/etc/zonapi/growatt.env` met `GROWATT_API_TOKEN=...` gebruiken. Het meegeleverde servicesjabloon leest dit bestand. Voor een reeds geïnstalleerde service voeg je met `sudo systemctl edit zonapi` onder `[Service]` de regel `EnvironmentFile=-/etc/zonapi/growatt.env` toe. Herstart Node na het wijzigen van broninstellingen of token.
 
 ### Weerdiagnose
 
-Open `/weather` voor de ingestelde locatie, het werkelijk opgebouwde Open-Meteo-adres, zontijden, resolutie, aanvraaggeschiedenis, HTTP-status, fouttekst en opgeslagen instraling. `Nu ophalen` slaat het normale tijdsinterval over voor één poging; `max_requests_per_local_day` blijft gelden. Een eerdere HTTP 400 kan als oude fout zichtbaar blijven in de geschiedenis; een nieuw verzoek slaat de volledige foutreden van Open-Meteo op.
+Open `/intern/weather` voor de ingestelde locatie, het werkelijk opgebouwde Open-Meteo-adres, zontijden, resolutie, aanvraaggeschiedenis, HTTP-status, fouttekst en opgeslagen instraling. `Nu ophalen` slaat het normale tijdsinterval over voor één poging; `max_requests_per_local_day` blijft gelden. Een eerdere HTTP 400 kan als oude fout zichtbaar blijven in de geschiedenis; een nieuw verzoek slaat de volledige foutreden van Open-Meteo op.
 
 De weerscheduler haalt gedurende de hele dag op, ook 's avonds en 's nachts. Normale verzoeken worden over de volledige Nederlandse kalenderdag verdeeld: bij 12 verzoeken per dag ongeveer iedere twee uur. De verdeling houdt rekening met dagen van 23 of 25 uur bij de overgang naar zomer- of wintertijd. Het dagquotum, de laatste poging en de foutwachttijd blijven na een herstart behouden. Wissen of uitschakelen van logs reset deze planning niet. Zonsopkomst en zonsondergang bepalen de grafiekgrenzen en apparaatadviezen.
 
@@ -202,16 +235,16 @@ ZonAPI vraagt standaard GHI, DNI en DHI per 15 minuten op via Open-Meteo. Eén g
 
 De bronwaarden zijn gemiddelden over het voorafgaande kwartier of uur. De API zet ze om naar UTC-intervallen en rekent daarna zelf de paneelopbrengst uit. Opslag, grafieken, historie en apparaatadviezen gebruiken dezelfde selectie: nieuwere ophaaltijd gaat voor, bij gelijke ophaaltijd gaat de fijnste resolutie voor. Uur- en kwartierwaarden worden niet dubbel geteld. De oorspronkelijke intervallen en modelnamen blijven opgeslagen, ook als slechts een deel van een uur als terugval wordt gebruikt.
 
-De daglimiet en kalibratiefactor blijven gelden; de kwartierresolutie verhoogt de ophaalfrequentie niet. Nieuwe kwartierdata komt bij de eerstvolgende geplande ophaalpoging beschikbaar, of via **Nu ophalen** op `/weather`. Daar staat onder **Resolutie vandaag** bijvoorbeeld `15 min` of `15 / 60 min`.
+De daglimiet en kalibratiefactor blijven gelden; de kwartierresolutie verhoogt de ophaalfrequentie niet. Nieuwe kwartierdata komt bij de eerstvolgende geplande ophaalpoging beschikbaar, of via **Nu ophalen** op `/intern/weather`. Daar staat onder **Resolutie vandaag** bijvoorbeeld `15 min` of `15 / 60 min`.
 
 Optioneel kun je in de bestaande `weather`-sectie `"resolution_minutes": 15` opnemen. Met `60` wordt uitsluitend de oorspronkelijke uurvoorspelling aangevraagd, met automatische modelkeuze. Herstart Node na wijzigen. De voorspelling- en instralingendpoints geven `resolution_minutes` (fijnste bronresolutie), `resolutions_minutes` en `mixed_resolution` terug. Ieder slot bevat ook `model`, de effectieve `resolution_minutes` en de oorspronkelijke `source_resolution_minutes`.
 
 ### Growatt-teller op nul
 
-Open `/growatt` en lees `TCP`, `Database` en `Ontvangen pakketten`; dezelfde velden staan in `GET /api/v1/growatt` (`listener`, `database_path`, `summary.frames_total`). De teller leest de actieve SQLite-database; hij wordt ook nul na de knop **Berichten en logs verwijderen**. Historische vermogensmetingen blijven dan wel bestaan. De TCP-status is `true` als poort 5279 werkelijk luistert. Bij `false` geeft `listener.last_error` de foutcode, bijvoorbeeld `EADDRINUSE` of `EADDRNOTAVAIL`. Als hij luistert maar er geen nieuwe berichten zijn, controleer in `GET /api/v1/growatt/timeline?view=events&limit=20` of er TCP-verbindingen worden geopend. Op de server:
+Open `/intern/growatt` en lees `TCP`, `Database` en `Ontvangen pakketten`; dezelfde velden staan in `GET /intern/api/v1/growatt` (`listener`, `database_path`, `summary.frames_total`). De teller leest de actieve SQLite-database; hij wordt ook nul na de knop **Berichten en logs verwijderen**. Historische vermogensmetingen blijven dan wel bestaan. De TCP-status is `true` als poort 5279 werkelijk luistert. Bij `false` geeft `listener.last_error` de foutcode, bijvoorbeeld `EADDRINUSE` of `EADDRNOTAVAIL`. Als hij luistert maar er geen nieuwe berichten zijn, controleer in `GET /intern/api/v1/growatt/timeline?view=events&limit=20` of er TCP-verbindingen worden geopend. Op de server:
 
 ```sh
-curl -s http://192.168.2.210:3002/api/v1/growatt
+curl -s http://127.0.0.1:3002/intern/api/v1/growatt
 sudo ss -ltnp '( sport = :5279 )'
 sudo journalctl -u zonapi -n 50 --no-pager
 ```
@@ -298,7 +331,7 @@ Optionele instellingen; behoud je eigen `calibration_factor`:
 
 Op het dashboard staat naast het percentage het eigen tijdvak, bijvoorbeeld **Blok 14:00–14:15**, en **Blokken vandaag 1/96**. Bij zomer-/wintertijd kan een kalenderdag 92 of 100 blokken tellen. De tooltip vermeldt de datum, de drie meetmomenten en een eventueel genegeerde uitschieter. Zolang leren nog niet kan, staat er een concrete wachtreden en het aantal ontvangen momenten of omvormers.
 
-`GET /api/v1/pv/corrections` geeft `mode: "per_block"`, `scope: "independent_quarters"`, `future_day_policy: "same_clock_quarter"`, `latest.start`, `latest.end`, `latest.date`, de bron-/meetwaarden en de onderbouwing in `sampling`. `learned_blocks` telt alle opgeslagen blokken voor het model; `learned_blocks_today` en het compatibiliteitsveld `learned_quarters` tellen de blokken van vandaag. `learned_clock_quarters` telt de beschikbare afzonderlijke klokkwartieren voor toekomstige dagen. `quarters` beschrijft de echte gedateerde kwartieren van vandaag, inclusief ontbrekende eigen factoren (`null`). Voorspelslots houden `base_power_w`, `power_w`, `automatic_correction_factor` en `correction_source`; de herkomst is `block` voor een eigen gemeten correctie, `same_clock_quarter` voor hergebruik op toekomstige dagen en `none` voor de basis. `correction_reference_start` en `correction_reference_end` wijzen naar het gemeten bronblok.
+`GET /intern/api/v1/pv/corrections` geeft `mode: "per_block"`, `scope: "independent_quarters"`, `future_day_policy: "same_clock_quarter"`, `latest.start`, `latest.end`, `latest.date`, de bron-/meetwaarden en de onderbouwing in `sampling`. `learned_blocks` telt alle opgeslagen blokken voor het model; `learned_blocks_today` en het compatibiliteitsveld `learned_quarters` tellen de blokken van vandaag. `learned_clock_quarters` telt de beschikbare afzonderlijke klokkwartieren voor toekomstige dagen. `quarters` beschrijft de echte gedateerde kwartieren van vandaag, inclusief ontbrekende eigen factoren (`null`). Voorspelslots houden `base_power_w`, `power_w`, `automatic_correction_factor` en `correction_source`; de herkomst is `block` voor een eigen gemeten correctie, `same_clock_quarter` voor hergebruik op toekomstige dagen en `none` voor de basis. `correction_reference_start` en `correction_reference_end` wijzen naar het gemeten bronblok.
 
 In de Database-pagina staan de nieuwe correcties in **`pv_block_corrections`**, met `start_ms` en `end_ms`. Bij de automatische migratie naar databaseschema 6 worden oude correcties alleen overgenomen als hun onderbouwing een eenduidige `target_time` bevat. De oude `pv_correction_pattern` blijft als archief bestaan en wordt niet meer gebruikt voor berekeningen. Overgenomen factoren in andere cacheblokken worden teruggezet naar de bewaarde basiswaarden. Originele weer-, Growatt- en HomeWizard-metingen blijven behouden.
 
@@ -338,54 +371,61 @@ Beperk leesrechten op dit bestand tot de servicegebruiker. Voor v2 HTTPS stel je
 
 ## Endpoints
 
+Alle volledige gegevens- en beheerroutes gebruiken de prefix `/intern`. Alleen het dashboard en zijn beperkte, vaste snapshot zijn openbaar. Bestaande ESP32's en eigen scripts moeten hun ZonAPI-adressen van `/api/v1/...` aanpassen naar `/intern/api/v1/...`; de oude routes hebben geen alias of redirect. De API van de fysieke HomeWizard-apparaten zelf verandert niet.
+
 | Pad | Resultaat |
 | --- | --- |
-| `GET /api/v1/forecast?hours=3` | GHI/DNI/DHI en eigen PV-berekening voor komende uren; `power_w:null` met ontbrekende configuratie als panelen nog niet ingesteld zijn. |
-| `GET /api/v1/forecast/day` | Voorspelling voor vandaag uit de cache met zonsopkomst/-ondergang en aangrenzende tijdvakken; optioneel `?date=YYYY-MM-DD` voor een andere kalenderdag. |
-| `GET /api/v1/forecast/days` | Vandaag, morgen en overmorgen met eigen datums, zonuren en gecorrigeerde voorspelslots; leest uitsluitend de cache. |
-| `GET /api/v1/pv/corrections` | Onafhankelijke gedateerde blokcorrecties, laatste eigen tijdvak en de kwartieren van vandaag. |
-| `GET /api/v1/irradiance?hours=3` | Instraling per kwartier met uurterugval en berekende GTI per paneelgroep. |
-| `GET /api/v1/production/current` | Afzonderlijke omvormers plus uitsluitend bij vier verse metingen een betrouwbare som. |
-| `GET /api/v1/production/day` | Totale opbrengst per meetronde van vandaag, met bron, groepeertijd, aantal omvormers en zonsopgang/-ondergang. |
-| `GET /api/v1/growatt?limit=50` | Feitelijke TCP-luisterstatus/fout, actieve databasepad, ontvangen pakkettypen/statussen, omvormers en recente fouten; maximaal 100 pakketten per aanvraag. |
-| `GET /api/v1/growatt/cloud` | Webbronstatus en herkende installaties/omvormers zonder token. |
-| `POST /api/v1/growatt/cloud/poll` | Eén ophaalpoging als het ingestelde interval en eventuele foutwachttijd verstreken zijn. |
-| `GET /api/v1/growatt/cloud/calls/:id` | HTTP-metadata en geschoond JSON-antwoord van één opgeslagen webverzoek. |
-| `GET /api/v1/weather?status=all&limit=50&offset=0` | Weerstatus, aangemaakte aanvraag-URL, zoninstraling van vandaag en gefilterde, pagineerbare aanvragen met HTTP-status en foutreden. Statusfilter: `all`, `ok`, `error`, `pending`. |
-| `POST /api/v1/weather/refresh` | Probeert direct eenmaal het weer op te halen binnen het dagelijkse quotum, ook 's nachts; resultaat bevat `attempted`, `reason` en bijgewerkte status. |
-| `GET /api/v1/:source/logging` | Logstatus voor `growatt`, `weather` of `homewizard`. |
-| `PUT /api/v1/:source/logging?enabled=false` | Logging uitzetten in `debug.json`; `enabled=true` zet logging aan. |
-| `DELETE /api/v1/weather/diagnostics` | Wist weerlogs met behoud van dagquotum, planning, instraling en actuele status. |
-| `GET /api/v1/homewizard?device=all&status=all&limit=50&offset=0` | Lokale meterinformatie, actuele bronstatus en gefilterde verzoeken. `device`: `all`, `p1`, `kwh`; `status`: `all`, `ok`, `error`. |
-| `POST /api/v1/homewizard/poll` | Leest eenmaal de ingestelde lokale meters. |
-| `DELETE /api/v1/homewizard/diagnostics` | Wist meterlogs met behoud van meetgeschiedenis en actuele status. |
-| `GET /api/v1/growatt/timeline?type=xx04&limit=100` | Chronologische lijst van pakketten, TCP-gebeurtenissen en webverzoeken, met filters `type` (`xx04` of `5004`), `address` (`50`–`53`), `view` (`all`, `packets`, `errors`, `events`, `cloud`) en paginering via `offset`. `has_more` geeft aan of er meer regels zijn. |
-| `GET /api/v1/growatt/frames/:id` | Eén ontvangen pakket inclusief de oorspronkelijke hex-inhoud en eventuele gedecodeerde meting. |
-| `DELETE /api/v1/growatt/diagnostics` | Verwijdert Growatt-pakketten en verbindings-/antwoordlogs, behoudt opgeslagen opbrengstmetingen; geeft verwijderde aantallen terug. De Growatt-pagina biedt hiervoor een knop met bevestiging. |
-| `GET /api/v1/meters/current` | P1 en kWh afzonderlijk, plus precies **één** gekozen netto netvermogen. Positief = import, negatief = export. |
-| `GET /api/v1/history?metric=irradiance&from=...&to=...` | Bestaande time series. `metric`: `irradiance`, `pv_forecast`, `inverter`, `p1` of `kwh`; `limit` max. 5000. Bij `inverter` kiest optioneel `source=shinelink`, `cloud` of `auto` de bron; standaard geldt de ingestelde opbrengstbron. Bij voorspellingen overschrijft een nieuwere bronwaarde hetzelfde tijdvak. |
-| `GET /api/v1/appliances` | Geldige JSON-profielen en eventuele laad-/validatiefouten. |
-| `GET /api/v1/appliances/daily` | Per voorspelde lokale dag zontijden en startadviezen voor alle apparaatprofielen. |
-| `GET /api/v1/appliances/wasmachine/advice` | `can_start_now`, `earliest_start`, `best_start`, volledige zonnefractie en status (`ok`, `stale`, `forecast_incomplete`, enzovoort). Ook `droger` en `vaatwasser`. |
-| `GET /api/v1/status` | Bronnen, configuratiefouten, historisch aantal ontvangen frames, zontijden, gebruikt/dagmaximum en volgende weersophaling. |
+| `GET /api/v1/dashboard` | Openbare alleen-lezen snapshot met uitsluitend dashboardwaarden: huidige totalen, drie daggrafieken, correcties, apparaten, dagelijkse startadviezen en cyclusgrafieken. Geen keuzemogelijkheid voor interne tabellen of brongegevens. |
+| `GET /intern` | Interne ingang; toont de Growatt-beheerpagina. Ook bereikbaar op `/intern/`. |
+| `GET /intern/database` | Interne databasebrowser met tabelkeuze, sortering, filters en paginering. |
+| `GET /intern/api/v1/database/tables` | Interne catalogus van toepassingstabellen en kolommen. |
+| `GET /intern/api/v1/database/rows?table=forecast` | Interne gepagineerde tabelinhoud. |
+| `GET /intern/api/v1/forecast?hours=3` | GHI/DNI/DHI en eigen PV-berekening voor komende uren; `power_w:null` met ontbrekende configuratie als panelen nog niet ingesteld zijn. |
+| `GET /intern/api/v1/forecast/day` | Voorspelling voor vandaag uit de cache met zonsopkomst/-ondergang en aangrenzende tijdvakken; optioneel `?date=YYYY-MM-DD` voor een andere kalenderdag. |
+| `GET /intern/api/v1/forecast/days` | Vandaag, morgen en overmorgen met eigen datums, zonuren en gecorrigeerde voorspelslots; leest uitsluitend de cache. |
+| `GET /intern/api/v1/pv/corrections` | Onafhankelijke gedateerde blokcorrecties, laatste eigen tijdvak en de kwartieren van vandaag. |
+| `GET /intern/api/v1/irradiance?hours=3` | Instraling per kwartier met uurterugval en berekende GTI per paneelgroep. |
+| `GET /intern/api/v1/production/current` | Afzonderlijke omvormers plus uitsluitend bij vier verse metingen een betrouwbare som. |
+| `GET /intern/api/v1/production/day` | Totale opbrengst per meetronde van vandaag, met bron, groepeertijd, aantal omvormers en zonsopgang/-ondergang. |
+| `GET /intern/api/v1/growatt?limit=50` | Feitelijke TCP-luisterstatus/fout, actieve databasepad, ontvangen pakkettypen/statussen, omvormers en recente fouten; maximaal 100 pakketten per aanvraag. |
+| `GET /intern/api/v1/growatt/cloud` | Webbronstatus en herkende installaties/omvormers zonder token. |
+| `POST /intern/api/v1/growatt/cloud/poll` | Eén ophaalpoging als het ingestelde interval en eventuele foutwachttijd verstreken zijn. |
+| `GET /intern/api/v1/growatt/cloud/calls/:id` | HTTP-metadata en geschoond JSON-antwoord van één opgeslagen webverzoek. |
+| `GET /intern/api/v1/weather?status=all&limit=50&offset=0` | Weerstatus, aangemaakte aanvraag-URL, zoninstraling van vandaag en gefilterde, pagineerbare aanvragen met HTTP-status en foutreden. Statusfilter: `all`, `ok`, `error`, `pending`. |
+| `POST /intern/api/v1/weather/refresh` | Probeert direct eenmaal het weer op te halen binnen het dagelijkse quotum, ook 's nachts; resultaat bevat `attempted`, `reason` en bijgewerkte status. |
+| `GET /intern/api/v1/:source/logging` | Logstatus voor `growatt`, `weather` of `homewizard`. |
+| `PUT /intern/api/v1/:source/logging?enabled=false` | Logging uitzetten in `debug.json`; `enabled=true` zet logging aan. |
+| `DELETE /intern/api/v1/weather/diagnostics` | Wist weerlogs met behoud van dagquotum, planning, instraling en actuele status. |
+| `GET /intern/api/v1/homewizard?device=all&status=all&limit=50&offset=0` | Lokale meterinformatie, actuele bronstatus en gefilterde verzoeken. `device`: `all`, `p1`, `kwh`; `status`: `all`, `ok`, `error`. |
+| `POST /intern/api/v1/homewizard/poll` | Leest eenmaal de ingestelde lokale meters. |
+| `DELETE /intern/api/v1/homewizard/diagnostics` | Wist meterlogs met behoud van meetgeschiedenis en actuele status. |
+| `GET /intern/api/v1/growatt/timeline?type=xx04&limit=100` | Chronologische lijst van pakketten, TCP-gebeurtenissen en webverzoeken, met filters `type` (`xx04` of `5004`), `address` (`50`–`53`), `view` (`all`, `packets`, `errors`, `events`, `cloud`) en paginering via `offset`. `has_more` geeft aan of er meer regels zijn. |
+| `GET /intern/api/v1/growatt/frames/:id` | Eén ontvangen pakket inclusief de oorspronkelijke hex-inhoud en eventuele gedecodeerde meting. |
+| `DELETE /intern/api/v1/growatt/diagnostics` | Verwijdert Growatt-pakketten en verbindings-/antwoordlogs, behoudt opgeslagen opbrengstmetingen; geeft verwijderde aantallen terug. De Growatt-pagina biedt hiervoor een knop met bevestiging. |
+| `GET /intern/api/v1/meters/current` | P1 en kWh afzonderlijk, plus precies **één** gekozen netto netvermogen. Positief = import, negatief = export. |
+| `GET /intern/api/v1/history?metric=irradiance&from=...&to=...` | Bestaande time series. `metric`: `irradiance`, `pv_forecast`, `inverter`, `p1` of `kwh`; `limit` max. 5000. Bij `inverter` kiest optioneel `source=shinelink`, `cloud` of `auto` de bron; standaard geldt de ingestelde opbrengstbron. Bij voorspellingen overschrijft een nieuwere bronwaarde hetzelfde tijdvak. |
+| `GET /intern/api/v1/appliances` | Geldige JSON-profielen en eventuele laad-/validatiefouten. |
+| `GET /intern/api/v1/appliances/daily` | Per voorspelde lokale dag zontijden en startadviezen voor alle apparaatprofielen. |
+| `GET /intern/api/v1/appliances/wasmachine/advice` | `can_start_now`, `earliest_start`, `best_start`, volledige zonnefractie en status (`ok`, `stale`, `forecast_incomplete`, enzovoort). Ook `droger` en `vaatwasser`. |
+| `GET /intern/api/v1/status` | Bronnen, configuratiefouten, historisch aantal ontvangen frames, zontijden, gebruikt/dagmaximum en volgende weersophaling. |
 | `GET /dashboard` | Ruime daggrafieken voor vandaag, morgen en overmorgen, elk tussen eigen zonuren, met verbonden voorspeltijdvakken en tijd-/waardecursor; vandaag ook gemeten totaalpunten en huidige-tijdlijn. |
-| `GET /growatt` | Growatt-pagina met omvormermetingen, tijdlijn voor pakketten, antwoorden, tijdsynchronisatie en verbindingen, filters, verwijderknop en verversing iedere 15 seconden. |
-| `GET /weather` | Weerpagina met zontijden, bronverzoeken, fouten, instralingsgrafiek en handmatige ophaalknop, verversing iedere 15 seconden. |
-| `GET /homewizard` | Lokale meterinformatie, poll-logs, filters, logbeheer en handmatig ophalen; verversing iedere 15 seconden. |
+| `GET /intern/growatt` | Growatt-pagina met omvormermetingen, tijdlijn voor pakketten, antwoorden, tijdsynchronisatie en verbindingen, filters, verwijderknop en verversing iedere 15 seconden. |
+| `GET /intern/weather` | Weerpagina met zontijden, bronverzoeken, fouten, instralingsgrafiek en handmatige ophaalknop, verversing iedere 15 seconden. |
+| `GET /intern/homewizard` | Lokale meterinformatie, poll-logs, filters, logbeheer en handmatig ophalen; verversing iedere 15 seconden. |
 
-Bijvoorbeeld voor een ESP32: lees `can_start_now` alleen als `status === "ok"`; bij `null`, `stale` of ontbrekende instellingen toon je "onbekend" in plaats van "nee". `earliest_start` kan na drie uur liggen. `best_start` en `best` bevatten het moment met de meeste zonne-energie, ook als de minimumdrempel nergens wordt gehaald. Deze velden staan eveneens per apparaat in `/api/v1/appliances/daily`. De nieuwe `solar_share` is de ongeronde fractie (0–1); `solar_share_percent` blijft het leesbare percentage met maximaal één decimaal. De vergelijking van startmomenten en minimumdrempels gebruikt de ongeronde fractie, zodat afronden geen gedeeltelijke dekking als 100% presenteert. Een bruikbaar gedeeltelijk alternatief vereist `status === "ok"` en `0 < best.solar_share < 1`; houd ook rekening met `already_active` of de socketstatus.
+Bijvoorbeeld voor een ESP32: lees `can_start_now` alleen als `status === "ok"`; bij `null`, `stale` of ontbrekende instellingen toon je "onbekend" in plaats van "nee". `earliest_start` kan na drie uur liggen. `best_start` en `best` bevatten het moment met de meeste zonne-energie, ook als de minimumdrempel nergens wordt gehaald. Deze velden staan eveneens per apparaat in `/intern/api/v1/appliances/daily`. De nieuwe `solar_share` is de ongeronde fractie (0–1); `solar_share_percent` blijft het leesbare percentage met maximaal één decimaal. De vergelijking van startmomenten en minimumdrempels gebruikt de ongeronde fractie, zodat afronden geen gedeeltelijke dekking als 100% presenteert. Een bruikbaar gedeeltelijk alternatief vereist `status === "ok"` en `0 < best.solar_share < 1`; houd ook rekening met `already_active` of de socketstatus.
 
 ## Growatt-validatie bij eerste live-verbinding
 
 1. Laat de dienst eerst lokaal draaien, verplaats daarna het ingestelde ShineLanBox-serveradres. De decoder ontvangt op de ingestelde TCP-poort; de software heeft geen uitgaand Growatt-adres en gebruikt geen proxy.
-2. Bekijk `/api/v1/status`: `frames` toont `decoded:...`, `unknown_layout`, `bad_crc` en dergelijke; de individuele omvormers staan er met meettijd. In `config/layouts/README.md` staat het schema voor alternatieve layouts.
-   Via `/growatt` zijn de berichttypen, ontvangen bytes en TCP-gebeurtenissen direct in de browser te bekijken. Kies `xx04` om ook eerdere meetpakketten te vinden die niet bij de laatste honderd berichten staan. De knop Vernieuwen en het tijdstip Bijgewerkt tonen of nieuwe gegevens zijn opgehaald. De hex-inhoud kan serienummers bevatten.
+2. Bekijk `/intern/api/v1/status`: `frames` toont `decoded:...`, `unknown_layout`, `bad_crc` en dergelijke; de individuele omvormers staan er met meettijd. In `config/layouts/README.md` staat het schema voor alternatieve layouts.
+   Via `/intern/growatt` zijn de berichttypen, ontvangen bytes en TCP-gebeurtenissen direct in de browser te bekijken. Kies `xx04` om ook eerdere meetpakketten te vinden die niet bij de laatste honderd berichten staan. De knop Vernieuwen en het tijdstip Bijgewerkt tonen of nieuwe gegevens zijn opgehaald. De hex-inhoud kan serienummers bevatten.
    ShineLanBox-v06-aanmeldingen met type `5003`–`5303` of `5029`–`5329` tonen de adressen `50`–`53`, omvormerserienummers en logger. Open een `xx29`-pakket met **Bekijk** om per RF-stick het update-interval, de firmware, tijdzone en apparaatklok te lezen. In de vier verstrekte voorbeelden meldt adres `50` 5 minuten en melden adressen `51`–`53` elk 1 minuut. Deze pakketten bevatten geen actuele vermogensmeting; daarvoor is een datarecord nodig (`xx04` of `xx50`).
 3. Vergelijk meerdere werkelijk gemeten wattages en energietellers **per serienummer** met de eigen omvormers. Controleer herverbinding en of oudere gebufferde pakketten niet het actuele vermogen vervangen. Gebruik desgewenst lokaal `node scripts/inspect-frames.js` voor pakketstatus; `--hex` toont privégegevens, waaronder serienummers.
 4. Bij uitsluitend lokaal gebruik kun je externe Growatt-verbindingen met de firewall blokkeren. Voor cloudgebruik moet de ShineLanBox Growatt wel kunnen bereiken. De TCP-ontvanger stuurt in geen van beide standen pakketten of cloudopdrachten door. Of jouw ShineLanBox 7.0.0.4 de generieke ACK van de lokale TCP-server accepteert, kan pas met de echte hardware worden bevestigd. Als dat niet zo is, zijn de bewaarde pakketten de input voor een gerichte protocolaanpassing.
 
-Een ontvangen `5004` verschijnt als omvormermeting onder het serienummer van adres `50`. Bij de lokale bron wordt de totale actuele opbrengst pas gevuld wanneer alle vier omvormers een recente meting hebben. De grafiek bundelt deze waarden tot één totaalpunt; individuele metingen blijven zichtbaar op `/growatt`. Bekijk na elk bericht `reply_sent` in `/growatt` voor de lokaal geschreven antwoordbytes. ZonAPI schrijft de ACK vóór het decoderen; direct daarna volgt op de eerste geldige `xx03` een lokale `0118`-tijdsopdracht voor dataloggerregister 31. Bij ontbrekende `xx04`-pakketten herhaalt de opdracht hoogstens eenmaal per tien minuten, zolang er `xx03`-pakketten binnenkomen. `time_sync_sent` logt de uitgaande bytes, `time_sync_response` logt een eventueel binnenkomend `xx18`-antwoord. `reply_sent` betekent dat Node de bytes aan de socket heeft overgedragen; controleer de daaropvolgende pakketten om het effect op de logger te zien. Nieuwe TCP-verbindingen en normale sluitingen staan tussen de berichten; na 30 minuten stilte volgt `idle_disconnect`. De listener gebruikt geen TCP-keepalive met korte probe-termijn. `DELETE /api/v1/growatt/diagnostics` wist alleen diagnostische berichten; de opbrengsthistorie blijft aanwezig door een automatische SQLite-migratie bij de eerste start van deze versie.
+Een ontvangen `5004` verschijnt als omvormermeting onder het serienummer van adres `50`. Bij de lokale bron wordt de totale actuele opbrengst pas gevuld wanneer alle vier omvormers een recente meting hebben. De grafiek bundelt deze waarden tot één totaalpunt; individuele metingen blijven zichtbaar op `/intern/growatt`. Bekijk na elk bericht `reply_sent` in `/intern/growatt` voor de lokaal geschreven antwoordbytes. ZonAPI schrijft de ACK vóór het decoderen; direct daarna volgt op de eerste geldige `xx03` een lokale `0118`-tijdsopdracht voor dataloggerregister 31. Bij ontbrekende `xx04`-pakketten herhaalt de opdracht hoogstens eenmaal per tien minuten, zolang er `xx03`-pakketten binnenkomen. `time_sync_sent` logt de uitgaande bytes, `time_sync_response` logt een eventueel binnenkomend `xx18`-antwoord. `reply_sent` betekent dat Node de bytes aan de socket heeft overgedragen; controleer de daaropvolgende pakketten om het effect op de logger te zien. Nieuwe TCP-verbindingen en normale sluitingen staan tussen de berichten; na 30 minuten stilte volgt `idle_disconnect`. De listener gebruikt geen TCP-keepalive met korte probe-termijn. `DELETE /intern/api/v1/growatt/diagnostics` wist alleen diagnostische berichten; de opbrengsthistorie blijft aanwezig door een automatische SQLite-migratie bij de eerste start van deze versie.
 
 ## Testen
 
-`npm test` controleert debugbestandbeheer en dashboard-logschakelaars, behoud van metingen en quota met logging uit, nachtelijke weerplanning en daglimieten rond zomer-/wintertijd, drie daggrafieken met eigen zonuren en cursors bij verschillende schermbreedtes, geleerde kwartiercorrecties voor toekomstige dagen, Growatt-frequentiebeperking en meettijden, bronkeuze zonder dubbeltelling, TCP-verwerking, database-migraties, kwartier-/uurselectie, HomeWizard en apparaatadviezen. De tests gebruiken lokale fixtures en simulaties van de externe bronnen.
+`npm test` controleert de scheiding tussen openbare en interne HTTP-routes, het weglaten van technische velden uit de openbare snapshot, geweigerde openbare schrijfmethoden, de echte dashboardmodule met uitsluitend de openbare snapshot, interne beheerpagina's en hun bestanden, debugbestandbeheer en dashboard-logschakelaars, behoud van metingen en quota met logging uit, nachtelijke weerplanning en daglimieten rond zomer-/wintertijd, drie daggrafieken met eigen zonuren en cursors bij verschillende schermbreedtes, geleerde kwartiercorrecties voor toekomstige dagen, Growatt-frequentiebeperking en meettijden, bronkeuze zonder dubbeltelling, TCP-verwerking, database-migraties, kwartier-/uurselectie, HomeWizard en apparaatadviezen. De tests gebruiken lokale fixtures en simulaties van de externe bronnen.

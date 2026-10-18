@@ -24,28 +24,28 @@ test('weerpagina toont configuratie, verzendt handmatig verzoek en registreert H
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
-    const page = await (await fetch(`${base}/weather`)).text();
+    const page = await (await fetch(`${base}/intern/weather`)).text();
     assert.match(page, /Weerverzoeken/);
     assert.match(page, /weather\.js" type="module"/);
-    assert.equal((await fetch(`${base}/weather-chart.js`)).status, 200);
-    const before = await (await fetch(`${base}/api/v1/weather`)).json();
+    assert.equal((await fetch(`${base}/intern/weather-chart.js`)).status, 200);
+    const before = await (await fetch(`${base}/intern/api/v1/weather`)).json();
     assert.match(before.request_url, /latitude=52\.2/);
     assert.equal(before.status.used_requests, 0);
-    const request = await fetch(`${base}/api/v1/weather/refresh`, { method: 'POST' });
+    const request = await fetch(`${base}/intern/api/v1/weather/refresh`, { method: 'POST' });
     assert.equal(request.status, 200);
     assert.equal((await request.json()).attempted, true);
-    const after = await (await fetch(`${base}/api/v1/weather?status=ok&limit=1`)).json();
+    const after = await (await fetch(`${base}/intern/api/v1/weather?status=ok&limit=1`)).json();
     assert.equal(after.status.used_requests, 1);
     assert.equal(after.calls.rows[0].http_status, 200);
     assert.equal(after.calls.rows[0].forecast_rows, 1);
     assert.equal(after.forecast.rows[0].ghi_w_m2, 200);
-    assert.equal((await (await fetch(`${base}/api/v1/weather/diagnostics`, { method: 'DELETE' })).json()).calls_deleted, 1);
-    const cleared = await (await fetch(`${base}/api/v1/weather`)).json();
+    assert.equal((await (await fetch(`${base}/intern/api/v1/weather/diagnostics`, { method: 'DELETE' })).json()).calls_deleted, 1);
+    const cleared = await (await fetch(`${base}/intern/api/v1/weather`)).json();
     assert.equal(cleared.status.used_requests, 1);
     assert.equal(cleared.calls.rows.length, 0);
     assert.equal(cleared.forecast.rows[0].ghi_w_m2, 200);
-    assert.equal((await (await fetch(`${base}/api/v1/weather/refresh`, { method: 'POST' })).json()).reason, 'quota');
-    assert.equal((await fetch(`${base}/api/v1/weather?status=unknown`)).status, 400);
+    assert.equal((await (await fetch(`${base}/intern/api/v1/weather/refresh`, { method: 'POST' })).json()).reason, 'quota');
+    assert.equal((await fetch(`${base}/intern/api/v1/weather?status=unknown`)).status, 400);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     db.close();

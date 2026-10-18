@@ -38,7 +38,7 @@ test('API corrigeert op alle drie dagen hetzelfde Nederlandse klokkwartier met d
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
-    const result = await (await fetch(`${base}/api/v1/forecast/days`)).json();
+    const result = await (await fetch(`${base}/intern/api/v1/forecast/days`)).json();
     assert.deepEqual(result.days.map((day) => day.date), dates);
     assert.equal(result.generated_at, new Date(now).toISOString());
     for (const [index, day] of result.days.entries()) {
@@ -59,16 +59,16 @@ test('API corrigeert op alle drie dagen hetzelfde Nederlandse klokkwartier met d
     assert.deepEqual(corrected.map((slot) => slot.power_w), [200, 240, 280]);
     assert.deepEqual(corrected.map((slot) => slot.end), ['2026-10-24T10:00:00.000Z', '2026-10-25T11:00:00.000Z', '2026-10-26T11:00:00.000Z']);
     assert.ok(corrected.every((slot) => slot.correction_reference_end === new Date(now).toISOString()));
-    assert.deepEqual(await (await fetch(`${base}/api/v1/forecast/day`)).json(), result.days[0]);
-    assert.deepEqual(await (await fetch(`${base}/api/v1/forecast/day?date=2026-10-26`)).json(), result.days[2]);
-    for (const value of ['2026-02-30', '2026-13-01', '2026-1-01', 'morgen']) assert.equal((await fetch(`${base}/api/v1/forecast/day?date=${value}`)).status, 400);
+    assert.deepEqual(await (await fetch(`${base}/intern/api/v1/forecast/day`)).json(), result.days[0]);
+    assert.deepEqual(await (await fetch(`${base}/intern/api/v1/forecast/day?date=2026-10-26`)).json(), result.days[2]);
+    for (const value of ['2026-02-30', '2026-13-01', '2026-1-01', 'morgen']) assert.equal((await fetch(`${base}/intern/api/v1/forecast/day?date=${value}`)).status, 400);
     assert.equal(repository.countCalls(dates[0]), 1);
     const page = await (await fetch(`${base}/dashboard`)).text();
     assert.match(page, /pv-chart-tomorrow/);
     assert.match(page, /pv-chart-after-tomorrow/);
     assert.equal((await fetch(`${base}/dashboard-production-days.js`)).status, 200);
     now = Date.parse('2026-10-24T22:30:00Z');
-    const midnight = await (await fetch(`${base}/api/v1/forecast/days`)).json();
+    const midnight = await (await fetch(`${base}/intern/api/v1/forecast/days`)).json();
     assert.deepEqual(midnight.days.map((day) => day.date), ['2026-10-25', '2026-10-26', '2026-10-27']);
     assert.equal(localDay(Date.parse(midnight.days[2].sunrise)), '2026-10-27');
     assert.equal(midnight.days[2].status, 'forecast_unavailable');

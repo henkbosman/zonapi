@@ -9,7 +9,7 @@ function svgNode(name, attributes, parent) {
   return node;
 }
 
-/** Tekent een instralingsreeks uit opgeslagen tijdvakken; input: forecast uit /api/v1/weather, huidige ms en container; output: void. */
+/** Tekent een instralingsreeks uit opgeslagen tijdvakken; input: forecast uit /intern/api/v1/weather, huidige ms en container; output: void. */
 export function drawRadiationChart(forecast, now, container) {
   container.replaceChildren();
   const sunrise = Date.parse(forecast.sunrise);

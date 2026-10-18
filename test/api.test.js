@@ -13,14 +13,14 @@ test('API en dashboard geven ontbrekende configuratie expliciet terug', async ()
   const server = startHttpServer({ settings: { ...settings, http: { host: '127.0.0.1', port: 0 } }, panels, panelErrors, repository, weather: { status: () => ({ source: 'open-meteo', used_requests: 0, max_requests: 12, location_configured: false }) }, homewizard: { status: () => ({ p1: null, kwh: null }) } });
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
-  const forecast = await (await fetch(`${base}/api/v1/forecast?hours=3`)).json();
+  const forecast = await (await fetch(`${base}/intern/api/v1/forecast?hours=3`)).json();
   assert.equal(forecast.status, 'forecast_unavailable');
-  const advice = await (await fetch(`${base}/api/v1/appliances/wasmachine/advice`)).json();
+  const advice = await (await fetch(`${base}/intern/api/v1/appliances/wasmachine/advice`)).json();
   assert.equal(advice.status, 'configuration_incomplete');
   assert.ok(advice.missing.some((item) => item.includes('wp_per_panel')));
-  const meters = await (await fetch(`${base}/api/v1/meters/current`)).json();
+  const meters = await (await fetch(`${base}/intern/api/v1/meters/current`)).json();
   assert.equal(meters.net_power_w, null);
-  const daily = await (await fetch(`${base}/api/v1/appliances/daily`)).json();
+  const daily = await (await fetch(`${base}/intern/api/v1/appliances/daily`)).json();
   assert.equal(daily.days.length, settings.weather.forecast_days);
   assert.equal(daily.days[0].appliances.length, 3);
   const dashboard = await fetch(`${base}/dashboard`);
@@ -51,7 +51,7 @@ test('daggrafiek toont alleen totalen en logs wissen bewaart ook losse omvormerm
   await once(server, 'listening');
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
-    const day = await (await fetch(`${base}/api/v1/production/day`)).json();
+    const day = await (await fetch(`${base}/intern/api/v1/production/day`)).json();
     assert.equal(day.sunrise, sunrise);
     assert.equal(day.sunset, sunset);
     assert.deepEqual(day.points, []);
@@ -62,14 +62,14 @@ test('daggrafiek toont alleen totalen en logs wissen bewaart ook losse omvormerm
     const chartModule = await fetch(`${base}/dashboard-production-chart.js`);
     assert.equal(chartModule.status, 200);
     assert.match(await chartModule.text(), /drawProductionChart/);
-    assert.equal((await (await fetch(`${base}/api/v1/status`)).json()).growatt.power_w, null);
-    const cleared = await fetch(`${base}/api/v1/growatt/diagnostics`, { method: 'DELETE' });
+    assert.equal((await (await fetch(`${base}/intern/api/v1/status`)).json()).growatt.power_w, null);
+    const cleared = await fetch(`${base}/intern/api/v1/growatt/diagnostics`, { method: 'DELETE' });
     assert.deepEqual(await cleared.json(), { frames_deleted: 3, events_deleted: 1, cloud_calls_deleted: 0 });
-    assert.deepEqual((await (await fetch(`${base}/api/v1/growatt/timeline`)).json()).rows, []);
-    assert.deepEqual((await (await fetch(`${base}/api/v1/production/day`)).json()).points, day.points);
+    assert.deepEqual((await (await fetch(`${base}/intern/api/v1/growatt/timeline`)).json()).rows, []);
+    assert.deepEqual((await (await fetch(`${base}/intern/api/v1/production/day`)).json()).points, day.points);
     assert.equal(repository.history('inverter', measured - 1, now + 1, 100).length, 3);
-    assert.equal((await (await fetch(`${base}/api/v1/growatt`)).json()).summary.frames_total, 0);
-    assert.equal((await fetch(`${base}/api/v1/growatt/diagnostics`, { method: 'POST' })).status, 405);
+    assert.equal((await (await fetch(`${base}/intern/api/v1/growatt`)).json()).summary.frames_total, 0);
+    assert.equal((await fetch(`${base}/intern/api/v1/growatt/diagnostics`, { method: 'POST' })).status, 405);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     db.close();
@@ -89,7 +89,7 @@ test('dagvoorspelling leest ochtend en middag uit de cache en laat het bestaande
   await once(server, 'listening');
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
-    const day = await (await fetch(`${base}/api/v1/forecast/day`)).json();
+    const day = await (await fetch(`${base}/intern/api/v1/forecast/day`)).json();
     assert.equal(day.status, 'ok');
     assert.equal(day.sunrise, sunrise);
     assert.equal(day.sunset, sunset);
@@ -97,7 +97,7 @@ test('dagvoorspelling leest ochtend en middag uit de cache en laat het bestaande
     assert.ok(day.slots.some((slot) => Date.parse(slot.start) > now + 8 * 3600000));
     assert.ok(day.slots.every((slot) => slot.power_w === 320));
     assert.equal(repository.lastCall(), null);
-    const upcoming = await (await fetch(`${base}/api/v1/forecast?hours=3`)).json();
+    const upcoming = await (await fetch(`${base}/intern/api/v1/forecast?hours=3`)).json();
     assert.ok(upcoming.slots.length > 0 && upcoming.slots.length <= 4);
     assert.ok(upcoming.slots.every((slot) => Date.parse(slot.end) > now && Date.parse(slot.start) < Date.parse(day.now) + 3 * 3600000 + 1000));
     assert.equal((await fetch(`${base}/production-chart-series.js`)).status, 200);

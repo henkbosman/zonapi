@@ -14,7 +14,7 @@ function watts(value) {
 /** Formatteert een energieteller; input: kWh of null; output: teller met eenheid of streepje. */
 function energy(value) { return Number.isFinite(value) ? `${value} kWh` : '—'; }
 
-/** Werkt de actuele opbrengst en omvormertabel bij; input: antwoord van /api/v1/production/current; output: void. */
+/** Werkt de actuele opbrengst en omvormertabel bij; input: antwoord van /intern/api/v1/production/current; output: void. */
 export function renderGrowattProduction(production) {
   document.getElementById('power').textContent = watts(production.power_w);
   document.getElementById('active').textContent = `${production.active_inverters}/${production.expected_inverters}`;

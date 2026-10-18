@@ -124,7 +124,7 @@ test('Growatt kan op het kwartier worden opgevraagd terwijl de echte blauwe meet
     weather: { status: () => ({ sunrise: f.sunrise, sunset: f.sunset }) }, homewizard: { status: () => ({}) } });
   await once(server, 'listening');
   t.after(async () => { await new Promise((resolve) => server.close(resolve)); await cloud.stop(); });
-  const day = await (await fetch(`http://127.0.0.1:${server.address().port}/api/v1/production/day`)).json();
+  const day = await (await fetch(`http://127.0.0.1:${server.address().port}/intern/api/v1/production/day`)).json();
   assert.equal(day.points.length, 1);
   assert.equal(day.points[0].time, iso(at('13:03:01')));
   assert.equal(day.points[0].measured_from, iso(at('13:02:46')));
