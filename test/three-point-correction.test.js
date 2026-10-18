@@ -49,7 +49,7 @@ function fixture(t, { automatic = {}, path = ':memory:', weather = true, center 
     return rows;
   };
   f.learn = () => learnQuarterCorrection(f.repository, f.settings, f.panels, [], f.repository.currentCloudInverters(), f.now);
-  f.pattern = () => f.repository.pvCorrectionPattern(correctionModelKey(f.settings, f.panels));
+  f.pattern = () => f.repository.pvBlockCorrections(correctionModelKey(f.settings, f.panels));
   f.trio = (powers = [800, 820, 840], options = {}) => { for (let i = 0; i < 3; i++) f.add(f.target + (i - 1) * five, powers[i], options); };
   t.after(() => f.db.close());
   return f;
@@ -226,20 +226,6 @@ test('driepuntsonderbouwing overleeft een databaseherstart en het wissen of uits
   assert.equal(status.latest.sampling.samples[1].used, false);
 });
 
-test('een bestaande patroontabel zonder driepuntsmetadata wordt aangevuld met behoud van eerder geleerde correcties', (t) => {
-  const folder = mkdtempSync(join(tmpdir(), 'zonapi-old-pattern-'));
-  const path = join(folder, 'state.sqlite'), f = fixture(t, { path });
-  t.after(() => rmSync(folder, { recursive: true, force: true }));
-  f.repository.savePvCorrection({ model_key: correctionModelKey(f.settings, f.panels), quarter_minute: 9 * 60 + 15,
-    factor: 0.5, predicted_w: 1000, measured_w: 500, measured_ms: target - 1000, updated_ms: target, signature: 'legacy' });
-  f.db.exec('ALTER TABLE pv_correction_pattern DROP COLUMN sampling_json');
-  f.db.close(); f.db = openDatabase(path); f.repository = createRepository(f.db);
-  assert.equal(f.pattern()[0].factor, 0.5);
-  assert.equal(f.pattern()[0].sampling_json, null);
-  f.trio(); assert.equal(f.learn().factor, 0.82);
-  assert.equal(JSON.parse(f.pattern()[0].sampling_json).used_samples, 3);
-});
-
 test('nulproductie blijft mogelijk en lage of ontbrekende voorspelling, te oude data en onvolledige configuratie leren niet', (t) => {
   const zero = fixture(t); zero.trio([0, 0, 0]);
   assert.equal(zero.learn().factor, 0);
@@ -263,7 +249,7 @@ test('driepuntsvensters rond de terugkerende wintertijd gebruiken aparte UTC-mee
   const later = f.learn();
   assert.equal(later.time, '02:15');
   assert.equal(later.factor, 1.2);
-  assert.equal(f.pattern().length, 1);
+  assert.equal(f.pattern().length, 2);
   assert.ok(later.sampling.samples.every((sample) => Date.parse(sample.time) >= Date.parse('2026-10-25T01:10:00Z')));
 });
 
@@ -306,7 +292,7 @@ test('vijfminutenopvragen met vertraagde Growatt-antwoorden sturen de driepuntsc
   assert.equal(status.latest.sampling.used_samples, 2);
   assert.deepEqual(status.latest.sampling.ignored_times, [iso(target)]);
   const forecast = await (await fetch(`${base}/api/v1/forecast?hours=3`)).json();
-  assert.ok(forecast.slots.every((slot) => slot.power_w === 810));
+  assert.ok(forecast.slots.every((slot) => slot.power_w === 1000 && slot.automatic_correction_factor === 1));
   const previous = globalThis.document, nodes = new Map();
   globalThis.document = { createElement: () => ({ textContent: '' }), getElementById(id) {
     if (!nodes.has(id)) nodes.set(id, { textContent: '', children: [], replaceChildren() { this.children = []; }, append(child) { this.children.push(child); } });
@@ -327,7 +313,7 @@ test('herstart leert direct uit opgeslagen afwijkende meetklokken en bewaart cor
   const result = learner.learn();
   assert.equal(result.status, 'updated'); assert.equal(result.factor, 0.81);
   assert.equal(f.pattern().length, 1); assert.equal(JSON.parse(f.pattern()[0].sampling_json).used_samples, 2);
-  const cached = f.repository.pv(f.now, f.now + 3600000);
+  const cached = f.repository.pv(target - quarter, target);
   assert.ok(cached.length > 0); assert.ok(cached.every((row) => row.correction_factor === 0.81));
   f.repository.clearGrowattDiagnostics(); f.repository.setLogging('growatt', false);
   assert.equal(f.repository.diagnosticState('growatt', 'pv_correction').status, 'updated');
@@ -337,7 +323,7 @@ test('herstart leert direct uit opgeslagen afwijkende meetklokken en bewaart cor
   const corrections = await (await fetch(`${base}/api/v1/pv/corrections`)).json();
   assert.equal(corrections.status, 'active'); assert.equal(corrections.last_attempt.status, 'updated');
   assert.equal(corrections.sample_tolerance_seconds, 150);
-  const table = await (await fetch(`${base}/api/v1/database/rows?table=pv_correction_pattern`)).json();
+  const table = await (await fetch(`${base}/api/v1/database/rows?table=pv_block_corrections`)).json();
   assert.equal(table.total_rows, 1); assert.equal(table.rows[0][table.columns.findIndex((column) => column.name === 'factor')], 0.81);
   const display = {};
   renderPvCorrection(display, corrections); assert.match(display.textContent, /Correctie -19%/); assert.match(display.textContent, /2\/3 metingen/);
@@ -397,7 +383,7 @@ test('strenge handmatige tijdsmarge, verouderde voorspelling en uitgeschakelde c
 
 test('een mislukte correctie wordt bewaard en een nieuwe paneelconfiguratie neemt geen wachtreden van een ander model over', (t) => {
   const f = fixture(t); f.trio();
-  const repository = { ...f.repository, savePvCorrection() { throw new Error('Testfout tijdens opslaan'); } };
+  const repository = { ...f.repository, savePvBlockCorrection() { throw new Error('Testfout tijdens opslaan'); } };
   const learner = createPvCorrectionLearner({ ...f, repository, panelErrors: [], clock: () => f.now });
   assert.equal(learner.learn().status, 'error'); assert.equal(f.pattern().length, 0);
   const display = {}; renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());

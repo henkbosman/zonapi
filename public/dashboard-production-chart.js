@@ -1,5 +1,5 @@
 import { attachTimeCursor } from './chart-cursor.js';
-import { forecastLinePoints, lineValueAt, canConnectPoints, clockAxisTicks } from './production-chart-series.js';
+import { forecastLinePoints, lineValueAt, canConnectPoints, clockAxisTicks, blockCorrectionAt } from './production-chart-series.js';
 
 const timeLabel = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit' });
 const preciseTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -72,9 +72,7 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
     .sort((a, b) => a.ms - b.ms);
   const forecast = forecastLinePoints(slots, start, end);
   const baseForecast = forecastLinePoints(slots.map((slot) => ({ ...slot, power_w: slot.base_power_w })), start, end);
-  const correction = forecastLinePoints(slots.map((slot) => ({ ...slot,
-    power_w: Number.isFinite(slot.power_w) ? slot.automatic_correction_factor : null })), start, end)
-    .map((point) => ({ ...point, value: (point.value - 1) * 100 }));
+  const hasCorrection = slots.some((slot) => Number.isFinite(slot.power_w) && Number.isFinite(slot.automatic_correction_factor));
   const width = Math.max(280, container.clientWidth || 780), height = 360;
   const svg = node('svg', { viewBox: `0 0 ${width} ${height}`, width, height, preserveAspectRatio: 'xMinYMin meet', role: 'group',
     'aria-label': forecastOnly ? 'Voorspelde zonopbrengst tussen zonsopkomst en zonsondergang' : 'Gemeten en voorspelde zonopbrengst tussen zonsopkomst en zonsondergang' });
@@ -113,7 +111,7 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
     ...(forecastOnly ? [] : [{ label: 'Gemeten', color: '#137771', valueAt: (ms) => lineValueAt(measured, ms, Infinity) }]),
     { label: 'Voorspelling', color: '#996200', valueAt: (ms) => lineValueAt(forecast, ms, 75 * 60000) },
     ...(baseForecast.length ? [{ label: 'Zonder correctie', color: '#8c7445', valueAt: (ms) => lineValueAt(baseForecast, ms, 75 * 60000) }] : []),
-    ...(correction.length ? [{ label: 'Correctie', color: '#996200', valueAt: (ms) => lineValueAt(correction, ms, 75 * 60000), formatValue: correctionLabel }] : []),
+    ...(hasCorrection ? [{ label: 'Correctie', color: '#996200', valueAt: (ms) => blockCorrectionAt(slots, ms), formatValue: correctionLabel }] : []),
     ...(hasBaseload ? [{ label: 'Basislast', color: '#c64040', valueAt: () => baseloadW }] : [])
   ]);
   container.append(svg);

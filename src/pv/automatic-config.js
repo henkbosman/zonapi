@@ -2,13 +2,15 @@
 export function automaticCorrectionConfig(settings) {
   const supplied = settings.pv?.automatic_correction === undefined ? {} : settings.pv.automatic_correction;
   if (!supplied || typeof supplied !== 'object' || Array.isArray(supplied)) throw new Error('pv.automatic_correction moet een object zijn');
-  const config = { enabled: true, mode: 'live_today_pattern', min_forecast_w: 100, max_factor: 3, max_skew_seconds: 300,
+  const config = { enabled: true, mode: 'per_block', min_forecast_w: 100, max_factor: 3, max_skew_seconds: 300,
     sample_tolerance_seconds: 150, outlier_relative: 0.35, outlier_min_w: 200, ...supplied };
   // De oude standaard liet op iedere vijfminutenklok een gat van twee minuten vallen.
   // Bestaande settings.json-bestanden krijgen dezelfde herstelde standaard zonder overschrijven.
   if (config.sample_tolerance_seconds === 90) config.sample_tolerance_seconds = 150;
   if (typeof config.enabled !== 'boolean') throw new Error('pv.automatic_correction.enabled moet true of false zijn');
-  if (!['live_today_pattern', 'pattern'].includes(config.mode)) throw new Error('pv.automatic_correction.mode moet live_today_pattern of pattern zijn');
+  if (!['per_block', 'live_today_pattern', 'pattern'].includes(config.mode)) throw new Error('pv.automatic_correction.mode moet per_block zijn');
+  // Oude instellingen blijven leesbaar; alle correcties zijn voortaan aan één gedateerd blok gebonden.
+  config.mode = 'per_block';
   if (!Number.isFinite(config.min_forecast_w) || config.min_forecast_w <= 0 || config.min_forecast_w > 20000) throw new Error('pv.automatic_correction.min_forecast_w moet >0 en <=20000 zijn');
   if (!Number.isFinite(config.max_factor) || config.max_factor < 1 || config.max_factor > 10) throw new Error('pv.automatic_correction.max_factor moet 1..10 zijn');
   if (!Number.isInteger(config.max_skew_seconds) || config.max_skew_seconds < 0 || config.max_skew_seconds > 3600) throw new Error('pv.automatic_correction.max_skew_seconds moet 0..3600 zijn');

@@ -20,6 +20,15 @@ export function lineValueAt(points, ms, maxGapMs) {
   return previous.value + (next.value - previous.value) * (ms - previous.ms) / (next.ms - previous.ms);
 }
 
+/** Leest de eigen correctie van het tijdvak vóór het bronpunt; input: slots en tijd-ms; output: percentage zonder interpolatie met buurblokken, of null. */
+export function blockCorrectionAt(slots, ms) {
+  const valid = (slot) => Number.isFinite(slot.power_w) && Number.isFinite(slot.automatic_correction_factor)
+    && Number.isFinite(Date.parse(slot.start)) && Date.parse(slot.end) > Date.parse(slot.start);
+  const slot = slots.find((item) => valid(item) && Date.parse(item.start) < ms && Date.parse(item.end) >= ms)
+    ?? slots.find((item) => valid(item) && Date.parse(item.start) === ms && Date.parse(item.end) > ms);
+  return slot ? (slot.automatic_correction_factor - 1) * 100 : null;
+}
+
 /** Zet tijdvakgemiddelden op hun eindtijd, zoals de Open-Meteo-bronklok; input: slots en zonuren in ms; output: punten met expliciete tijdvakken en ongemarkeerde lijnranden. */
 export function forecastLinePoints(slots, start, end) {
   const samples = new Map();

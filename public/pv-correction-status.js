@@ -9,18 +9,19 @@ export function correctionAttemptText(attempt) {
   const labels = { disabled: 'uitgeschakeld', configuration_incomplete: 'paneelconfiguratie of locatie onvolledig', stale: 'Growatt-metingen te oud',
     time_skew: 'meettijden liggen te ver uiteen', low_forecast: 'te weinig voorspelde opwek', forecast_unavailable: 'weersvoorspelling ontbreekt',
     forecast_stale: 'weersvoorspelling te oud', older_measurement: 'meting is ouder dan de opgeslagen correctie', error: 'fout bij berekenen van de correctie',
-    updated: 'opgeslagen', unchanged: 'actueel' };
+    updated: 'opgeslagen', unchanged: 'actueel', invalid_block: 'ongeldig correctieblok' };
   return labels[attempt.status] ?? attempt.status;
 }
 
 /** Toont een factor of een verklaarde wachtstatus in de bestaande grafieklegenda; input: element en correctie-API; output: void. */
 export function renderPvCorrection(element, correction) {
-  const sampling = correction?.latest?.sampling, attempt = correction?.last_attempt;
+  const sampling = Number.isFinite(correction?.latest?.sampling?.used_samples) ? correction.latest.sampling : null, attempt = correction?.last_attempt;
   const active = correction?.status === 'active' && correction.latest;
   element.textContent = active
-    ? `Correctie ${correction.latest.correction_percent > 0 ? '+' : ''}${correction.latest.correction_percent.toLocaleString('nl-NL')}% · Patroon ${correction.learned_quarters}/96${sampling ? ` · ${sampling.used_samples}/3 metingen${sampling.ignored_times.length ? ' · 1 uitschieter genegeerd' : ''}` : ''}`
+    ? `Correctie ${correction.latest.correction_percent > 0 ? '+' : ''}${correction.latest.correction_percent.toLocaleString('nl-NL')}%${correction.latest.start ? ` · Blok ${time.format(new Date(correction.latest.start))}–${time.format(new Date(correction.latest.end))}` : ''} · Blokken vandaag ${correction.learned_blocks_today ?? correction.learned_quarters}/${correction.total_blocks_in_day ?? 96}${sampling ? ` · ${sampling.used_samples}/3 metingen${sampling.ignored_times.length ? ' · 1 uitschieter genegeerd' : ''}` : ''}`
     : `Correctie: ${correction?.status === 'disabled' ? 'uitgeschakeld' : correctionAttemptText(attempt)}`;
   const details = [];
+  if (correction?.latest?.start) details.push(`Correctie geldt alleen voor ${correction.latest.date} ${time.format(new Date(correction.latest.start))}–${time.format(new Date(correction.latest.end))}`);
   if (sampling) details.push(...sampling.samples.map((sample) => `${time.format(new Date(sample.time))}: ${Math.round(sample.power_w)} W${sample.used ? '' : ' (genegeerd)'}`));
   if (attempt) {
     details.push(`Laatste poging: ${time.format(new Date(attempt.attempted_at))} · ${correctionAttemptText(attempt)}`);

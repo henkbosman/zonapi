@@ -5,14 +5,19 @@ import { correctionModelKey } from './correction-key.js';
 import { clockQuarter, quarterLabel, splitForecastQuarters } from './quarter.js';
 import { applyPvCorrection } from './apply-correction.js';
 import { localDay } from '../weather/local-day.js';
+import { localDayRange } from '../weather/local-calendar.js';
 
-/** Maakt één consistente voorspelsnapshot met livecorrectie, kwartierpatroon en bevroren verleden; input: opslag, instellingen, panelen en peiltijd; output: {prepare,estimate,status,modelKey}. */
+const quarterMs = 900000;
+
+/** Maakt een voorspelsnapshot met onafhankelijke gedateerde kwartiercorrecties; input: opslag, instellingen, panelen en peiltijd; output: voorbereiden, schatten en status. */
 export function createPvForecastModel(repository, settings, panels, now) {
   const config = automaticCorrectionConfig(settings), modelKey = correctionModelKey(settings, panels);
   const factor = getCalibrationFactor(settings);
-  const pattern = repository.pvCorrectionPattern(modelKey).filter((row) => row.measured_ms <= now).map((row) => ({ ...row, factor: Math.min(config.max_factor, row.factor) }));
-  const byQuarter = new Map(pattern.map((row) => [row.quarter_minute, row]));
-  const latest = [...pattern].sort((a, b) => b.measured_ms - a.measured_ms || b.updated_ms - a.updated_ms)[0] ?? null;
+  const blocks = repository.pvBlockCorrections(modelKey, now - 27 * 3600000, now + (settings.weather.forecast_days + 1) * 86400000)
+    .filter((row) => row.measured_ms <= now && row.updated_ms <= now).map((row) => ({ ...row, factor: Math.min(config.max_factor, row.factor) }));
+  const byEnd = new Map(blocks.map((row) => [row.end_ms, row]));
+  const savedLatest = repository.latestPvBlockCorrection(modelKey, now);
+  const latest = savedLatest ? { ...savedLatest, factor: Math.min(config.max_factor, savedLatest.factor) } : null;
   const active = config.enabled && latest !== null;
   const savedAttempt = repository.diagnosticState?.('growatt', 'pv_correction');
   const lastAttempt = savedAttempt?.model_key === modelKey && Date.parse(savedAttempt.attempted_at) <= now ? savedAttempt : null;
@@ -22,50 +27,52 @@ export function createPvForecastModel(repository, settings, panels, now) {
     past.get(row.group_id).push(row);
   }
 
-  /** Bepaalt de factor voor één toekomstig kwartier; input: tijd in ms; output: factor en herkomst live/pattern/latest/none. */
-  function correction(at) {
-    if (!active) return { factor: 1, source: 'none' };
-    if (config.mode === 'live_today_pattern' && localDay(at) === localDay(now) && localDay(latest.measured_ms) === localDay(now)) return { factor: latest.factor, source: 'live' };
-    const learned = byQuarter.get(clockQuarter(at));
-    return learned ? { factor: learned.factor, source: 'pattern' } : { factor: latest.factor, source: 'latest' };
-  }
-
-  /** Bereidt tijdvakken voor klokkwartiercorrecties voor; input: weerrijen; output: kwartierdelen zodra een leerpatroon bestaat, anders de oorspronkelijke reeks. */
+  /** Splitst de bron zodat één kwartier nooit de factor van zijn buur krijgt; input: bronvakken; output: onafhankelijke kwartierdelen. */
   function prepare(rows) { return active ? splitForecastQuarters(rows) : rows; }
 
-  /** Rekent één weertijdvak consistent om naar basis en gecorrigeerde AC-opbrengst; input: weerrij; output: groepswaarden, factor en herkomst. */
+  /** Rekent uitsluitend met de factor van het eigen gedateerde blok; input: effectief weertijdvak; output: basis en gecorrigeerde groepswaarden. */
   function estimate(row) {
-    const base = estimatePv(row, panels, settings.location.latitude, settings.location.longitude, factor);
-    if (row.end_ms <= now) {
-      const stored = base.groups.map((group) => past.get(group.group_id)?.find((item) => item.start_ms <= row.start_ms && item.end_ms >= row.end_ms));
-      if (stored.length && stored.every(Boolean)) {
-        const groups = stored.map((item, index) => ({ ...base.groups[index], power_w: item.power_w, base_power_w: item.base_power_w ?? item.power_w }));
-        return { power_w: Math.round(groups.reduce((sum, group) => sum + group.power_w, 0) * 10) / 10,
-          base_power_w: Math.round(groups.reduce((sum, group) => sum + group.base_power_w, 0) * 10) / 10,
-          correction_factor: stored[0].correction_factor, correction_source: 'stored', groups };
+    let base = estimatePv(row, panels, settings.location.latitude, settings.location.longitude, factor);
+    const block = active ? byEnd.get(Math.ceil(row.end_ms / quarterMs) * quarterMs) : null;
+    const own = block && row.start_ms >= block.start_ms && row.end_ms <= block.end_ms;
+    if (own) {
+      let snapshot;
+      try { snapshot = JSON.parse(block.sampling_json)?.forecast; } catch { /* Oudere correcties bevatten alleen het totale basisvermogen. */ }
+      if (Array.isArray(snapshot?.groups) && snapshot.groups.length === base.groups.length
+        && snapshot.groups.every((group) => base.groups.some((item) => item.group_id === group.group_id && item.inverter_id === group.inverter_id) && Number.isFinite(group.power_w))) {
+        base = { power_w: block.predicted_w, groups: snapshot.groups };
+      } else if (base.power_w > 0 && base.power_w !== block.predicted_w) {
+        const ratio = block.predicted_w / base.power_w;
+        base = { power_w: block.predicted_w, groups: base.groups.map((group) => ({ ...group, power_w: group.power_w * ratio })) };
       }
-      return { ...applyPvCorrection(base, panels, 1), correction_source: 'none' };
+    } else if (row.end_ms <= now) {
+      const stored = base.groups.map((group) => past.get(group.group_id)?.find((item) => item.model_key === modelKey
+        && Number.isFinite(item.base_power_w) && item.start_ms <= row.start_ms && item.end_ms >= row.end_ms));
+      if (stored.length && stored.every(Boolean)) {
+        const groups = stored.map((item, index) => ({ ...base.groups[index], power_w: item.base_power_w, gti_w_m2: item.gti_w_m2 }));
+        base = { groups, power_w: Math.round(groups.reduce((sum, group) => sum + group.power_w, 0) * 10) / 10 };
+      }
     }
-    const selected = correction((row.start_ms + row.end_ms) / 2);
-    return { ...applyPvCorrection(base, panels, selected.factor), correction_source: selected.source };
+    return { ...applyPvCorrection(base, panels, own ? block.factor : 1), correction_source: own ? 'block' : 'none' };
   }
 
-  /** Beschrijft de gebruikte correctiesnapshot zonder meetwaarden te wijzigen; input: geen; output: configuratie, laatste correctie en kwartierpatroon. */
+  /** Beschrijft het eigen blok zonder klokpatroon of terugval op de laatste factor; input: geen; output: status met expliciete datums en tijdvakgrenzen. */
   function status() {
     const sampling = (row) => { try { return row?.sampling_json ? JSON.parse(row.sampling_json) : null; } catch { return null; } };
-    return { enabled: config.enabled, mode: config.mode, status: !config.enabled ? 'disabled' : active ? 'active' : 'learning', model_key: modelKey,
+    const describe = (row, start, end) => ({ date: localDay(start), start: new Date(start).toISOString(), end: new Date(end).toISOString(),
+      time: quarterLabel(clockQuarter(end)), quarter_minute: clockQuarter(end), factor: row?.factor ?? null,
+      correction_percent: row ? Math.round((row.factor - 1) * 1000) / 10 : null,
+      measured_at: row ? new Date(row.measured_ms).toISOString() : null, updated_at: row ? new Date(row.updated_ms).toISOString() : null,
+      predicted_w: row?.predicted_w ?? null, measured_w: row?.measured_w ?? null, sampling: sampling(row) });
+    const day = localDay(now), range = localDayRange(day), quarters = [];
+    for (let start = range.start_ms; start < range.end_ms; start += quarterMs) quarters.push(describe(byEnd.get(start + quarterMs), start, start + quarterMs));
+    const learnedToday = quarters.filter((row) => row.factor !== null).length;
+    return { enabled: config.enabled, mode: config.mode, scope: 'dated_block', status: !config.enabled ? 'disabled' : active ? 'active' : 'learning', model_key: modelKey,
       min_forecast_w: config.min_forecast_w, max_factor: config.max_factor, max_skew_seconds: config.max_skew_seconds,
       sample_tolerance_seconds: config.sample_tolerance_seconds, outlier_relative: config.outlier_relative, outlier_min_w: config.outlier_min_w,
-      learned_quarters: pattern.length, last_attempt: lastAttempt,
-      latest: latest ? { time: quarterLabel(latest.quarter_minute), factor: latest.factor, correction_percent: Math.round((latest.factor - 1) * 1000) / 10,
-        measured_at: new Date(latest.measured_ms).toISOString(), updated_at: new Date(latest.updated_ms).toISOString(), predicted_w: latest.predicted_w, measured_w: latest.measured_w, sampling: sampling(latest) } : null,
-      quarters: Array.from({ length: 96 }, (_, index) => {
-        const minute = index * 15, row = byQuarter.get(minute);
-        return { time: quarterLabel(minute), quarter_minute: minute, factor: row?.factor ?? null,
-          correction_percent: row ? Math.round((row.factor - 1) * 1000) / 10 : null,
-          measured_at: row ? new Date(row.measured_ms).toISOString() : null, updated_at: row ? new Date(row.updated_ms).toISOString() : null,
-          predicted_w: row?.predicted_w ?? null, measured_w: row?.measured_w ?? null, sampling: sampling(row) };
-      }) };
+      day, learned_blocks: repository.countPvBlockCorrections(modelKey, now), learned_blocks_today: learnedToday,
+      learned_quarters: learnedToday, total_blocks_in_day: quarters.length, last_attempt: lastAttempt,
+      latest: latest ? describe(latest, latest.start_ms, latest.end_ms) : null, quarters };
   }
   return { prepare, estimate, status, modelKey, active };
 }

@@ -1,15 +1,18 @@
 ZonAPI
-Versie: 2026-10-18-Correctie-Fix1
+Versie: 2026-10-18-Blokcorrecties1
 
-Herstel ontbrekende automatische correcties:
-- Geen gaten meer tussen de toegestane Growatt-meetklokken.
-- Bestaande standaard van 90 seconden wordt automatisch 150 seconden.
-- Correcties leren na herstart en na nieuwe weerdata uit beschikbare meetgegevens.
-- Wachtredenen en aantallen ontvangen metingen zichtbaar op het dashboard.
-- Laatste correctiepoging beschikbaar in de API en de database.
+Elke correctie geldt uitsluitend voor het eigen gedateerde kwartierblok.
+Voorbeeld: de correctie van 14:15 geldt voor 14:00–14:15 op die datum.
+Andere blokken gebruiken hun eigen correctie of de basisvoorspelling.
 
-Deze versie bevat ook de Database-pagina, de lichte voorspelling zonder
-automatische correctie en de losse HomeWizard-apparaten.
+- Geen doorwerking van de laatste factor naar latere blokken of andere dagen.
+- Onafhankelijke opslag in pv_block_corrections met begin- en eindtijd.
+- Automatische migratie naar databaseschema 6.
+- Herstel van eerder overgenomen factoren in afgeleide voorspellingen.
+- Eigen tijdvak en aantal gecorrigeerde blokken zichtbaar op het dashboard.
+
+Deze versie bevat ook Correctie-Fix1, de Database-pagina, de lichte
+basisvoorspelling en de losse HomeWizard-apparaten.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
 Bewaar je eigen config/ en data/.

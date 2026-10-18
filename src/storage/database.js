@@ -8,7 +8,8 @@ import { createApplianceCycleSchema } from './appliance-cycles.js';
 export function openDatabase(path) {
   mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
-  if (db.prepare('PRAGMA user_version').get().user_version > 5) { db.close(); throw new Error('Database heeft een nieuwere schemaversie'); }
+  const version = db.prepare('PRAGMA user_version').get().user_version;
+  if (version > 6) { db.close(); throw new Error('Database heeft een nieuwere schemaversie'); }
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;
     CREATE TABLE IF NOT EXISTS forecast (
       source TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
@@ -112,8 +113,8 @@ export function openDatabase(path) {
     const previous = db.prepare(`SELECT * FROM weather_calls ${condition} ORDER BY attempted_ms DESC,id DESC LIMIT 1`).get();
     if (previous) db.prepare("INSERT OR IGNORE INTO diagnostic_state VALUES('weather',?,?)").run(key, JSON.stringify(previous));
   }
-  createPvCorrectionSchema(db);
+  createPvCorrectionSchema(db, { migratePerBlock: version < 6 });
   createApplianceCycleSchema(db);
-  db.exec('PRAGMA user_version=5');
+  db.exec('PRAGMA user_version=6');
   return db;
 }

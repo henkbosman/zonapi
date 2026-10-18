@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { productionSeries } from '../src/api/production-series.js';
 import { drawProductionChart } from '../public/dashboard-production-chart.js';
-import { forecastLinePoints, lineValueAt } from '../public/production-chart-series.js';
+import { forecastLinePoints, lineValueAt, blockCorrectionAt } from '../public/production-chart-series.js';
 
 /** Maakt een kleine SVG/DOM-testnode; input: tagnaam; output: node met kinderen en attributen. */
 function element(tagName) {
@@ -195,4 +195,17 @@ test('lichte basisvoorspelling bepaalt mede de schaal en correctiepercentages bl
     const baseDots = svg.children.filter((child) => child.attributes['data-series'] === 'base_forecast');
     assert.equal(baseDots.length, 3); assert.match(baseDots[0].children[0].textContent, /Zonder correctie/);
   } finally { globalThis.document = before; }
+});
+
+test('mouseover leest uitsluitend de correctie van het eigen blok en mengt geen percentages van buurblokken', () => {
+  const start = Date.parse('2026-10-18T12:00:00Z');
+  const slots = [0.5, 1, 1.2].map((factor, index) => ({ start: new Date(start + index * 900000).toISOString(),
+    end: new Date(start + (index + 1) * 900000).toISOString(), power_w: 1000 * factor, automatic_correction_factor: factor }));
+  assert.equal(blockCorrectionAt(slots, start + 900000), -50);
+  assert.equal(blockCorrectionAt(slots, start + 900001), 0);
+  assert.equal(blockCorrectionAt(slots, start + 1200000), 0);
+  assert.equal(blockCorrectionAt(slots, start + 1800000), 0);
+  assert.ok(Math.abs(blockCorrectionAt(slots, start + 1800001) - 20) < 0.000001);
+  assert.equal(blockCorrectionAt(slots, start - 1), null);
+  assert.equal(blockCorrectionAt(slots, start + 2700001), null);
 });

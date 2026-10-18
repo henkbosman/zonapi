@@ -9,7 +9,7 @@ import { forecastDaysResponse } from '../src/api/forecast-days.js';
 import { learnPvCorrection } from '../src/pv/learn-correction.js';
 import { localDay } from '../src/weather/local-day.js';
 
-test('API geeft vandaag, morgen en overmorgen met eigen zonuren en dezelfde geleerde correctie, ook rond wintertijd', async (context) => {
+test('API geeft drie dagen met eigen zonuren en corrigeert alleen het eigen gedateerde blok, ook rond wintertijd', async (context) => {
   let now = Date.parse('2026-10-24T10:00:00Z');
   context.mock.method(Date, 'now', () => now);
   const { settings: defaults } = loadConfiguration();
@@ -46,9 +46,11 @@ test('API geeft vandaag, morgen en overmorgen met eigen zonuren en dezelfde gele
       assert.equal(day.sunset, new Date(repository.getSun(dates[index]).sunset_ms).toISOString());
       assert.ok(day.slots.length > 20);
       const future = day.slots.filter((slot) => Date.parse(slot.start) > now);
-      assert.ok(future.every((slot) => slot.power_w === 200 + index * 40 && slot.base_power_w === 400 + index * 80));
-      assert.ok(future.every((slot) => slot.automatic_correction_factor === 0.5));
+      assert.ok(future.every((slot) => slot.power_w === 400 + index * 80 && slot.base_power_w === 400 + index * 80));
+      assert.ok(future.every((slot) => slot.automatic_correction_factor === 1));
     }
+    const corrected = result.days.flatMap((day) => day.slots).filter((slot) => slot.automatic_correction_factor !== 1);
+    assert.equal(corrected.length, 1); assert.equal(corrected[0].end, new Date(now).toISOString()); assert.equal(corrected[0].power_w, 200);
     assert.deepEqual(await (await fetch(`${base}/api/v1/forecast/day`)).json(), result.days[0]);
     assert.deepEqual(await (await fetch(`${base}/api/v1/forecast/day?date=2026-10-26`)).json(), result.days[2]);
     for (const value of ['2026-02-30', '2026-13-01', '2026-1-01', 'morgen']) assert.equal((await fetch(`${base}/api/v1/forecast/day?date=${value}`)).status, 400);
