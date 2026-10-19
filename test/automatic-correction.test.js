@@ -281,9 +281,9 @@ test('toekomstige klokkwartieren volgen Nederlandse wintertijd in plaats van een
 test('het kwartier tot middernacht hoort bij de kalenderdag waarop het begint', (t) => {
   const end = Date.parse('2026-10-18T22:00:00Z'), f = fixture(t, { center: end }); f.learn(600);
   assert.equal(clockQuarter(end), 0);
-  // Morgen 23:45–00:00 gebruikt dezelfde factor; vandaag blijft een ongemeten blok zelfstandig.
+  // Vandaag en morgen 23:45–00:00 gebruiken de vorige dagfactor zolang hun eigen metingen ontbreken.
   assert.equal(f.value(end + 2 * 86400000).power_w, 600);
-  assert.equal(f.value(end + 86400000).power_w, 1000);
+  assert.equal(f.value(end + 86400000).power_w, 600);
   assert.equal(f.value(end + 2 * 86400000 - quarter).power_w, 1000);
 });
 

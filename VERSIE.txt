@@ -1,7 +1,14 @@
 ZonAPI
-Versie: 2026-10-19-Programmas1
+Versie: 2026-10-19-Vandaagcorrecties1
 
-Minimale zonnedekking per apparaat en meerdere benoemde programma's.
+Herstelt eerdere kwartiercorrecties in de voorspelling van vandaag.
+
+- Vandaag gebruikt een eerdere meetdag totdat het eigen meetdrietal compleet is.
+- Eigen nieuwe correcties krijgen voorrang; buurkwartieren blijven onafhankelijk.
+- Dagovergang, wintertijd en het kwartier tot middernacht behouden de terugval.
+- Herstart herstelt ook de overgenomen correcties in verstreken cacheblokken.
+- Dagelijkse herberekening gevalideerd met echte driepuntsvensters over drie dagen.
+- Grafieken, openbare snapshot en programma-adviezen gebruiken dezelfde waarden.
 
 - min_solar_share per apparaat; ontbrekend of null gebruikt de algemene grens.
 - Elk programma heeft een naam, optionele id en eigen steps/verbruiksfasen.
@@ -22,5 +29,6 @@ en examples/vaatwasser-programmas.json; voorbeeldverbruik is een schatting.
 De update-ZIP bevat geen config/ of database en wijzigt je eigen profielen niet.
 De Caddyfile en HTTP-poort 3002 zijn ongewijzigd ten opzichte van InternExtern1.
 
-226 tests slagen, inclusief programma-adviezen via echte HTTP-routes,
-minimumterugval, actieve belasting, socketuitlezing, dashboard en privacy.
+234 tests slagen, inclusief dagelijkse herberekening en de dagovergang,
+programma-adviezen via echte HTTP-routes, minimumterugval, actieve belasting,
+socketuitlezing, dashboard en privacy.
