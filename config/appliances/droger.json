@@ -2,6 +2,7 @@
   "id": "droger",
   "name": "Droger",
   "estimated_profile": false,
+  "min_solar_share": 0.9,
   "homewizard": {
     "host": "192.168.2.126"
   },
