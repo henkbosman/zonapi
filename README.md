@@ -56,7 +56,7 @@ Open daarna `http://127.0.0.1:13002/intern`. Met deze Caddyfile is `/intern` via
 
 Stop de Node-dienst en kopieer `src/` en `public/` uit het archief naar de bestaande installatie. Behoud de eigen `config/settings.json`, `config/debug.json`, `config/panels.json`, `config/appliances/` en database in `data/`. Start daarna Node opnieuw. Ontbreekt `config/debug.json`, dan wordt het automatisch aangemaakt met alle logboeken uitgeschakeld. De bestaande database en kwartiercorrecties blijven in gebruik.
 
-Het losse dashboardupdatearchief bevat `src/`, `public/`, `test/`, `Caddyfile`, `VERSIE.txt` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database.
+Het losse dashboardupdatearchief bevat `src/`, `public/`, `test/`, `examples/`, `Caddyfile`, `VERSIE.txt` en deze README in de map `zonapi/`. Pak het uit in de **bovenliggende map** van je bestaande ZonAPI-installatie; het bevat geen configuratie of database. Bestaande apparaatprofielen met één `steps`-lijst blijven werken als programma **Standaard**. Voeg meerdere programma's desgewenst zelf toe aan je eigen apparaatbestanden zoals hieronder beschreven.
 
 Deze update haalt Growatt op vaste vijfminutenmomenten op. Iedere Open-Meteo-kwartiercorrectie gebruikt drie volledige meetmomenten op vijf minuten vóór, rond en vijf minuten na de bronklok, met herkenning van één duidelijke uitschieter. Het apparaatadvies met Meeste zon, de actieve apparaten, cyclusgrafieken, rode basislastlijn en socketherkenning blijven beschikbaar. Bestaande instellingen blijven geldig: zonder `growatt.production_source` wordt uitsluitend de lokale ShineLink-bron gebruikt. Zonder `weather.resolution_minutes` worden kwartierwaarden opgehaald. Een oude `weather.forecast_days` van `2` wordt bij het laden verhoogd tot `3`.
 
@@ -97,9 +97,9 @@ Een blauwe punt gebruikt de laatste echte meettijd van de omvormers in dat totaa
 
 De voorspelslots bevatten nu `time` (gelijk aan `end`), `time_basis: "preceding_interval_mean"`, `sample_start` en `sample_end`. De laatste twee behouden de oorspronkelijke bronperiode, ook als uurdata in effectieve kwartierdelen is verdeeld. `start`/`end` blijven de effectieve tijdvakgrenzen voor het apparaatadvies. Deze weergavecorrectie verandert geen opgeslagen meetklokken en vereist geen databasemigratie.
 
-Het dashboard geeft per apparaat een starttijd op iedere dag van `weather.forecast_days`. De volledige cyclus moet binnen de zonuren van die dag passen. Vandaag worden alleen toekomstige starttijden gezocht. Dezelfde apparaatprofielen, basislast, reserve en minimale zonnefractie gelden als voor het bestaande ESP32-advies. Ontbrekende of verouderde gegevens worden afzonderlijk weergegeven. Het bestaande `/advice`-endpoint blijft `advice.search_hours` gebruiken; het nieuwe `/appliances/daily` gebruikt alle ingestelde voorspeldagen.
+Het dashboard geeft per apparaat en programma een starttijd op iedere dag van `weather.forecast_days`. De volledige cyclus van dat programma moet binnen de zonuren van die dag passen. Vandaag worden alleen toekomstige starttijden gezocht. Dezelfde apparaatprofielen, basislast, reserve en minimale zonnefractie gelden als voor het bestaande ESP32-advies. Ontbrekende of verouderde gegevens worden afzonderlijk weergegeven. Het losse `/intern/api/v1/appliances/<id>/advice`-endpoint blijft `advice.search_hours` gebruiken; `/intern/api/v1/appliances/daily` gebruikt alle ingestelde voorspeldagen.
 
-Als geen startmoment de hele cyclus voor 100% uit zonne-energie kan dekken, toont het dashboard per apparaat en per dag **Meeste zon**, met het beste starttijdstip en de verwachte zonnedekking. Bijvoorbeeld: **14:10 — Meeste zon · 65%**. Er is dan aanvulling uit het net nodig. De keuze maximaliseert de zonne-energie die het apparaat gedurende zijn volledige cyclus gebruikt; het tijdstip met de hoogste zonnepaneelopbrengst hoeft daarvoor niet het beste startmoment te zijn. Basislast, reserve en lopende apparaten tellen mee. Bij gelijke uitkomsten wordt het vroegste moment gekozen. De bestaande stapgrootte `advice.start_step_minutes` blijft gelden.
+Als geen startmoment de hele cyclus voor 100% uit zonne-energie kan dekken, toont het dashboard per programma en per dag **Meeste zon**, met het beste starttijdstip en de verwachte zonnedekking. Bijvoorbeeld: **14:10 — Meeste zon · 65%**. Er is dan aanvulling uit het net nodig. De keuze maximaliseert de zonne-energie die het programma gedurende zijn volledige cyclus gebruikt; het tijdstip met de hoogste zonnepaneelopbrengst hoeft daarvoor niet het beste startmoment te zijn. Basislast, reserve en lopende apparaten tellen mee. Bij gelijke uitkomsten wordt het vroegste moment gekozen. De bestaande stapgrootte `advice.start_step_minutes` blijft gelden.
 
 Een starttijd die aan het ingestelde `min_solar_share` voldoet, blijft staan. Is die grens bijvoorbeeld 70% en bestaat er geen optie van 100%, dan kan daarnaast **Meeste zon: 14:10 · 85%** verschijnen. Als beide tijden gelijk zijn, wordt het tijdstip eenmaal getoond. Bij nul bruikbare zonne-energie, ontbrekende of verouderde gegevens verschijnt geen alternatief. Een draaiend apparaat blijft vandaag **Bezig** tonen. Voor deze toevoeging zijn geen configuratiewijzigingen of extra bronverzoeken nodig.
 
@@ -112,6 +112,50 @@ Open **Database** in de navigatie of ga naar `/intern/database`. Via **Tabel kie
 Klik op een kolomnaam voor oplopende of aflopende sortering. De invoervelden onder iedere kolom zoeken letterlijk naar een deel van de waarde; meerdere filters gelden samen. `%` en `_` zijn gewone zoektekens. Met **Records per pagina** kies je 10, 25, 50, 100, 250 of 500 records. Gebruik de paginaknoppen of voer een paginanummer in om alle resultaten te bereiken. **Filters wissen** herstelt de ongefilterde inhoud en **Vernieuwen** haalt de actuele pagina op. De pagina leest uitsluitend; er zijn geen schrijf- of verwijderacties.
 
 De bijbehorende leesendpoints zijn `GET /intern/api/v1/database/tables` en `GET /intern/api/v1/database/rows?table=forecast&page=1&page_size=50`. Optionele parameters zijn `sort` (kolomnaam), `direction=asc|desc` en `filters` (een JSON-lijst met objecten zoals `{"column":"source","value":"open-meteo"}`). Tabellen en kolommen worden tegen het actuele schema gecontroleerd. Filterwaarden worden als parameters doorgegeven. Hiervoor zijn geen configuratiewijziging, extra bronverzoeken of databasemigratie nodig.
+
+### Apparaten, programma's en minimale zonnedekking
+
+Ieder bestand in `config/appliances/` beschrijft één fysiek apparaat. Zet de eigen minimale zonnedekking in dat bestand met `min_solar_share`, als fractie van 0 tot en met 1. `0.95` betekent minimaal 95% van de energie van de volledige programmacyclus uit beschikbare zonne-energie. Deze grens geldt voor alle programma's van dat apparaat. Zonder dit veld, of met `null`, gebruikt ZonAPI `advice.min_solar_share` uit `config/settings.json`. Een expliciete `0` is geldig en wordt niet vervangen door de algemene instelling. De apparaatkaart toont het gebruikte minimumpercentage.
+
+Voor meerdere programma's gebruik je een niet-lege `programs`-lijst. Elk programma heeft een unieke `name` en een eigen niet-lege `steps`-lijst. Iedere stap bevat `duration_minutes` en `power_w`; de programmaduur wordt uit de stappen berekend. Een programma-`id` is optioneel: zonder `id` wordt het uit de naam afgeleid. Met een expliciete `id` blijven verwijzingen gelijk als je de naam verandert.
+
+Bijvoorbeeld in `config/appliances/vaatwasser.json`:
+
+```json
+{
+  "id": "vaatwasser",
+  "name": "Vaatwasser",
+  "estimated_profile": true,
+  "min_solar_share": 0.95,
+  "homewizard": { "host": "" },
+  "programs": [
+    {
+      "id": "eco",
+      "name": "Eco",
+      "steps": [
+        { "duration_minutes": 60, "power_w": 500 },
+        { "duration_minutes": 30, "power_w": 100 }
+      ]
+    },
+    {
+      "id": "snel",
+      "name": "Snel",
+      "steps": [
+        { "duration_minutes": 15, "power_w": 1500 },
+        { "duration_minutes": 15, "power_w": 100 }
+      ]
+    }
+  ]
+}
+```
+
+Dit voorbeeld staat ook in `examples/vaatwasser-programmas.json`. De tijden en vermogens zijn **voorbeeldschattingen**: gebruik je eigen verbruiksfasen en behoud het bestaande socket-IP en de eigen herkenningsinstellingen. De update past de eigen apparaatbestanden niet aan. Zonder `programs` blijft de bestaande `steps`-lijst geldig als één programma **Standaard**. Als beide velden aanwezig zijn, gebruikt het advies de programma's uit `programs`.
+
+Het dashboard toont voor ieder programma de naam, duur en adviezen voor vandaag, morgen en overmorgen. Elk programma krijgt een eigen vroegste start die aan de apparaatgrens voldoet, plus waar van toepassing een eigen **Meeste zon**-alternatief. Zo kan Eco op een ander moment geschikt zijn dan Snel. Ook de JSON-adviezen bevatten `program_id` en `program_name`. Het algemene apparaatadvies kiest het vroegste geschikte programma; `best_program_id` en `best_program_name` noemen het programma met het hoogste zonnedekkingspercentage. Beide keuzes kunnen verschillen. Alle afzonderlijke uitkomsten staan in `programs`.
+
+`GET /intern/api/v1/appliances/vaatwasser/advice?program=eco` beperkt het losse advies tot dat programma. De parameter accepteert de exacte programma-id of naam; een onbekend programma geeft HTTP 404. Zonder parameter bevat het antwoord alle programma's. De openbare dashboardsnapshot toont programmanamen, duur en adviezen, zonder de ruwe stappen of apparaat-IP's.
+
+Wijzigingen aan apparaatbestanden worden bij de volgende API-aanvraag gelezen; het dashboard ververst iedere 30 seconden. Alleen voor een wijziging van de algemene instelling in `settings.json` moet ZonAPI worden herstart.
 
 ### Energy Socket per apparaat
 
@@ -135,7 +179,7 @@ ZonAPI leest de sockets iedere `homewizard.poll_seconds` uit `settings.json`, on
 
 Pas na **5 minuten aaneengesloten 5 W of lager** wordt het apparaat weer **Niet actief**. Dat voorkomt dat korte pauzes in een programma als stoppen worden gezien. Stel de grenzen af op het stand-byverbruik en de langste gebruikelijke programmapauze van je eigen apparaat; verbruik alleen kan niet ieder programma of iedere handmatige pauze onderscheiden. Verbruik tussen de beide grenzen verandert de lopende toestand niet. `stop_threshold_w` moet lager zijn dan `start_threshold_w`; beide wachttijden zijn instelbaar van 0 tot 3600 seconden.
 
-Bij een mislukte of te oude socketmeting toont het dashboard **Socket niet bereikbaar**, met de fout als toelichting. Het presenteert dan geen actuele aan/uitstatus. De geldigheid is minimaal 2 minuten, of drie pollintervallen als dat langer is. Na een langdurige meetonderbreking wordt de start opnieuw vastgesteld. Een korte serverherstart behoudt een recent herkend programma; IP- of grenswijzigingen beginnen met nieuwe herkenning.
+Bij een mislukte of te oude socketmeting toont het dashboard **Socket niet bereikbaar**, met de fout als toelichting. Het presenteert dan geen actuele aan/uitstatus. De geldigheid is minimaal 2 minuten, of drie pollintervallen als dat langer is. Na een langdurige meetonderbreking wordt de start opnieuw vastgesteld. Een korte serverherstart behoudt een recent herkende actieve cyclus; IP- of grenswijzigingen beginnen met nieuwe herkenning. Een socket meldt het actuele vermogen, maar niet welk ingesteld programma werkelijk draait.
 
 `GET /intern/api/v1/appliances` bevat per profiel `activity` met `configured`, `state`, `running`, `power_w`, `measured_at`, `started_at`, `stopped_at` en `error`. Apparaatverbruik komt in een eigen statustabel en wordt nooit als extra netmeter bij P1/kWh opgeteld. De laatste status overschrijft één rij per apparaat. Daarnaast worden de begrensde cyclusmetingen hieronder bewaard, ook als debuglogging uitstaat. Met HomeWizard-logging aan verschijnen de aanvragen als `socket:<apparaat-id>` in de bestaande begrensde verzoekentijdlijn. Logs wissen laat de actuele apparaatstatus en cyclusgrafieken staan.
 
@@ -151,7 +195,7 @@ Een volledige referentie is pas beschikbaar nadat ZonAPI een cyclus vanaf een re
 
 De database bewaart per apparaat maximaal **de lopende cyclus plus de twee laatst afgesloten cycli**. Onderbroken cycli tellen mee in die twee; alleen volledige, normaal afgesloten cycli kunnen referentie zijn. Oudere cycli en hun meetpunten worden automatisch verwijderd. Een startkandidaat die niet bevestigd wordt, verdwijnt eveneens. Iedere cyclus is begrensd op 24 uur en 20.000 meetpunten. Zo groeit deze historie niet onbeperkt. De cyclusopslag en socketstatus worden samen in één transactie bijgewerkt; logging is hiervan onafhankelijk.
 
-`GET /intern/api/v1/appliances/cycles` geeft per apparaat `current`, `previous`, `live`, `elapsed_seconds` en `activity`. Meetpunten bevatten `elapsed_seconds` en `power_w`; de cyclusmetadata bevat de echte start/eindtijd, duur, maximale meetpauze en `complete`. `previous` is `null` zolang er geen bruikbare voorafgaande cyclus is. De bestaande JSON-verbruiksprofielen blijven de bron voor het te starten apparaat. Voor de resterende vraag van al draaiende apparaten wordt bij voorkeur de eerder gemeten cyclus gebruikt, zoals hieronder beschreven.
+`GET /intern/api/v1/appliances/cycles` geeft per apparaat `current`, `previous`, `live`, `elapsed_seconds` en `activity`. Meetpunten bevatten `elapsed_seconds` en `power_w`; de cyclusmetadata bevat de echte start/eindtijd, duur, maximale meetpauze en `complete`. `previous` is `null` zolang er geen bruikbare voorafgaande cyclus is. De JSON-programmaprofielen blijven de bron voor het te starten apparaat. De gemeten cyclusgrafiek blijft per fysiek apparaat; eerdere cycli worden niet automatisch aan een programmanaam gekoppeld. Voor de resterende vraag van een actief apparaat geldt de aanpak hieronder.
 
 ### Startadvies bij actieve apparaten
 
@@ -159,7 +203,7 @@ Wanneer een Energy Socket een start herkent, houdt ZonAPI in de adviezen voor an
 
 **Beschikbaar voor het nieuwe apparaat = voorspelde opwek − basislast − reserve − het totale verwachte verbruik van actieve apparaten**, met minimaal nul beschikbaar vermogen.
 
-Voor ieder actief apparaat worden de resterende fasen bepaald vanaf de herkende starttijd. Bij voorkeur gebruikt ZonAPI de vorige volledig gemeten cyclus, met dezelfde schuine lijnen als in de cyclusgrafiek. Zonder geschikte cyclus gebruikt ZonAPI de fasen in het JSON-profiel. De eerstvolgende pollperiode wordt gebaseerd op het actuele socketvermogen. Daarna volgt het resterende verwachte verloop. Een fase van 2000 W die al voorbij is, wordt niet opnieuw voor de hele programmaduur afgetrokken. Korte verwarmingspieken, faseovergangen en eindtijden tellen op hun eigen tijdstip mee, ook binnen één kwartierprognose.
+Voor ieder actief apparaat worden de resterende fasen bepaald vanaf de herkende starttijd. Bij één ingesteld programma gebruikt ZonAPI bij voorkeur de vorige volledig gemeten cyclus, met dezelfde schuine lijnen als in de cyclusgrafiek. Zonder geschikte cyclus gebruikt ZonAPI de fasen in het JSON-profiel. Bij meerdere ingestelde programma's is het werkelijk draaiende programma onbekend. ZonAPI rekent dan op ieder tijdstip met het hoogste vermogen van de mogelijke programma's, tot het einde van het langste programma (`program_envelope`). Alternatieve programma's worden nooit bij elkaar opgeteld en de socket wordt maar eenmaal uitgelezen. Deze voorzichtige schatting kan een advies voor een ander apparaat later laten beginnen. De eerstvolgende pollperiode wordt gebaseerd op het actuele socketvermogen. Daarna volgt het resterende verwachte verloop. Een fase van 2000 W die al voorbij is, wordt niet opnieuw voor de hele programmaduur afgetrokken. Korte verwarmingspieken, faseovergangen en eindtijden tellen op hun eigen tijdstip mee, ook binnen één kwartierprognose.
 
 Meerdere actieve apparaten worden bij elkaar opgeteld. Een zware fase kan de starttijd van een ander apparaat naar achteren schuiven; tijdens een lichte fase kan er wel genoeg ruimte zijn. Zodra een stop bevestigd is, vervalt de reservering bij de volgende adviesaanvraag. Als een cyclus vandaag eindigt, wordt die belasting niet naar morgen of overmorgen doorgetrokken. Een actief apparaat krijgt zelf geen tweede overlappende start voorgesteld. Ook een nog te bevestigen startkandidaat telt al mee zolang de recente socketmetingen verhoogd verbruik tonen.
 
@@ -167,7 +211,7 @@ Duurt het apparaat langer dan zijn vorige cyclus of JSON-profiel, dan blijft het
 
 Op de apparaatkaart staat **Rekening gehouden met: ...** voor andere actieve apparaten. Bij de tekst staat als toelichting de geschatte resterende duur. De bestaande minimale zonnedekking over de volledige cyclus, basislast en reserve blijven gelden. De adviezen worden opnieuw berekend met de opgeslagen socketmetingen; hiervoor zijn geen extra HomeWizard-, Growatt- of weerverzoeken nodig.
 
-`GET /intern/api/v1/appliances/daily` bevat bovenaan `active_appliances`; het losse `/intern/api/v1/appliances/<id>/advice`-endpoint bevat de meegerekende andere apparaten bij dezelfde naam. Per apparaat staan onder meer `source` (`previous_cycle`, `profile` of `current_power`), `fresh`, `expected_end`, `remaining_minutes` en `overrun`. Het eigen advies kan ook `already_active` en `busy_until` bevatten. Voor dashboard en ESP32 geldt dezelfde berekening. Er zijn geen nieuwe instellingen nodig; de bestaande socket-IP's en JSON-profielen worden gebruikt.
+`GET /intern/api/v1/appliances/daily` bevat bovenaan `active_appliances`; het losse `/intern/api/v1/appliances/<id>/advice`-endpoint bevat de meegerekende andere apparaten bij dezelfde naam. Per actief apparaat staan onder meer `source` (`previous_cycle`, `profile`, `program_envelope` of `current_power`), `fresh`, `expected_end`, `remaining_minutes` en `overrun`. Het eigen advies kan ook `already_active` en `busy_until` bevatten. Voor dashboard en ESP32 geldt dezelfde berekening. De bestaande socket-IP's en JSON-profielen worden gebruikt.
 
 Een startadvies voor een nog niet gestart apparaat reserveert zelf geen vermogen voor de andere adviezen. Pas bij herkend verbruik telt het apparaat als actieve belasting mee. Het model gebruikt de basislast als achtergrondverbruik; kies een vaste basislast exclusief de apparaten die afzonderlijk worden meegerekend.
 
@@ -270,7 +314,7 @@ Vergelijk `database_path` met het databasebestand van de bestaande installatie. 
 | `settings.json > advice.reserve_w` | Vermogensmarge bovenop de geschatte huisbasislast, standaard 300 W. |
 | `settings.json > advice.baseload_w` | `null` leert een voorzichtige basislast uit minstens 12 uitgelijnde netto- en vier omvormermetingen; of stel zelf een bekende constante in. De P1 is primair, de kWh-meter kan als alternatieve historie dienen. |
 | `panels.json > groups` | Eerst 20 panelen op het zuiden (`azimuth_deg: 180`), maar **Wp, helling en omvormertoewijzing moeten worden ingevuld**. Splits een groep in meerdere richtingen door meerdere regels te maken; de aantallen tellen op tot 20. |
-| `appliances/*.json` | Elk apparaat heeft `steps` met `duration_minutes` en `power_w`, en optioneel eigen `reserve_w` en `min_solar_share`. De meegeleverde 90/150/210 minuten en wattages zijn **schattingen**, te vervangen door eigen metingen. |
+| `appliances/*.json` | Elk apparaat heeft `programs` met per programma een unieke `name` en eigen `steps` (`duration_minutes` en `power_w`). Een oude `steps`-lijst blijft geldig als Standaard. Optioneel eigen `reserve_w` en `min_solar_share`; ontbrekende of `null` minimumwaarde gebruikt de algemene grens. Meegeleverde tijden en wattages zijn **schattingen**, te vervangen door eigen metingen. |
 
 Een enkele groep van 20 panelen heeft geen echte `inverter_id` totdat je weet hoe de panelen verdeeld zijn. Maak vervolgens bijvoorbeeld groepen per omvormer met id `mic-1` … `mic-4`, en zet per groep het juiste aantal, `wp_per_panel` en `tilt_deg` in `panels.json`. Er worden geen extra weerserviceverzoeken gedaan als je later een deel naar oost of west verlegt: één GHI/DNI/DHI-reeks wordt lokaal omgerekend naar ieder paneelvlak. Vul de vier echte omvormerserienummers in `inverters[].serial` in wanneer ze bekend zijn; daarna worden onbekende serienummers niet in de actuele totaalsom opgenomen.
 
@@ -404,9 +448,9 @@ Alle volledige gegevens- en beheerroutes gebruiken de prefix `/intern`. Alleen h
 | `DELETE /intern/api/v1/growatt/diagnostics` | Verwijdert Growatt-pakketten en verbindings-/antwoordlogs, behoudt opgeslagen opbrengstmetingen; geeft verwijderde aantallen terug. De Growatt-pagina biedt hiervoor een knop met bevestiging. |
 | `GET /intern/api/v1/meters/current` | P1 en kWh afzonderlijk, plus precies **één** gekozen netto netvermogen. Positief = import, negatief = export. |
 | `GET /intern/api/v1/history?metric=irradiance&from=...&to=...` | Bestaande time series. `metric`: `irradiance`, `pv_forecast`, `inverter`, `p1` of `kwh`; `limit` max. 5000. Bij `inverter` kiest optioneel `source=shinelink`, `cloud` of `auto` de bron; standaard geldt de ingestelde opbrengstbron. Bij voorspellingen overschrijft een nieuwere bronwaarde hetzelfde tijdvak. |
-| `GET /intern/api/v1/appliances` | Geldige JSON-profielen en eventuele laad-/validatiefouten. |
-| `GET /intern/api/v1/appliances/daily` | Per voorspelde lokale dag zontijden en startadviezen voor alle apparaatprofielen. |
-| `GET /intern/api/v1/appliances/wasmachine/advice` | `can_start_now`, `earliest_start`, `best_start`, volledige zonnefractie en status (`ok`, `stale`, `forecast_incomplete`, enzovoort). Ook `droger` en `vaatwasser`. |
+| `GET /intern/api/v1/appliances` | Geldige JSON-profielen, programma's met hun stappen en duur, socketstatus en eventuele laad-/validatiefouten. |
+| `GET /intern/api/v1/appliances/daily` | Per voorspelde lokale dag zontijden en startadviezen voor ieder apparaat en programma. |
+| `GET /intern/api/v1/appliances/wasmachine/advice` | Apparaatsamenvatting en `programs` met per programma `can_start_now`, `earliest_start`, `best_start`, zonnefractie en status. Kandidaten noemen programma-id en naam. Optioneel `?program=<id-of-naam>`; ook beschikbaar voor andere apparaat-id's. |
 | `GET /intern/api/v1/status` | Bronnen, configuratiefouten, historisch aantal ontvangen frames, zontijden, gebruikt/dagmaximum en volgende weersophaling. |
 | `GET /dashboard` | Ruime daggrafieken voor vandaag, morgen en overmorgen, elk tussen eigen zonuren, met verbonden voorspeltijdvakken en tijd-/waardecursor; vandaag ook gemeten totaalpunten en huidige-tijdlijn. |
 | `GET /intern/growatt` | Growatt-pagina met omvormermetingen, tijdlijn voor pakketten, antwoorden, tijdsynchronisatie en verbindingen, filters, verwijderknop en verversing iedere 15 seconden. |
@@ -428,4 +472,4 @@ Een ontvangen `5004` verschijnt als omvormermeting onder het serienummer van adr
 
 ## Testen
 
-`npm test` controleert de scheiding tussen openbare en interne HTTP-routes, het weglaten van technische velden uit de openbare snapshot, geweigerde openbare schrijfmethoden, de echte dashboardmodule met uitsluitend de openbare snapshot, interne beheerpagina's en hun bestanden, debugbestandbeheer en dashboard-logschakelaars, behoud van metingen en quota met logging uit, nachtelijke weerplanning en daglimieten rond zomer-/wintertijd, drie daggrafieken met eigen zonuren en cursors bij verschillende schermbreedtes, geleerde kwartiercorrecties voor toekomstige dagen, Growatt-frequentiebeperking en meettijden, bronkeuze zonder dubbeltelling, TCP-verwerking, database-migraties, kwartier-/uurselectie, HomeWizard en apparaatadviezen. De tests gebruiken lokale fixtures en simulaties van de externe bronnen.
+`npm test` controleert de scheiding tussen openbare en interne HTTP-routes, het weglaten van technische velden uit de openbare snapshot, geweigerde openbare schrijfmethoden, de echte dashboardmodule met uitsluitend de openbare snapshot, interne beheerpagina's en hun bestanden, debugbestandbeheer en dashboard-logschakelaars, behoud van metingen en quota met logging uit, nachtelijke weerplanning en daglimieten rond zomer-/wintertijd, drie daggrafieken met eigen zonuren en cursors bij verschillende schermbreedtes, geleerde kwartiercorrecties voor toekomstige dagen, Growatt-frequentiebeperking en meettijden, bronkeuze zonder dubbeltelling, TCP-verwerking, database-migraties, kwartier-/uurselectie, HomeWizard en apparaatadviezen. Programmatests controleren validatie, behoud van oude profielen, apparaatminimum en algemene terugval, afzonderlijke starttijden en zonnedekking, programmakeuze via HTTP, publieke gegevensafscherming, dashboardweergave, configuratiewijzigingen tijdens bedrijf en één socketuitlezing per fysiek apparaat. De tests gebruiken lokale fixtures en simulaties van de externe bronnen. Deze versie slaagt voor **226 tests**.

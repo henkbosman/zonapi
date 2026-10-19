@@ -50,8 +50,16 @@ export function renderDailyAdvice(container, profiles, daily) {
   for (const profile of profiles) {
     const card = document.createElement('article'); card.className = 'appliance';
     const title = document.createElement('h3'); title.textContent = profile.name;
-    const duration = document.createElement('p'); duration.textContent = `Cyclus: ${profile.duration_minutes} min`;
+    const programs = profile.programs?.length ? profile.programs : [{ id: 'standaard', name: 'Standaard', duration_minutes: profile.duration_minutes }];
+    const multiple = programs.length > 1;
+    const duration = document.createElement('p'); duration.textContent = multiple ? `${programs.length} programma’s` : `Programma: ${programs[0].name} · Cyclus: ${programs[0].duration_minutes} min`;
     card.append(title, duration);
+    if (Number.isFinite(profile.minimum_solar_share_percent)) {
+      const minimum = document.createElement('p'); minimum.className = 'appliance-minimum';
+      minimum.textContent = `Minimale zonnedekking: ${profile.minimum_solar_share_percent.toLocaleString('nl-NL', { maximumFractionDigits: 2 })}%`;
+      minimum.title = profile.minimum_solar_share_source === 'general' ? 'Gebruikt de algemene minimale zonnedekking' : 'Gebruikt de minimale zonnedekking van dit apparaat';
+      card.append(minimum);
+    }
     renderActivity(card, profile.activity);
     const active = (daily.active_appliances ?? []).filter((item) => item.id !== profile.id);
     if (active.length) {
@@ -60,31 +68,44 @@ export function renderDailyAdvice(container, profiles, daily) {
       accounted.title = active.map((item) => `${item.name}: nog circa ${item.remaining_minutes} min${item.overrun ? '; programma duurt langer dan verwacht' : ''}`).join('\n');
       card.append(accounted);
     }
-    const list = document.createElement('dl'); list.className = 'daily-starts';
-    for (const [index, day] of daily.days.entries()) {
-      const advice = day.appliances.find((item) => item.id === profile.id);
-      const row = document.createElement('div'); row.className = 'daily-start';
-      const date = document.createElement('dt'); date.textContent = dayFormat.format(new Date(`${day.date}T12:00:00Z`));
-      const start = document.createElement('dd');
-      const alternative = solarAlternative(advice);
-      if (index === 0 && profile.activity?.running) {
-        start.textContent = 'Bezig'; start.className = 'start-time';
-      } else if (advice?.status === 'ok' && advice.earliest_start) {
-        start.textContent = timeFormat.format(new Date(advice.earliest_start));
-        if (advice.can_start_now) start.textContent = `Nu · ${start.textContent}`;
-        start.className = 'start-time';
-        start.title = `Eigen zon: ${advice.earliest.solar_share_percent}%`;
-        if (alternative) renderSolarAlternative(start, alternative, advice.earliest_start);
-      } else if (alternative) {
-        start.textContent = timeFormat.format(new Date(advice.best_start));
-        start.className = 'start-time start-alternative';
-        renderSolarAlternative(start, alternative, advice.best_start);
-      } else {
-        start.textContent = advice?.status === 'ok' ? 'Te weinig zon' : statuses[advice?.status] ?? 'Geen advies';
-        start.className = 'start-unavailable';
+    for (const program of programs) {
+      const section = multiple ? document.createElement('section') : card;
+      if (multiple) {
+        section.className = 'appliance-program';
+        const heading = document.createElement('h4'); heading.textContent = program.name;
+        const length = document.createElement('p'); length.textContent = `Cyclus: ${program.duration_minutes} min`;
+        section.append(heading, length);
       }
-      row.append(date, start); list.append(row);
+      const list = document.createElement('dl'); list.className = 'daily-starts';
+      for (const [index, day] of daily.days.entries()) {
+        const appliance = day.appliances.find((item) => item.id === profile.id);
+        const advice = profile.programs?.length ? appliance?.programs?.find((item) => item.program_id === program.id || item.id === program.id)
+          ?? (multiple ? null : appliance) : appliance;
+        const row = document.createElement('div'); row.className = 'daily-start';
+        const date = document.createElement('dt'); date.textContent = dayFormat.format(new Date(`${day.date}T12:00:00Z`));
+        const start = document.createElement('dd');
+        const alternative = solarAlternative(advice);
+        if (index === 0 && profile.activity?.running) {
+          start.textContent = multiple ? 'Apparaat bezig' : 'Bezig'; start.className = 'start-time';
+        } else if (advice?.status === 'ok' && advice.earliest_start) {
+          start.textContent = timeFormat.format(new Date(advice.earliest_start));
+          if (advice.can_start_now) start.textContent = `Nu · ${start.textContent}`;
+          start.className = 'start-time';
+          start.title = `Eigen zon: ${advice.earliest.solar_share_percent}%`;
+          if (alternative) renderSolarAlternative(start, alternative, advice.earliest_start);
+        } else if (alternative) {
+          start.textContent = timeFormat.format(new Date(advice.best_start));
+          start.className = 'start-time start-alternative';
+          renderSolarAlternative(start, alternative, advice.best_start);
+        } else {
+          start.textContent = advice?.status === 'ok' ? 'Te weinig zon' : statuses[advice?.status] ?? 'Geen advies';
+          start.className = 'start-unavailable';
+        }
+        row.append(date, start); list.append(row);
+      }
+      section.append(list);
+      if (multiple) card.append(section);
     }
-    card.append(list); container.append(card);
+    container.append(card);
   }
 }

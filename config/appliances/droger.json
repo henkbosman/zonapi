@@ -2,10 +2,16 @@
   "id": "droger",
   "name": "Droger",
   "estimated_profile": false,
-  "steps": [
-    { "duration_minutes": 120, "power_w": 400 }
-  ],
   "homewizard": {
     "host": "192.168.2.126"
-  }
+  },
+  "programs": [
+    {
+      "id": "kastdroog",
+      "name": "Kastdroog",
+      "steps": [
+        { "duration_minutes": 120, "power_w": 400 }
+      ]
+    }
+  ]
 }

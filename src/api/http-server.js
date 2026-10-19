@@ -15,7 +15,8 @@ import { diagnosticAction } from './diagnostic-actions.js';
 import { growattListenerStatus } from '../growatt/listener-status.js';
 import { getBaseload } from '../appliances/baseload.js';
 import { loadProfiles } from '../appliances/load-profiles.js';
-import { advise } from '../appliances/start-advice.js';
+import { adviseAppliance } from '../appliances/program-advice.js';
+import { appliancePrograms } from '../appliances/programs.js';
 import { dailyAdvice } from '../appliances/daily-advice.js';
 import { socketActivity } from '../appliances/socket-activity.js';
 import { applianceCycleResponse } from './appliance-cycles.js';
@@ -140,11 +141,14 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
         const { profiles } = loadProfiles(profilesDirectory);
         const profile = profiles.get(id);
         if (!profile) return sendJson(response, 404, { error: 'Onbekend of ongeldig apparaatprofiel' });
+        const chosenProgram = url.searchParams.get('program');
+        if (chosenProgram !== null && !appliancePrograms(profile).some((program) => program.id === chosenProgram || program.name === chosenProgram))
+          return sendJson(response, 404, { error: 'Onbekend programma' });
         const durationHours = profile.duration_minutes / 60;
         const pvModel = createPvForecastModel(repository, settings, panels, now);
         const rows = pvModel.prepare(forecastRows(settings.advice.search_hours + durationHours + 1));
         const activeDemand = createActiveDemand([...profiles.values()], repository, settings, now);
-        const advice = advise(profile, rows, { settings, panels, panelErrors, pvModel, activeDemand, latitude: settings.location.latitude, longitude: settings.location.longitude, baseload: getBaseload(settings, repository, now, serials), now });
+        const advice = adviseAppliance(profile, rows, { settings, panels, panelErrors, pvModel, activeDemand, latitude: settings.location.latitude, longitude: settings.location.longitude, baseload: getBaseload(settings, repository, now, serials), now }, chosenProgram);
         return sendJson(response, 200, advice);
       }
       if (url.pathname === '/intern/api/v1/history') {

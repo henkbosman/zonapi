@@ -34,6 +34,7 @@ export function evaluateStart(profile, startMs, weather, context) {
   // Rond uitsluitend de weergave af: een gedeeltelijk gedekte cyclus mag daardoor geen 100%-advies worden.
   const percent = Math.min(share < 1 ? 99.9 : 100, Math.round(share * 1000) / 10);
   return { start: new Date(startMs).toISOString(), solar_share: share, solar_share_percent: percent,
+    ...(profile.program_id ? { program_id: profile.program_id, program_name: profile.program_name, duration_minutes: profile.duration_minutes } : {}),
     energy_wh: Math.round(totalWh), solar_wh: Math.round(solarWh), forecast_age_minutes: Math.max(0, Math.round(recordAgeMs / 60000)) };
 }
 
@@ -66,6 +67,7 @@ export function advise(profile, weather, context) {
   const stale = [first, best, nowStart].some((item) => item && item.forecast_age_minutes * 60000 > staleLimit);
   return {
     ...active, status: stale ? 'stale' : 'ok', id: profile.id, duration_minutes: profile.duration_minutes,
+    ...(profile.program_id ? { program_id: profile.program_id, program_name: profile.program_name } : {}),
     estimated_profile: profile.estimated_profile === true, baseload: context.baseload, minimum_solar_share_percent: threshold * 100,
     can_start_now: busyUntil !== null && context.now < busyUntil ? false : stale || !nowStart ? null : nowStart.solar_share >= threshold - SHARE_EPSILON,
     now: nowStart, earliest_start: first?.start ?? null, earliest: first, best_start: best?.start ?? null, best,

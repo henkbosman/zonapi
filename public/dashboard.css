@@ -57,6 +57,11 @@ body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 5%,#
 .appliance h3 { margin:0 0 5px; font-size:17px }
 .appliance .time { font-weight:800; font-size:21px; margin:15px 0 5px; color:var(--teal) }
 .appliance p { color:var(--muted); font-size:12px; line-height:1.45; margin:5px 0 }
+.appliance .appliance-minimum { margin:7px 0; font-weight:650 }
+.appliance-program { border-top:1px solid var(--line); padding-top:15px; margin-top:17px; min-width:0 }
+.appliance-program h4 { margin:0 0 4px; font-size:15px; color:var(--ink); overflow-wrap:anywhere }
+.appliance-program .daily-starts { margin-top:10px }
+.appliance-program .daily-start:first-child { border-top:0 }
 .appliance .appliance-activity { display:inline-block; margin:9px 0 2px; border-radius:9px; padding:7px 9px; background:#edf2ef; color:var(--ink); font-weight:700 }
 .appliance .activity-running { background:var(--mint); color:var(--teal) }
 .appliance .activity-starting { background:#fff1ce; color:#78550b }

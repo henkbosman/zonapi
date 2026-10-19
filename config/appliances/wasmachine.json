@@ -2,12 +2,18 @@
   "id": "wasmachine",
   "name": "Wasmachine",
   "estimated_profile": false,
-  "steps": [
-    { "duration_minutes": 25, "power_w": 2000 },
-    { "duration_minutes": 30, "power_w": 90 },
-    { "duration_minutes": 10, "power_w": 350 }
-  ],
   "homewizard": {
     "host": "192.168.2.7"
-  }
+  },
+  "programs": [
+    {
+      "id": "snel-en-mix",
+      "name": "Snel en Mix",
+      "steps": [
+        { "duration_minutes": 25, "power_w": 2000 },
+        { "duration_minutes": 30, "power_w": 90 },
+        { "duration_minutes": 10, "power_w": 350 }
+      ]
+    }
+  ]
 }

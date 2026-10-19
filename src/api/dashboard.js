@@ -8,6 +8,7 @@ import { productionResponse, metersResponse } from './measurements.js';
 import { productionDayResponse } from './production-day.js';
 import { forecastDaysResponse } from './forecast-days.js';
 import { applianceCycleResponse } from './appliance-cycles.js';
+import { appliancePrograms, minimumSolarShare } from '../appliances/programs.js';
 
 /** Selecteert uitsluitend afgesproken openbare velden; input: object en veldnamen; output: nieuw object zonder onverwachte bronvelden. */
 function pick(value, keys) {
@@ -42,15 +43,21 @@ function publicForecast(value) {
 }
 
 /** Selecteert de zichtbare start-/energiegegevens van een cyclus; input: berekend kandidaatadvies; output: openbaar kandidaatadvies of null. */
-function publicStart(value) { return value ? pick(value, ['start', 'solar_share', 'solar_share_percent', 'energy_wh', 'solar_wh']) : null; }
+function publicStart(value) { return value ? pick(value, ['start', 'solar_share', 'solar_share_percent', 'energy_wh', 'solar_wh', 'program_id', 'program_name', 'duration_minutes']) : null; }
+
+/** Laat per programma uitsluitend namen en berekende adviezen door; input: intern apparaat-/programma-advies; output: openbare adviesvelden zonder steps of configuratie. */
+function publicProgramAdvice(value) {
+  return { ...pick(value, ['id', 'name', 'duration_minutes', 'status', 'can_start_now', 'earliest_start', 'best_start',
+    'program_id', 'program_name', 'best_program_id', 'best_program_name', 'minimum_solar_share_percent', 'minimum_solar_share_source']),
+    earliest: publicStart(value.earliest), best: publicStart(value.best),
+    ...(value.programs ? { programs: value.programs.map(publicProgramAdvice) } : {}) };
+}
 
 /** Laat uitsluitend dagadviezen en namen van meegerekende apparaten door; input: interne dagplanning; output: openbare planning zonder configuratie en foutmeldingen. */
 function publicAdvice(value) {
   return { generated_at: value.generated_at,
     active_appliances: value.active_appliances.map((row) => pick(row, ['id', 'name', 'fresh', 'remaining_minutes', 'overrun'])),
-    days: value.days.map((day) => ({ ...pick(day, ['date', 'sunrise', 'sunset']), appliances: day.appliances.map((row) => ({
-      ...pick(row, ['id', 'name', 'duration_minutes', 'status', 'can_start_now', 'earliest_start', 'best_start']),
-      earliest: publicStart(row.earliest), best: publicStart(row.best) })) })) };
+    days: value.days.map((day) => ({ ...pick(day, ['date', 'sunrise', 'sunset']), appliances: day.appliances.map(publicProgramAdvice) })) };
 }
 
 /** Selecteert een gemeten cyclus zonder interne database-id; input: cyclus; output: vermogensverloop of null. */
@@ -79,8 +86,12 @@ export function dashboardResponse({ settings, panels, panelErrors, repository, w
       growatt: pick(pv, ['status', 'source', 'expected_inverters', 'active_inverters', 'power_w']),
       homewizard: { net_power_w: meters.net_power_w }, baseload: baseload ? { power_w: baseload.power_w } : null },
     forecasts: { generated_at: forecasts.generated_at, days: forecasts.days.map(publicForecast) },
-    profiles: { profiles: profiles.map((profile) => ({ ...pick(profile, ['id', 'name', 'duration_minutes']),
-      activity: publicActivity(socketActivity(profile, repository, settings.homewizard.poll_seconds, now)) })) },
+    profiles: { profiles: profiles.map((profile) => {
+      const minimum = minimumSolarShare(profile, settings);
+      return { ...pick(profile, ['id', 'name', 'duration_minutes']), minimum_solar_share_percent: minimum.percent,
+        minimum_solar_share_source: minimum.source, programs: appliancePrograms(profile).map((program) => pick(program, ['id', 'name', 'duration_minutes'])),
+        activity: publicActivity(socketActivity(profile, repository, settings.homewizard.poll_seconds, now)) };
+    }) },
     production: { ...pick(production, ['sunrise', 'sunset', 'now']), points: production.points.map((row) =>
       pick(row, ['time', 'power_w', 'measured_from', 'active_inverters', 'expected_inverters'])) },
     daily: publicAdvice(daily),

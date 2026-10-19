@@ -1,29 +1,26 @@
 ZonAPI
-Versie: 2026-10-18-InternExtern1
+Versie: 2026-10-19-Programmas1
 
-Scheidt het openbare dashboard van de volledige interne toepassing.
-Openbaar: /dashboard, benodigde bestanden en GET /api/v1/dashboard.
-Intern: /intern/growatt, /intern/weather, /intern/homewizard,
-/intern/database en alle volledige API-routes onder /intern/api/v1/.
-De oude adressen blijven niet als alias of redirect beschikbaar.
+Minimale zonnedekking per apparaat en meerdere benoemde programma's.
 
-- Openbare snapshot met uitsluitend de benodigde dashboardvelden.
-- Geen IP-adressen, serienummers, ruwe antwoorden of databasepaden daarin.
-- Dashboard zonder beheermenu; interne pagina's hebben hun eigen routes.
-- Ophalen, logging wijzigen en wissen werken alleen via interne routes.
-- Caddyfile voor zon.ferion.nl met achterliggende dienst 127.0.0.1:3002.
-- Caddy weigert /intern, overige routes en alle schrijfmethoden op dit domein.
-- Intern beheer via de directe dienst op de server of via een SSH-tunnel.
-- Databaseschema 6 en bestaande meetgegevens blijven bruikbaar.
-
-Deze versie bevat ook Dagcorrecties1, Blokcorrecties1, Correctie-Fix1,
-de Database-pagina, de lichte basisvoorspelling en HomeWizard-apparaten.
+- min_solar_share per apparaat; ontbrekend of null gebruikt de algemene grens.
+- Elk programma heeft een naam, optionele id en eigen steps/verbruiksfasen.
+- Eigen startadvies en Meeste zon per programma en per voorspelde dag.
+- Programmanaam, duur en het gebruikte minimumpercentage op het dashboard.
+- Interne advies-API met programmakeuze en programma-id/naam in kandidaten.
+- Oude profielen met alleen steps blijven geldig als programma Standaard.
+- Actieve apparaten blijven eenmaal meetellen; bij onbekend programma geldt
+  het hoogste mogelijke fasevermogen tot het einde van het langste programma.
+- Eén socketuitlezing en één cyclusgrafiek per fysiek apparaat.
+- Openbare gegevensafscherming en interne routes blijven behouden.
+- Databaseschema 6; geen nieuwe migratie of extra externe bronverzoeken.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
-Behoud je eigen config/ en data/ en de bestaande HTTP-poort 3002.
-Vervang het siteblok voor zon.ferion.nl door de meegeleverde Caddyfile,
-valideer de configuratie en herlaad Caddy. Behoud andere siteblokken.
-Pas bestaande ESP32's en scripts aan naar /intern/api/v1/.
+Behoud je eigen config/ en data/. Stel programma's en eventueel een eigen
+min_solar_share in per config/appliances/<apparaat>.json. Zie de README
+en examples/vaatwasser-programmas.json; voorbeeldverbruik is een schatting.
+De update-ZIP bevat geen config/ of database en wijzigt je eigen profielen niet.
+De Caddyfile en HTTP-poort 3002 zijn ongewijzigd ten opzichte van InternExtern1.
 
-216 tests slagen, inclusief echte HTTP-routes, gegevensafscherming,
-openbare schrijfverboden en het tekenen/verversen van het dashboard.
+226 tests slagen, inclusief programma-adviezen via echte HTTP-routes,
+minimumterugval, actieve belasting, socketuitlezing, dashboard en privacy.

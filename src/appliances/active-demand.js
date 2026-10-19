@@ -1,4 +1,5 @@
 import { socketConfig, socketConfigKey, socketFreshnessMs } from './socket-config.js';
+import { appliancePrograms, programEnvelope } from './programs.js';
 
 /** Zoekt het eerste segment waarvan het einde na het tijdstip ligt; input: segmenten en tijd-ms; output: index. */
 function segmentIndex(segments, at) {
@@ -22,7 +23,7 @@ function powerAt(segment, at) { return segment.first + (segment.last - segment.f
 /** Verplaatst een JSON-programma naar de herkende starttijd; input: profiel en start-ms; output: constante vermogenssegmenten. */
 function profileSegments(profile, start) {
   let from = start;
-  return profile.steps.map((step) => {
+  return programEnvelope(profile).map((step) => {
     const until = from + step.duration_minutes * 60000;
     const segment = { from, until, first: step.power_w, last: step.power_w };
     from = until; return segment;
@@ -51,12 +52,13 @@ function remainingLoad(profile, saved, config, repository, settings, now) {
   const identifiedStart = pending ? state.pending_start_ms : state.started_ms;
   const start = Number.isFinite(identifiedStart) && identifiedStart <= now ? identifiedStart : now;
   const programmed = profileSegments(profile, start), duration = programmed.at(-1).until - start;
-  const peak = Math.max(...profile.steps.map((step) => step.power_w));
-  const reference = repository.applianceCycles(profile.id).find((run) => run.state === 'completed' && run.complete && run.started_ms < start
+  const alternatives = appliancePrograms(profile).length > 1;
+  const peak = Math.max(...programEnvelope(profile).map((step) => step.power_w));
+  const reference = alternatives ? null : repository.applianceCycles(profile.id).find((run) => run.state === 'completed' && run.complete && run.started_ms < start
     && run.ended_ms > run.started_ms && run.points.length >= 2);
   const learned = reference ? cycleSegments(reference, start) : [];
   let until = reference ? start + reference.ended_ms - reference.started_ms : start + duration;
-  let source = reference ? 'previous_cycle' : 'profile';
+  let source = reference ? 'previous_cycle' : alternatives ? 'program_envelope' : 'profile';
   const overrun = until <= now;
   const currentPower = Number.isFinite(state.power_w) && state.power_w >= 0 ? state.power_w : null;
   let segments;
