@@ -56,7 +56,8 @@ test('kwartiermodus is standaard, blijft optioneel en vraagt beide resoluties in
   for (const value of [null, '15', 0, 30, false]) assert.ok(validateSettings({ ...legacy, weather: { ...legacy.weather, resolution_minutes: value } }).some((error) => error.includes('weather.resolution_minutes')));
   const url = forecastUrl(52, 5, 3);
   assert.equal(url.searchParams.get('models'), 'best_match,icon_d2');
-  assert.equal(url.searchParams.get('hourly'), url.searchParams.get('minutely_15'));
+  assert.deepEqual(url.searchParams.get('hourly').split(',').slice(0, 3), url.searchParams.get('minutely_15').split(','));
+  assert.ok(url.searchParams.get('hourly').includes('cloud_cover,weather_code'));
   assert.equal(url.searchParams.get('forecast_minutely_15'), '192');
   assert.equal(url.searchParams.get('past_minutely_15'), '96');
   const hourUrl = forecastUrl(52, 5, 3, 60);

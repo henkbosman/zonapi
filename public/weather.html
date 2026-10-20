@@ -44,6 +44,12 @@
     </section>
 
     <section class="full-card">
+      <h2>Bewolking vandaag</h2>
+      <p>Onbewolkt betekent 0% bewolking en weercode helder. Dit zijn uurwaarden uit het weermodel, geen lokale waarnemingen. Nieuwe kwartiercorrecties wachten op het volledige uur ervoor en erna, inclusief de omringende uurpunten, en op daarna opgehaalde weergegevens.</p>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Bewolking</th><th>Toestand</th><th>Weercode</th><th>Opgehaald</th></tr></thead><tbody id="weather-conditions"></tbody></table></div>
+    </section>
+
+    <section class="full-card">
       <div class="timeline-heading"><h2>Weerverzoeken</h2><div class="log-actions"><button type="button" id="toggle-logging" class="refresh-button" aria-pressed="true" disabled>Logging —</button><button type="button" id="clear-logs" class="clear-button">Logs verwijderen</button></div></div>
       <div class="timeline-filters"><label>Status <select id="status-filter"><option value="all">Alles</option><option value="error">Fouten</option><option value="ok">Gelukt</option><option value="pending">Bezig</option></select></label></div>
       <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Bron</th><th>Resultaat</th><th>HTTP</th><th>Duur</th><th>Punten</th><th>Details</th><th></th></tr></thead><tbody id="weather-calls"></tbody></table></div>

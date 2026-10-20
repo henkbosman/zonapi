@@ -9,7 +9,7 @@ export function openDatabase(path) {
   mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   const version = db.prepare('PRAGMA user_version').get().user_version;
-  if (version > 6) { db.close(); throw new Error('Database heeft een nieuwere schemaversie'); }
+  if (version > 7) { db.close(); throw new Error('Database heeft een nieuwere schemaversie'); }
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;
     CREATE TABLE IF NOT EXISTS forecast (
       source TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
@@ -71,6 +71,16 @@ export function openDatabase(path) {
     CREATE INDEX IF NOT EXISTS meter_received ON meter_measurements(device, received_ms);
     CREATE TABLE IF NOT EXISTS diagnostic_settings (source TEXT PRIMARY KEY, enabled INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS diagnostic_state (source TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(source,name));
+    CREATE TABLE IF NOT EXISTS weather_conditions (
+      location_key TEXT NOT NULL, time_ms INTEGER NOT NULL, source TEXT NOT NULL, model TEXT,
+      cloud_cover REAL CHECK(cloud_cover IS NULL OR (cloud_cover>=0 AND cloud_cover<=100)),
+      weather_code INTEGER CHECK(weather_code IS NULL OR (weather_code>=0 AND weather_code<=99)), fetched_ms INTEGER NOT NULL,
+      PRIMARY KEY(location_key,time_ms)
+    );
+    CREATE TABLE IF NOT EXISTS pv_correction_candidates (
+      model_key TEXT NOT NULL, end_ms INTEGER NOT NULL, created_ms INTEGER NOT NULL, ready_ms INTEGER NOT NULL,
+      signature TEXT NOT NULL, candidate_json TEXT NOT NULL, PRIMARY KEY(model_key,end_ms)
+    );
     CREATE TABLE IF NOT EXISTS weather_usage (local_date TEXT PRIMARY KEY, attempts INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS homewizard_calls (
       id INTEGER PRIMARY KEY, attempted_ms INTEGER NOT NULL, device TEXT NOT NULL, status TEXT NOT NULL,
@@ -115,6 +125,6 @@ export function openDatabase(path) {
   }
   createPvCorrectionSchema(db, { migratePerBlock: version < 6 });
   createApplianceCycleSchema(db);
-  db.exec('PRAGMA user_version=6');
+  db.exec('PRAGMA user_version=7');
   return db;
 }

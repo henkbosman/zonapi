@@ -16,6 +16,7 @@ import { createWeatherScheduler } from '../src/weather/scheduler.js';
 import { addCalendarDays, localDayRange } from '../src/weather/local-calendar.js';
 import { localDay } from '../src/weather/local-day.js';
 import { startHttpServer } from '../src/api/http-server.js';
+import { clearSkyBounds, weatherLocationKey } from '../src/weather/clear-sky.js';
 
 const minute = 60000, five = 5 * minute, quarter = 15 * minute, day = 86400000;
 const target = Date.parse('2026-10-18T08:15:00Z');
@@ -50,9 +51,16 @@ function fixture(t, { center = target, path = ':memory:' } = {}) {
   f.direct = (end, power) => {
     f.now = Math.max(f.now, end + 10 * minute);
     return learnPvCorrection(f.repository, settings, panels, [], [{ serial: 'TEST123456', source: 'cloud', power_w: power,
-      measured_ms: end + five + 1000, received_ms: f.now }], f.now, { target_ms: end });
+      measured_ms: end + five + 1000, received_ms: f.now }], f.now, { target_ms: end, defer: false });
   };
   f.learner = createPvCorrectionLearner({ settings, panels, panelErrors: [], repository: f.repository, clock: () => f.now });
+  f.approve = (end) => {
+    const bounds = clearSkyBounds(end);
+    f.now = Math.max(f.now, bounds.until + 1000);
+    for (let time = bounds.from; time <= bounds.until; time += 3600000) f.repository.saveWeatherCondition(weatherLocationKey(settings.location), {
+      source: 'open-meteo', model: 'best_match', time_ms: time, cloud_cover: 0, weather_code: 0, fetched_ms: f.now });
+    return f.learner.learn();
+  };
   f.sample = (time, power, received = time + 1000) => {
     f.now = Math.max(f.now, received);
     f.repository.saveCloudInverter({ serial: 'TEST123456', source: 'cloud', measured_ms: time, received_ms: received,
@@ -116,7 +124,7 @@ test('vandaag gebruikt dezelfde correcties in de openbare grafiek, interne grafi
   assert.equal(advice.earliest_start, iso(end));
 });
 
-test('echte driepuntsmetingen berekenen twee onafhankelijke kwartieren iedere dag opnieuw zonder stapeling', (t) => {
+test('echte driepuntsmetingen en achteraf heldere uren berekenen twee kwartieren iedere dag opnieuw zonder stapeling', (t) => {
   const f = fixture(t), scenarios = [
     [[600, 620, 640], [700, 720, 740]],
     [[750, 780, 810], [990, 1020, 1050]],
@@ -132,21 +140,23 @@ test('echte driepuntsmetingen berekenen twee onafhankelijke kwartieren iedere da
         const result = f.sample(end + (sample - 1) * five, power);
         if (sample < 2) assert.equal(f.blocks().some((row) => row.end_ms === end), false);
         else {
-          assert.equal(result.status, 'updated'); assert.equal(result.factor, expected[offset][index]);
-          assert.equal(result.sampling.used_samples, 3); assert.equal(result.target_time, iso(end));
+          assert.equal(result.status, 'waiting_for_clear_sky_window');
         }
       }
-      const block = { ...f.blocks().find((row) => row.end_ms === end) };
+    }
+    assert.equal(f.approve(first + quarter).processed_count, 2);
+    for (const [index, powers] of quarters.entries()) {
+      const end = first + index * quarter, block = { ...f.blocks().find((row) => row.end_ms === end) };
+      assert.equal(block.factor, expected[offset][index]);
       assert.equal(block.measured_w, powers[1]); assert.equal(block.predicted_w, [1000, 1500, 2000][offset]);
       assert.equal(f.value(end).power_w, powers[1]); assert.equal(f.value(end).correction_source, 'block');
-      assert.equal(f.learner.learn().status, 'unchanged');
+      assert.equal(f.learner.learn().status, 'stale');
       assert.deepEqual({ ...f.blocks().find((row) => row.end_ms === end) }, block);
       saved.push(block);
     }
     const status = f.model().status();
     assert.equal(status.learned_blocks_today, 2); assert.equal(status.learned_blocks, (offset + 1) * 2);
-    assert.equal(status.last_attempt.status, 'unchanged');
-    assert.equal(status.last_attempt.target_time, iso(first + quarter));
+    assert.equal(status.last_attempt.status, 'stale');
     assert.equal(f.value(first + 2 * quarter).correction_factor, 1);
     assert.deepEqual(f.blocks().map((row) => ({ ...row })), saved);
   }
@@ -161,7 +171,8 @@ test('een ontbrekend meetmoment behoudt de vorige dagfactor en een later complee
   assert.equal(pending.status, 'waiting_for_samples'); assert.equal(pending.received_samples, 2);
   assert.equal(f.value(end).power_w, 900); assert.equal(f.value(end).correction_source, 'same_clock_quarter');
   assert.equal(f.model().status().learned_blocks_today, 0);
-  const result = f.sample(end, 930, f.now + 1000);
+  assert.equal(f.sample(end, 930, f.now + 1000).status, 'waiting_for_clear_sky_window');
+  const result = f.approve(end);
   assert.equal(result.status, 'updated'); assert.equal(result.factor, 0.62);
   assert.equal(f.value(end).power_w, 930); assert.equal(f.value(end).correction_source, 'block');
   assert.equal(f.value(end).correction_reference_end, iso(end));
@@ -183,7 +194,8 @@ test('een weerupdate gebruikt vandaag de nieuwe eigen basis en leren vergelijkt 
   const cache = f.repository.pv(end - quarter, end);
   assert.equal(cache[0].base_power_w, 2000); assert.equal(cache[0].power_w, 1200);
   f.sample(end - five, 800); f.sample(end, 820);
-  assert.equal(f.sample(end + five, 840).factor, 0.41);
+  assert.equal(f.sample(end + five, 840).status, 'waiting_for_clear_sky_window');
+  assert.equal(f.approve(end).factor, 0.41);
   assert.equal(f.value(end).power_w, 820);
   assert.equal(f.blocks().find((row) => row.end_ms === end).predicted_w, 2000);
 });

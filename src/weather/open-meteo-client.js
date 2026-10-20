@@ -3,7 +3,7 @@ import { localDay } from './local-day.js';
 /** Bouwt één gecombineerd weerverzoek; input: lat, lon, dagen en optionele resolutie; output: URL met uurterugval en bij 15 minuten ICON-D2-kwartierdata. */
 export function forecastUrl(latitude, longitude, days, resolutionMinutes = 15) {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.search = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), hourly: 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation', daily: 'sunrise,sunset', timezone: 'Europe/Amsterdam', timeformat: 'unixtime', forecast_days: String(days) }).toString();
+  url.search = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), hourly: 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover,weather_code', daily: 'sunrise,sunset', timezone: 'Europe/Amsterdam', timeformat: 'unixtime', forecast_days: String(days), past_days: '2' }).toString();
   if (resolutionMinutes === 15) {
     url.searchParams.set('minutely_15', 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation');
     url.searchParams.set('forecast_minutely_15', '192');
@@ -38,6 +38,21 @@ function radiationRows(series, model, stepSeconds, fetchedMs) {
   return rows;
 }
 
+/** Leest echte uurpunten voor bewolking los van de voorafgaande instralingsgemiddelden; input: uurreeks en ontvangsttijd; output: modelpunten met null voor ontbrekende/ongeldige waarden. */
+function conditionRows(series, fetchedMs) {
+  if (!Array.isArray(series?.time)) return [];
+  const covers = series.cloud_cover_best_match ?? series.cloud_cover;
+  const codes = series.weather_code_best_match ?? series.weather_code;
+  return series.time.flatMap((time, index) => {
+    if (!Number.isFinite(time)) return [];
+    const cover = Array.isArray(covers) && covers.length === series.time.length ? covers[index] : null;
+    const code = Array.isArray(codes) && codes.length === series.time.length ? codes[index] : null;
+    return [{ source: 'open-meteo', model: 'best_match', time_ms: time * 1000, fetched_ms: fetchedMs,
+      cloud_cover: Number.isFinite(cover) && cover >= 0 && cover <= 100 ? cover : null,
+      weather_code: Number.isInteger(code) && code >= 0 && code <= 99 ? code : null }];
+  });
+}
+
 /** Normaliseert kwartier-, uur- en zonwaarden; input: API JSON, ophaaltijd en optionele resolutie; output: alle bronrijen en zonnedagen. */
 export function normalizeOpenMeteo(json, fetchedMs, resolutionMinutes = 15) {
   const rows = [...radiationRows(json.hourly, 'best_match', 3600, fetchedMs),
@@ -51,7 +66,7 @@ export function normalizeOpenMeteo(json, fetchedMs, resolutionMinutes = 15) {
     const sunset = Number.isFinite(sets[index]) ? sets[index] * 1000 : NaN;
     if (Number.isFinite(sunrise) && Number.isFinite(sunset) && sunset > sunrise) sun.push({ day: localDay(sunrise), sunrise_ms: sunrise, sunset_ms: sunset });
   }
-  return { rows, sun };
+  return { rows, sun, conditions: conditionRows(json.hourly, fetchedMs) };
 }
 
 /** Haalt uitsluitend Open-Meteo-voorspellingen op; input: locatie, dagen, optionele resolutie en fetch-functie; output: genormaliseerde rijen en HTTP-metadata of fout met metadata. */

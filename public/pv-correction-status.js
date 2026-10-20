@@ -3,6 +3,10 @@ const time = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', ho
 /** Geeft een concrete reden waarom een correctie nog niet is opgeslagen; input: laatste leerpoging; output: korte Nederlandse tekst. */
 export function correctionAttemptText(attempt) {
   if (!attempt) return 'wachten op de eerste meetronde';
+  if (attempt.status === 'waiting_for_clear_sky_window') return `wachten op het onbewolkte venster${attempt.clear_sky?.ready_at ? ` tot ${time.format(new Date(attempt.clear_sky.ready_at))}` : ''}`;
+  if (attempt.status === 'clear_sky_data_missing') return 'bewolkingsgegevens ontbreken of zijn onbekend';
+  if (attempt.status === 'waiting_for_clear_sky_data') return 'wachten op achteraf opgehaalde bewolkingsgegevens';
+  if (attempt.status === 'clouds_present') return 'geen nieuwe correctie: venster niet volledig onbewolkt';
   if (attempt.status === 'waiting_for_samples') return `wachten op meetpunten (${attempt.received_samples ?? 0}/3)`;
   if (attempt.status === 'incomplete') return Number.isFinite(attempt.received_inverters)
     ? `wachten op omvormers (${attempt.received_inverters}/${attempt.expected_inverters})` : 'meetronde onvolledig';
@@ -20,12 +24,16 @@ export function renderPvCorrection(element, correction) {
   element.textContent = active
     ? `Correctie ${correction.latest.correction_percent > 0 ? '+' : ''}${correction.latest.correction_percent.toLocaleString('nl-NL')}%${correction.latest.start ? ` · Blok ${time.format(new Date(correction.latest.start))}–${time.format(new Date(correction.latest.end))}` : ''} · Blokken vandaag ${correction.learned_blocks_today ?? correction.learned_quarters}/${correction.total_blocks_in_day ?? 96}${sampling ? ` · ${sampling.used_samples}/3 metingen${sampling.ignored_times.length ? ' · 1 uitschieter genegeerd' : ''}` : ''}`
     : `Correctie: ${correction?.status === 'disabled' ? 'uitgeschakeld' : correctionAttemptText(attempt)}`;
+  if (active && ['waiting_for_clear_sky_window', 'clear_sky_data_missing', 'waiting_for_clear_sky_data', 'clouds_present'].includes(attempt?.status)) {
+    element.textContent += ` · ${correctionAttemptText(attempt)}`;
+  }
   const details = [];
   if (correction?.latest?.start) {
     details.push(`Gemeten blok: ${correction.latest.date} ${time.format(new Date(correction.latest.start))}–${time.format(new Date(correction.latest.end))}`);
-    details.push('Voor toekomstige dagen gebruikt ieder klokkwartier zijn eigen laatst gemeten factor, op de weerverwachting van die dag.');
+    details.push('Vandaag en toekomstige dagen gebruiken per klokkwartier de eigen laatst gemeten factor, op de weerverwachting van die dag.');
   }
   if (sampling) details.push(...sampling.samples.map((sample) => `${time.format(new Date(sample.time))}: ${Math.round(sample.power_w)} W${sample.used ? '' : ' (genegeerd)'}`));
+  if (sampling?.clear_sky) details.push(`Volgens weer-API onbewolkt: ${time.format(new Date(sampling.clear_sky.window_start))}–${time.format(new Date(sampling.clear_sky.window_end))}`);
   if (attempt) {
     details.push(`Laatste poging: ${time.format(new Date(attempt.attempted_at))} · ${correctionAttemptText(attempt)}`);
     if (attempt.target_time) details.push(`Kwartier: ${time.format(new Date(attempt.target_time))}`);
@@ -33,6 +41,12 @@ export function renderPvCorrection(element, correction) {
     if (attempt.diagnostics?.rejected_timing) details.push(`${attempt.diagnostics.rejected_timing} metingen buiten de ingestelde tijdsmarge`);
     if (attempt.diagnostics?.rejected_skew) details.push(`${attempt.diagnostics.rejected_skew} meetmomenten met te grote onderlinge tijdsverschillen`);
     if (attempt.message) details.push(attempt.message);
+    if (attempt.clear_sky) {
+      const sky = attempt.clear_sky;
+      details.push(`Onbewolkt vereist van ${time.format(new Date(sky.window_start))} tot ${time.format(new Date(sky.window_end))}`);
+      details.push(`Controle van de omringende uurpunten tot ${time.format(new Date(sky.checked_until))}`);
+      if (Number.isFinite(sky.max_cloud_cover_percent)) details.push(`Hoogste bewolking: ${sky.max_cloud_cover_percent}%`);
+    }
   }
   element.title = details.join('\n');
 }

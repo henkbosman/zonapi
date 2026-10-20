@@ -6,8 +6,8 @@ import { productionFreshnessMinutes } from '../production/freshness.js';
 
 const iso = (ms) => new Date(ms).toISOString();
 
-/** Leert een Open-Meteo-kwartier uit drie volledige Growatt-totalen op t-5/t/t+5; input: opslag, model, fouten, actuele bronrijen en ontvangsttijd; output: correctiestatus plus herleidbare gebruikte/gefilterde metingen, of wachten bij ontbrekende data. */
-export function learnQuarterCorrection(repository, settings, panels, panelErrors, rows, now) {
+/** Bereidt een Open-Meteo-kwartier voor uit drie volledige Growatt-totalen op t-5/t/t+5; input: opslag, model, fouten, bronrijen, ontvangsttijd en optionele rekenmodus; output: wachtstatus en gebruikte/gefilterde metingen. De productiedienst beoordeelt daarna het onbewolkte venster. */
+export function learnQuarterCorrection(repository, settings, panels, panelErrors, rows, now, { defer = true } = {}) {
   const config = automaticCorrectionConfig(settings);
   if (!config.enabled) return { status: 'disabled' };
   if (panelErrors.length || !Number.isFinite(settings.location.latitude) || !Number.isFinite(settings.location.longitude)) return { status: 'configuration_incomplete' };
@@ -42,6 +42,6 @@ export function learnQuarterCorrection(repository, settings, panels, panelErrors
     samples: samples.map((sample, index) => ({ time: iso(sample.time), power_w: sample.power_w, used: filtered.used.includes(index),
       measured_from: iso(sample.measured_from), measured_to: iso(sample.measured_to),
       inverters: sample.values.map((row) => ({ serial: row.serial, measured_at: iso(row.measured_ms), power_w: row.power_w, source: row.source ?? source })) })) };
-  const result = learnPvCorrection(repository, settings, panels, panelErrors, values, now, { target_ms: target, sampling });
+  const result = learnPvCorrection(repository, settings, panels, panelErrors, values, now, { target_ms: target, sampling, defer });
   return { ...result, target_time: iso(target), sampling, ...(pendingTarget > target ? { pending } : {}) };
 }

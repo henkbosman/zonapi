@@ -150,7 +150,7 @@ test('een bestaande v4-database behoudt socketstatus en netmetingen; lopende pro
     f.db.prepare('INSERT INTO appliance_socket_state VALUES(?,?,?,?)').run(f.profile.id, socketConfigKey(socketConfig(f.profile)), base, JSON.stringify(state));
     f.repository.saveMeter(normalizeMeter('p1', 'v1', { active_power_w: -10 }, base));
     f.db.close(); f = fixture(path);
-    assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 6);
+    assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 7);
     assert.equal(f.repository.currentMeters()[0].net_power_w, -10);
     f.read(30, 500);
     assert.equal(f.response(30).current.complete, false);

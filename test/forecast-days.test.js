@@ -26,7 +26,7 @@ test('API corrigeert op alle drie dagen hetzelfde Nederlandse klokkwartier met d
     for (let hour = 4; hour < 20; hour++) repository.saveForecast({ source: 'open-meteo', start_ms: Date.parse(`${date}T00:00:00Z`) + hour * 3600000,
       end_ms: Date.parse(`${date}T00:00:00Z`) + (hour + 1) * 3600000, ghi: 250 + index * 50, dni: 0, dhi: 250 + index * 50, fetched_ms: now });
   }
-  const learned = learnPvCorrection(repository, settings, panels, [], [{ serial: 'TEST123456', measured_ms: now, received_ms: now, power_w: 200 }], now);
+  const learned = learnPvCorrection(repository, settings, panels, [], [{ serial: 'TEST123456', measured_ms: now, received_ms: now, power_w: 200 }], now, { defer: false });
   assert.equal(learned.status, 'updated');
   assert.equal(learned.factor, 0.5);
   const attempt = repository.beginCall(dates[0], now, 'test');

@@ -5,6 +5,7 @@ import { createPvForecastModel } from '../pv/forecast-model.js';
 import { forecastTimeline } from './forecast-timeline.js';
 import { getWeatherResolution } from './resolution.js';
 import { localDayRange } from './local-calendar.js';
+import { weatherLocationKey } from './clear-sky.js';
 
 /** Maakt een weerscheduler voor alle uren met een lokaal dagquotum; input: instellingen, panelen, fouten, repository en optionele klok/bron/correctiecallback; output: {tick,refresh,status,start,stop}. */
 export function createWeatherScheduler({ settings, panels, panelErrors, repository, clock = () => Date.now(), source = getIrradianceSource(settings.weather.source), onForecast }) {
@@ -52,6 +53,8 @@ export function createWeatherScheduler({ settings, panels, panelErrors, reposito
         for (const row of result.rows) {
           repository.saveForecast(row);
         }
+        for (const row of result.conditions ?? []) repository.saveWeatherCondition(weatherLocationKey(settings.location), row);
+        repository.pruneClearSkyHistory(now);
         if (!panelErrors.length) {
           const model = createPvForecastModel(repository, settings, panels, now);
           const rows = model.active ? forecastTimeline(result.rows, -Infinity, Infinity) : result.rows;

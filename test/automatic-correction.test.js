@@ -39,7 +39,7 @@ function fixture(t, { automatic = {}, path = ':memory:', irradiance = 125, cente
   f.learn = (power, end = f.target, at = Math.max(f.now, end + 10 * minute)) => {
     f.now = at;
     return learnPvCorrection(f.repository, settings, panels, [], serials.map((serial) => ({ serial, source: 'cloud', power_w: power / 4,
-      measured_ms: end + 5 * minute + 1000, received_ms: at })), at, { target_ms: end });
+      measured_ms: end + 5 * minute + 1000, received_ms: at })), at, { target_ms: end, defer: false });
   };
   f.value = (end, now = f.now) => {
     const model = createPvForecastModel(f.repository, settings, panels, now);
@@ -60,7 +60,7 @@ test('per_block is de standaard; bestaande modi worden zonder configuratieaanpas
   for (const value of [{ mode: 'unknown' }, { enabled: 1 }, { max_factor: 0 }, { max_skew_seconds: -1 }, { min_forecast_w: 0 }]) {
     assert.ok(validateSettings({ ...f.settings, pv: { automatic_correction: value } }).some((error) => error.startsWith('pv.automatic_correction')));
   }
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 6);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 7);
   const reordered = { ...f.panels, inverters: [...f.panels.inverters].reverse(), groups: [...f.panels.groups].reverse() };
   assert.equal(correctionModelKey(f.settings, reordered), correctionModelKey(f.settings, f.panels));
 });

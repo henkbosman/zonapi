@@ -5,8 +5,9 @@ import { clockQuarter, quarterLabel } from './quarter.js';
 import { basePvAtPeriodEnd } from './base-at-time.js';
 import { refreshPvForecast } from './refresh-forecast.js';
 import { productionFreshnessMinutes } from '../production/freshness.js';
+import { clearSkyBounds } from '../weather/clear-sky.js';
 
-/** Bewaart één gevalideerde correctie; input: opslag, model, voorbereide omvormerwaarden, ontvangsttijd en optionele kwartier-/venstermetadata; output: status/factor zonder stapeling. De dienst bereidt de drie meetmomenten voor via learnQuarterCorrection. */
+/** Valideert een meetblok en bewaart standaard uitsluitend de invoer tot de hemelcontrole; input: opslag, model, omvormerwaarden, ontvangsttijd en venstermetadata; output: wachtstatus. De afzonderlijke rekenlaag kan direct worden getoetst met defer:false. */
 export function learnPvCorrection(repository, settings, panels, panelErrors, rows, now, options = {}) {
   const config = automaticCorrectionConfig(settings);
   if (!config.enabled) return { status: 'disabled' };
@@ -29,23 +30,42 @@ export function learnPvCorrection(repository, settings, panels, panelErrors, row
   if (now - predicted.fetched_ms > settings.weather.stale_after_hours * 3600000) return { status: 'forecast_stale' };
   if (predicted.power_w < config.min_forecast_w) return { status: 'low_forecast' };
   const measured = values.reduce((sum, row) => sum + row.power_w, 0);
-  const factor = Math.round(Math.min(config.max_factor, measured / predicted.power_w) * 1000000) / 1000000;
   const signature = createHash('sha256').update(JSON.stringify({ values: values.map(({ serial, measured_ms, power_w }) => [serial, measured_ms, power_w]).sort(),
-    predicted_w: predicted.power_w, fetched_ms: predicted.fetched_ms, factor,
+    predicted_w: predicted.power_w, fetched_ms: predicted.fetched_ms, max_factor: config.max_factor,
     target_ms: target, ...(options.sampling ? { sampling: options.sampling } : {}) })).digest('hex');
   const quarter = clockQuarter(target);
   const bounds = { block_start: new Date(target - 900000).toISOString(), block_end: new Date(target).toISOString() };
-  if (existing?.signature === signature) return { status: 'unchanged', factor, time: quarterLabel(quarter), ...bounds };
+  if (existing?.signature === signature) return { status: 'unchanged', factor: existing.factor, time: quarterLabel(quarter), ...bounds };
+  const row = { model_key: modelKey, start_ms: target - 900000, end_ms: target, predicted_w: predicted.power_w,
+    measured_w: measured, measured_ms: measuredMs, updated_ms: now, signature,
+    sampling_json: JSON.stringify({ ...(options.sampling ?? { method: 'direct', target_time: new Date(target).toISOString() }),
+      forecast: { start: predicted.start, end: predicted.end, source_resolution_minutes: predicted.source_resolution_minutes,
+        power_w: predicted.power_w, groups: predicted.groups } }) };
+  if (options.defer !== false) {
+    repository.savePvCorrectionCandidate(row, now, clearSkyBounds(target).until);
+    return { status: 'waiting_for_clear_sky_window', time: quarterLabel(quarter), ...bounds };
+  }
+  return publishPvCorrection(repository, settings, panels, panelErrors, row, now);
+}
+
+/** Publiceert een reeds bij ontvangst gevalideerd blok; input: opslag, model, voorbereide rij, peiltijd en optionele heldere-hemelonderbouwing; output: opgeslagen correctie en één atomaire cacheverversing. */
+export function publishPvCorrection(repository, settings, panels, panelErrors, row, now, clearSky = null) {
+  if (row.model_key !== correctionModelKey(settings, panels) || row.measured_ms > now || row.end_ms > now
+    || !Number.isFinite(row.predicted_w) || row.predicted_w <= 0 || !Number.isFinite(row.measured_w) || row.measured_w < 0
+    || row.start_ms !== row.end_ms - 900000 || row.end_ms % 900000 !== 0) throw new Error('Ongeldige voorbereide kwartiercorrectie');
+  const factor = Math.round(Math.min(automaticCorrectionConfig(settings).max_factor, row.measured_w / row.predicted_w) * 1000000) / 1000000;
+  const sampling = JSON.parse(row.sampling_json);
   const db = repository.database();
   db.exec('BEGIN IMMEDIATE');
   try {
-    const result = repository.savePvBlockCorrection({ model_key: modelKey, start_ms: target - 900000, end_ms: target, factor, predicted_w: predicted.power_w,
-      measured_w: measured, measured_ms: measuredMs, updated_ms: now, signature,
-      sampling_json: JSON.stringify({ ...(options.sampling ?? { method: 'direct', target_time: new Date(target).toISOString() }),
-        forecast: { start: predicted.start, end: predicted.end, source_resolution_minutes: predicted.source_resolution_minutes,
-          power_w: predicted.power_w, groups: predicted.groups } }) });
-    if (result.changes) refreshPvForecast(repository, settings, panels, panelErrors, now, { transaction: false, blockEndMs: target });
+    const result = repository.savePvBlockCorrection({ ...row, factor, updated_ms: now,
+      sampling_json: JSON.stringify({ ...sampling, ...(clearSky ? { clear_sky: clearSky } : {}) }) });
+    if (result.changes) refreshPvForecast(repository, settings, panels, panelErrors, now, { transaction: false, blockEndMs: row.end_ms });
+    repository.deletePvCorrectionCandidate(row.model_key, row.end_ms, row.signature);
     db.exec('COMMIT');
-    return { status: result.changes ? 'updated' : 'unchanged', factor, time: quarterLabel(quarter), ...bounds, correction_percent: Math.round((factor - 1) * 1000) / 10 };
+    return { status: result.changes ? 'updated' : 'unchanged', factor, time: quarterLabel(clockQuarter(row.end_ms)),
+      block_start: new Date(row.start_ms).toISOString(), block_end: new Date(row.end_ms).toISOString(),
+      target_time: new Date(row.end_ms).toISOString(), correction_percent: Math.round((factor - 1) * 1000) / 10,
+      ...(clearSky ? { sampling: { ...sampling, clear_sky: clearSky }, clear_sky: clearSky } : {}) };
   } catch (error) { db.exec('ROLLBACK'); throw error; }
 }

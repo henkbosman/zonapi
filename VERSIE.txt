@@ -1,34 +1,32 @@
 ZonAPI
-Versie: 2026-10-19-Vandaagcorrecties1
+Versie: 2026-10-20-Onbewolkt1
 
-Herstelt eerdere kwartiercorrecties in de voorspelling van vandaag.
+Nieuwe kwartiercorrecties uitsluitend na achteraf gecontroleerde onbewolkte uren.
 
-- Vandaag gebruikt een eerdere meetdag totdat het eigen meetdrietal compleet is.
-- Eigen nieuwe correcties krijgen voorrang; buurkwartieren blijven onafhankelijk.
-- Dagovergang, wintertijd en het kwartier tot middernacht behouden de terugval.
-- Herstart herstelt ook de overgenomen correcties in verstreken cacheblokken.
-- Dagelijkse herberekening gevalideerd met echte driepuntsvensters over drie dagen.
-- Grafieken, openbare snapshot en programma-adviezen gebruiken dezelfde waarden.
+- Cloud_cover en weather_code worden in hetzelfde Open-Meteo-verzoek opgehaald.
+- Alleen exact 0% bewolking en weercode 0 gelden als volledig onbewolkt.
+- Controle van het hele kwartier plus minstens een uur ervoor en erna.
+- De omringende echte uurpunten moeten verstreken zijn en daarna opgehaald.
+- Voor 09:00–09:15: venster 08:00–10:15, controlepunten 08:00 tot en met 11:00.
+- Meetdrietallen en hun ongecorrigeerde basis wachten in de eigen database.
+- De factor wordt pas na goedkeuring berekend en toegepast, zonder stapeling.
+- Kandidaten overleven herstart en logs wissen; bewaartermijn 48 uur.
+- Bewolking vandaag op de interne Weer-pagina; concrete wachtreden op dashboard.
+- De laatste geldige factor blijft gelden zolang een nieuwe controle wacht.
+- Modelgegevens zijn geen garantie voor onbewolkt weer op de eigen locatie.
+- Databaseschema 7 voegt bewolkingspunten en kandidaatblokken toe.
+- Bestaande correcties, metingen, programma's en instellingen blijven behouden.
+- Geen extra weerverzoeken of nieuwe JSON-instellingen nodig.
 
-- min_solar_share per apparaat; ontbrekend of null gebruikt de algemene grens.
-- Elk programma heeft een naam, optionele id en eigen steps/verbruiksfasen.
-- Eigen startadvies en Meeste zon per programma en per voorspelde dag.
-- Programmanaam, duur en het gebruikte minimumpercentage op het dashboard.
-- Interne advies-API met programmakeuze en programma-id/naam in kandidaten.
-- Oude profielen met alleen steps blijven geldig als programma Standaard.
-- Actieve apparaten blijven eenmaal meetellen; bij onbekend programma geldt
-  het hoogste mogelijke fasevermogen tot het einde van het langste programma.
-- Eén socketuitlezing en één cyclusgrafiek per fysiek apparaat.
-- Openbare gegevensafscherming en interne routes blijven behouden.
-- Databaseschema 6; geen nieuwe migratie of extra externe bronverzoeken.
+Bevat ook de correcties voor vandaag/morgen/overmorgen, meerdere programma's
+en een eigen minimale zonnedekking per apparaat uit de voorgaande versies.
+Alle volledige routes blijven onder /intern; alleen het dashboard is openbaar.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
-Behoud je eigen config/ en data/. Stel programma's en eventueel een eigen
-min_solar_share in per config/appliances/<apparaat>.json. Zie de README
-en examples/vaatwasser-programmas.json; voorbeeldverbruik is een schatting.
-De update-ZIP bevat geen config/ of database en wijzigt je eigen profielen niet.
-De Caddyfile en HTTP-poort 3002 zijn ongewijzigd ten opzichte van InternExtern1.
+Behoud je eigen config/ en data/. De database wordt automatisch aangevuld.
+De update-ZIP bevat geen config/ of database.
+Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-234 tests slagen, inclusief dagelijkse herberekening en de dagovergang,
-programma-adviezen via echte HTTP-routes, minimumterugval, actieve belasting,
-socketuitlezing, dashboard en privacy.
+246 tests slagen, inclusief wachten op achteraf heldere uren, ontbrekende data,
+oorspronkelijke referentiebasis, herstart, migratie, dagelijkse herberekening,
+wintertijd, programma-adviezen en openbare gegevensafscherming.

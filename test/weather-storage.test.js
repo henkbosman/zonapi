@@ -15,7 +15,8 @@ import { DatabaseSync } from 'node:sqlite';
 test('uurmodus gebruikt standaard modelkeuze en bewaart de exacte reden van een HTTP 400', async () => {
   const url = forecastUrl(52.442903, 5.854103, 3, 60);
   assert.equal(url.searchParams.has('models'), false);
-  assert.equal(url.searchParams.get('hourly'), 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation');
+  assert.equal(url.searchParams.get('hourly'), 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover,weather_code');
+  assert.equal(url.searchParams.get('past_days'), '2');
   await assert.rejects(fetchOpenMeteo({ latitude: 52.442903, longitude: 5.854103, days: 3, resolutionMinutes: 60, fetcher: async (target) => {
     assert.equal(target.toString(), url.toString());
     return new Response(JSON.stringify({ error: true, reason: 'Invalid value for parameter models' }), { status: 400 });

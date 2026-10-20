@@ -33,7 +33,7 @@ test('v5-migratie behoudt echte eigen correcties en brondata; overgenomen cachef
   db.exec('DROP TABLE pv_block_corrections; PRAGMA user_version=5'); db.close();
   db = openDatabase(path); repository = createRepository(db);
   try {
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 6);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 7);
     assert.deepEqual(repository.forecastCandidates(0, Infinity).map((row) => ({ ...row })), raw);
     assert.equal(repository.pvCorrectionPattern(key).length, 2);
     assert.equal(repository.pvBlockCorrections(key).length, 1);

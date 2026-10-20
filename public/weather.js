@@ -69,6 +69,25 @@ function renderCalls(data) {
   element('#page-info').textContent = data.calls.rows.length ? `${data.calls.offset + 1}–${data.calls.offset + data.calls.rows.length}` : 'Geen resultaten';
 }
 
+/** Toont oorspronkelijke bewolkingsuurpunten, zonder ze naar instralingskwartieren te verschuiven; input: weeroverzicht; output: void. */
+function renderConditions(data) {
+  const body = element('#weather-conditions');
+  body.replaceChildren();
+  for (const row of data.conditions?.rows ?? []) {
+    const tr = document.createElement('tr');
+    const labels = { clear: 'Onbewolkt', cloudy: 'Bewolkt', unknown: 'Onbekend' };
+    for (const value of [time(row.time), row.cloud_cover_percent === null ? '—' : `${row.cloud_cover_percent}%`,
+      labels[row.condition] ?? 'Onbekend', row.weather_code ?? '—', time(row.fetched_at)]) {
+      const td = document.createElement('td'); td.textContent = String(value); tr.append(td);
+    }
+    body.append(tr);
+  }
+  if (!body.children.length) {
+    const tr = document.createElement('tr'), td = document.createElement('td');
+    td.colSpan = 5; td.textContent = 'Nog geen bewolkingsgegevens opgehaald'; tr.append(td); body.append(tr);
+  }
+}
+
 /** Laat de URL en het resultaat van een geselecteerd verzoek zien; input: verzoekrecord; output: void. */
 function showCall(row) {
   const metadata = element('#call-meta'); metadata.replaceChildren();
@@ -92,6 +111,7 @@ async function refresh() {
     renderLogging(data.logging);
     renderStatus(data);
     renderCalls(data);
+    renderConditions(data);
     drawRadiationChart(data.forecast, Date.parse(data.server_time), element('#radiation-chart'));
     element('#connection').textContent = `Bijgewerkt ${time(data.server_time)}`;
   } catch (error) { if (id === refreshId) element('#connection').textContent = `Fout: ${error.message}`; }

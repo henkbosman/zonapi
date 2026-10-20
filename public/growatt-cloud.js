@@ -6,9 +6,11 @@ function time(value) { return value ? fullTime.format(new Date(value)) : '—'; 
 /** Vat de driepuntscorrectie samen; input: correctieresultaat; output: kwartier, aantal gebruikte metingen of wachtreden. */
 function correctionText(result) {
   if (!result) return '—';
+  if (result.status === 'waiting_for_clear_sky_window') return `Wachten op onbewolkt venster${result.clear_sky?.ready_at ? ` tot ${time(result.clear_sky.ready_at)}` : ''}`;
   if (result.status === 'waiting_for_samples') return `${result.received_samples}/3 ontvangen · wachten op ${result.missing_times.map(time).join(', ')}`;
   if (['updated', 'unchanged'].includes(result.status) && result.sampling) return `${result.time} · ${result.sampling.used_samples}/3 metingen${result.sampling.ignored_times.length ? ' · 1 uitschieter genegeerd' : ''}`;
-  const labels = { disabled: 'Uitgeschakeld', incomplete: 'Meetronde onvolledig', stale: 'Metingen verouderd', low_forecast: 'Te weinig voorspelde opwek', forecast_unavailable: 'Voorspelling ontbreekt', forecast_stale: 'Voorspelling verouderd' };
+  const labels = { disabled: 'Uitgeschakeld', incomplete: 'Meetronde onvolledig', stale: 'Metingen verouderd', low_forecast: 'Te weinig voorspelde opwek', forecast_unavailable: 'Voorspelling ontbreekt', forecast_stale: 'Voorspelling verouderd',
+    clear_sky_data_missing: 'Bewolkingsgegevens ontbreken of zijn onbekend', waiting_for_clear_sky_data: 'Wachten op achteraf opgehaalde bewolkingsgegevens', clouds_present: 'Geen nieuwe correctie: niet volledig onbewolkt' };
   return labels[result.status] ?? result.status;
 }
 
@@ -24,6 +26,10 @@ export function renderGrowattCloud(cloud) {
   for (const [id, value] of Object.entries(values)) { const element = document.getElementById(id); if (element) element.textContent = value; }
   const correction = document.getElementById('cloud-correction');
   if (correction) correction.title = cloud.forecast_correction?.sampling?.samples.map((sample) => `${time(sample.time)} · ${Math.round(sample.power_w)} W${sample.used ? '' : ' · genegeerd'}`).join('\n') ?? '';
+  if (correction && cloud.forecast_correction?.clear_sky) {
+    const sky = cloud.forecast_correction.clear_sky;
+    correction.title += `${correction.title ? '\n' : ''}Onbewolkt vereist: ${time(sky.window_start)}–${time(sky.window_end)}; controle tot ${time(sky.checked_until)}`;
+  }
   document.getElementById('cloud-poll').disabled = !cloud.enabled || !cloud.configured || cloud.fetching;
   const list = document.getElementById('cloud-plants');
   list.replaceChildren();

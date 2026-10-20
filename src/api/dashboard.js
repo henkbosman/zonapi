@@ -21,6 +21,12 @@ function publicActivity(value) {
     error: value?.error ? 'Geen actuele socketmeting beschikbaar' : null };
 }
 
+/** Behoudt alleen de zichtbare venstercontrole zonder bronlocatie of interne kandidaatgegevens; input: interne hemelcontrole; output: openbare onderbouwing. */
+function publicClearSky(value) {
+  return pick(value, ['status', 'window_start', 'window_end', 'checked_from', 'checked_until', 'ready_at',
+    'required_samples', 'checked_samples', 'max_cloud_cover_percent']);
+}
+
 /** Behoudt de zichtbare kwartiercorrectie en meetonderbouwing zonder modelhash, omvormers of foutdetails; input: interne correctiestatus; output: openbare correctiestatus. */
 function publicCorrection(value) {
   if (!value) return null;
@@ -29,10 +35,12 @@ function publicCorrection(value) {
   return { ...pick(value, ['enabled', 'status', 'learned_blocks_today', 'learned_quarters', 'total_blocks_in_day']),
     latest: value.latest ? { ...pick(value.latest, ['date', 'start', 'end', 'factor', 'correction_percent']),
       sampling: Number.isFinite(sampling?.used_samples) ? { used_samples: sampling.used_samples,
-        ignored_times: sampling.ignored_times ?? [], samples: (sampling.samples ?? []).map((row) => pick(row, ['time', 'power_w', 'used'])) } : null } : null,
+        ignored_times: sampling.ignored_times ?? [], samples: (sampling.samples ?? []).map((row) => pick(row, ['time', 'power_w', 'used'])),
+        ...(sampling.clear_sky ? { clear_sky: publicClearSky(sampling.clear_sky) } : {}) } : null } : null,
     last_attempt: attempt ? { ...pick(attempt, ['status', 'attempted_at', 'target_time', 'received_samples', 'received_inverters', 'expected_inverters']),
       moments: (attempt.moments ?? []).map((row) => pick(row, ['time', 'received_inverters', 'expected_inverters', 'complete'])),
-      diagnostics: pick(attempt.diagnostics, ['rejected_timing', 'rejected_skew']) } : null };
+      diagnostics: pick(attempt.diagnostics, ['rejected_timing', 'rejected_skew']),
+      ...(attempt.clear_sky ? { clear_sky: publicClearSky(attempt.clear_sky) } : {}) } : null };
 }
 
 /** Geeft alleen de tijdreeksen voor de daggrafiek door; input: interne dagvoorspelling; output: grafiekwaarden zonder paneelgroepen of diagnostiek. */

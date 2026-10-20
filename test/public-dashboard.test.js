@@ -39,7 +39,7 @@ async function fixture(t) {
     target + index * 86400000 - quarter, target + index * 86400000 + quarter, 'test', now);
   const frame = repository.saveFrame(now - 60000, host, 6, '5004', 'decoded', Buffer.from(privateText));
   repository.saveInverter({ serial, measured_ms: now - 60000, received_ms: now, power_w: 1000, energy_today_kwh: 5, energy_total_kwh: 500, frame_id: frame });
-  const learned = learnPvCorrection(repository, settings, panels, [], [{ serial, power_w: 500, measured_ms: target + 300000, source: 'shinelink' }], now, { target_ms: target });
+  const learned = learnPvCorrection(repository, settings, panels, [], [{ serial, power_w: 500, measured_ms: target + 300000, source: 'shinelink' }], now, { target_ms: target, defer: false });
   assert.equal(learned.factor, 0.5);
   repository.saveDiagnosticState('growatt', 'pv_correction', { model_key: correctionModelKey(settings, panels), attempted_at: new Date(now).toISOString(),
     target_time: new Date(target).toISOString(), status: 'waiting_for_samples', received_samples: 2, message: privateText,
