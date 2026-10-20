@@ -1,13 +1,11 @@
 import { localDay } from './local-day.js';
 
-/** Bouwt één gecombineerd weerverzoek; input: lat, lon, dagen en optionele resolutie; output: URL met uurterugval en bij 15 minuten ICON-D2-kwartierdata. */
+/** Bouwt één gecombineerd weerverzoek vanaf vandaag; input: lat, lon, kalenderdagen en optionele resolutie; output: dezelfde kalenderperiode voor uur-, dag- en eventuele ICON-D2-kwartierdata, zonder extra historie. */
 export function forecastUrl(latitude, longitude, days, resolutionMinutes = 15) {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.search = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), hourly: 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover,weather_code', daily: 'sunrise,sunset', timezone: 'Europe/Amsterdam', timeformat: 'unixtime', forecast_days: String(days), past_days: '2' }).toString();
+  url.search = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), hourly: 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover,weather_code', daily: 'sunrise,sunset', timezone: 'Europe/Amsterdam', timeformat: 'unixtime', forecast_days: String(days) }).toString();
   if (resolutionMinutes === 15) {
     url.searchParams.set('minutely_15', 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation');
-    url.searchParams.set('forecast_minutely_15', '192');
-    url.searchParams.set('past_minutely_15', '96');
     url.searchParams.set('models', 'best_match,icon_d2');
   }
   return url;

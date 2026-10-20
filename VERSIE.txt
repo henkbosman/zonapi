@@ -1,34 +1,33 @@
 ZonAPI
-Versie: 2026-10-20-BewolkingFix1
+Versie: 2026-10-20-Weeropvraag1
 
-Bewolkingsverwerking en herkomstinformatie hersteld.
+Open-Meteo-opvraag beperkt tot de benodigde kalenderperiode.
 
-- Bewolkingsiconen volgen cloud_cover in plaats van de algemene weercode.
-- 0% is helder; meer dan 0% onder 80% deels bewolkt; vanaf 80% bewolkt.
-- Ontbrekende of ongeldige bewolkingspercentages blijven onbekend.
-- Waar kwartierinstraling en een volledig weerpaar beschikbaar zijn, wordt
-  ICON-D2 gebruikt; anders volgt een volledig Best Match-paar.
-- Geen combinatie van losse velden uit verschillende modellen/antwoordvormen.
-- De tooltip toont percentage, model, uurpunt, ophaaltijd en ruwe weercode.
-- Te oude weerdata is herkenbaar aan een verouderingsmelding.
-- De interne Weer-pagina toont dezelfde bewolkingsklasse en Strikt helder apart.
-- De correctiecontrole vereist nog steeds 0% bewolking en weercode 0.
-- Geen extra API-verzoeken, nieuwe instellingen of databasemigratie.
+- Geen past_days=2: eerdere kalenderdagen worden niet opnieuw opgevraagd.
+- Geen past_minutely_15=96 of los forecast_minutely_15=192-venster.
+- Uur-, kwartier- en dagreeksen volgen nu dezelfde forecast_days-periode,
+  standaard vandaag, morgen en overmorgen vanaf vandaag 00:00 Nederlandse tijd.
+- Het verstreken deel van vandaag blijft beschikbaar voor de grafiek.
+- Een hoger ingesteld aantal voorspellingsdagen blijft gelden voor dagadviezen.
+- De gebruikte velden en beide modellen blijven behouden: GHI/DNI/DHI,
+  bewolking, weercode, zonsopkomst en zonsondergang, met uurterugval.
+- Actueel verzoek en het echte verzoek gebruiken dezelfde URL-opbouw.
+- De aanvraaggeschiedenis bewaart de URL van de werkelijk uitgevoerde poging.
+- Bestaande correcties en opgeslagen weerhistorie blijven behouden.
+- Geen extra verzoeken, nieuwe instellingen of databasemigratie.
 
-De analyse en de grenzen van de bevindingen staan in README.md. De huidige
-brondata van de gebruikersinstallatie kon niet rechtstreeks worden onderzocht;
-een afwijking in het weermodel blijft mogelijk.
-
-Bevat ook het startadvies boven de grafieken, weericonen per kwartier,
-directe correcties en de correctiedatum in de popup.
+Bevat ook de eerdere bewolkingsherstelpunten, model- en ophaaltijdinformatie,
+weericonen, directe onafhankelijke kwartiercorrecties en de correctiedatum.
+Deze beperking van de aanvraag bevestigt geen oorzaak voor een onjuist lokaal
+bewolkingspercentage; de bewolkingswaarden blijven modelverwachtingen.
 Alle volledige routes blijven onder /intern; alleen het dashboard is openbaar.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
 Behoud je eigen config/ en data/. Gebruik daarna desgewenst Nu ophalen op de
-interne Weer-pagina om de nieuwe modelkeuze te activeren binnen het dagquotum.
+interne Weer-pagina om de kleinere aanvraag uit te voeren binnen het dagquotum.
 De update-ZIP bevat geen config/ of database. Schema blijft 7.
 Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-256 tests slagen, inclusief een meer-modelantwoord via de echte opslag en
-correctiedienst, modelterugval, ontbrekende waarden, wintertijd, de drie
-dagvoorspellingen, gegevensafscherming en verouderingsinformatie.
+257 tests slagen. De extra integratietest controleert dat de getoonde,
+verzonden en gelogde URL gelijk zijn, de drie daggrafieken gegevens hebben,
+het eerdere deel van vandaag behouden blijft en lokale weerhistorie blijft staan.

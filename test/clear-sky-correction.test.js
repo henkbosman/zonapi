@@ -72,7 +72,7 @@ function fixture(t, path = ':memory:') {
 test('bewolking wordt in hetzelfde verzoek opgehaald als echte uurpunten; null, ongeldige en ontbrekende bronwaarden worden nooit nul', () => {
   const url = forecastUrl(52, 5, 3);
   assert.match(url.searchParams.get('hourly'), /cloud_cover,weather_code/);
-  assert.equal(url.searchParams.get('past_days'), '2');
+  assert.equal(url.searchParams.has('past_days'), false);
   assert.doesNotMatch(url.searchParams.get('minutely_15'), /cloud_cover/);
   const time = target / 1000;
   const hourly = { time: [time, time + 3600], shortwave_radiation_best_match: [100, 200],

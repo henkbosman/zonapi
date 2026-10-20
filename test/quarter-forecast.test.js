@@ -58,8 +58,8 @@ test('kwartiermodus is standaard, blijft optioneel en vraagt beide resoluties in
   assert.equal(url.searchParams.get('models'), 'best_match,icon_d2');
   assert.deepEqual(url.searchParams.get('hourly').split(',').slice(0, 3), url.searchParams.get('minutely_15').split(','));
   assert.ok(url.searchParams.get('hourly').includes('cloud_cover,weather_code'));
-  assert.equal(url.searchParams.get('forecast_minutely_15'), '192');
-  assert.equal(url.searchParams.get('past_minutely_15'), '96');
+  assert.equal(url.searchParams.get('forecast_days'), '3');
+  for (const name of ['past_days', 'past_hours', 'past_minutely_15', 'forecast_hours', 'forecast_minutely_15']) assert.equal(url.searchParams.has(name), false);
   const hourUrl = forecastUrl(52, 5, 3, 60);
   assert.equal(hourUrl.searchParams.has('minutely_15'), false);
   assert.equal(hourUrl.searchParams.has('models'), false);

@@ -7,6 +7,8 @@ import { loadConfiguration } from '../src/config/load.js';
 import { createWeatherScheduler } from '../src/weather/scheduler.js';
 import { offlineSunTimes } from '../src/weather/solar-position.js';
 import { startHttpServer } from '../src/api/http-server.js';
+import { fetchOpenMeteo } from '../src/weather/open-meteo-client.js';
+import { weatherLocationKey } from '../src/weather/clear-sky.js';
 
 test('weerpagina toont configuratie, verzendt handmatig verzoek en registreert HTTP-diagnose', async () => {
   const { settings: defaults, panels, panel_errors: panelErrors } = loadConfiguration();
@@ -50,4 +52,55 @@ test('weerpagina toont configuratie, verzendt handmatig verzoek en registreert H
     await new Promise((resolve) => server.close(resolve));
     db.close();
   }
+});
+
+test('compacte aanvraag is gelijk aan de getoonde en gelogde URL en houdt drie daggrafieken en lokale historie beschikbaar', async (t) => {
+  const now = Date.parse('2026-10-20T12:00:00Z');
+  t.mock.method(Date, 'now', () => now);
+  const { settings: defaults, panels, panel_errors: panelErrors } = loadConfiguration();
+  const settings = { ...defaults, http: { host: '127.0.0.1', port: 0 }, location: { latitude: 52.2, longitude: 5.2 } };
+  const db = openDatabase(':memory:'), repository = createRepository(db);
+  const start = Date.parse('2026-10-19T22:00:00Z'); // Vandaag 00:00 in Nederland.
+  const times = Array.from({ length: 72 }, (_, index) => start / 1000 + index * 3600);
+  const quarters = Array.from({ length: 192 }, (_, index) => start / 1000 + index * 900);
+  const days = ['2026-10-20', '2026-10-21', '2026-10-22'];
+  const payload = { hourly: { time: times, shortwave_radiation_best_match: times.map(() => 200),
+    direct_normal_irradiance_best_match: times.map(() => 0), diffuse_radiation_best_match: times.map(() => 200),
+    cloud_cover_best_match: times.map(() => 0), weather_code_best_match: times.map(() => 0),
+    cloud_cover_icon_d2: times.map(() => 0), weather_code_icon_d2: times.map(() => 0) },
+    minutely_15: { time: quarters, shortwave_radiation_icon_d2: quarters.map(() => 250),
+      direct_normal_irradiance_icon_d2: quarters.map(() => 0), diffuse_radiation_icon_d2: quarters.map(() => 250) },
+    daily: { sunrise_best_match: days.map((day) => Date.parse(`${day}T06:00:00Z`) / 1000),
+      sunset_best_match: days.map((day) => Date.parse(`${day}T16:00:00Z`) / 1000) } };
+  const previous = { source: 'open-meteo', model: 'best_match', time_ms: start - 3600000,
+    cloud_cover: 0, weather_code: 0, fetched_ms: now - 86400000 };
+  repository.saveWeatherCondition(weatherLocationKey(settings.location), previous);
+  let sentUrl = null, requests = 0;
+  const weather = createWeatherScheduler({ settings, panels, panelErrors, repository, clock: () => now,
+    source: (options) => fetchOpenMeteo({ ...options, fetcher: async (url) => {
+      requests++;
+      sentUrl = url.toString();
+      assert.equal(url.searchParams.get('forecast_days'), '3');
+      for (const name of ['past_days', 'past_hours', 'past_minutely_15', 'forecast_minutely_15']) assert.equal(url.searchParams.has(name), false);
+      return Response.json(payload);
+    } }) });
+  const server = startHttpServer({ settings, panels, panelErrors, repository, weather, homewizard: { status: () => ({ p1: null, kwh: null }) } });
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const get = async (path) => (await fetch(`${base}${path}`)).json();
+  try {
+    const before = await get('/intern/api/v1/weather');
+    assert.equal((await weather.tick()).attempted, true);
+    const after = await get('/intern/api/v1/weather');
+    assert.equal(requests, 1);
+    assert.equal(before.request_url, sentUrl);
+    assert.equal(after.request_url, sentUrl);
+    assert.equal(after.calls.rows[0].request_url, sentUrl);
+    const forecast = await get('/intern/api/v1/forecast/days');
+    assert.deepEqual(forecast.days.map((day) => day.date), days);
+    assert.ok(forecast.days.every((day) => day.slots.length && day.conditions.rows.length));
+    assert.ok(forecast.days[0].slots.some((slot) => Date.parse(slot.end) < now && slot.model === 'icon_d2'));
+    assert.ok(forecast.days[2].slots.every((slot) => slot.model === 'best_match'));
+    assert.equal(repository.weatherConditions(weatherLocationKey(settings.location), previous.time_ms, previous.time_ms).length, 1);
+  } finally { await new Promise((resolve) => server.close(resolve)); db.close(); }
 });
