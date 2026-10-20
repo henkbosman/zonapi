@@ -267,7 +267,13 @@ test('de interne weerpagina toont bewolking en de openbare correctiestatus geeft
   assert.match(display.textContent, /onbewolkte venster/); assert.match(display.title, /08:00 tot 10:15/);
   f.ready(); f.sky();
   assert.equal(f.learner.learn().status, 'updated');
-  const approved = (await get('/api/v1/dashboard')).forecasts.days[0].automatic_correction;
+  const approvedSnapshot = await get('/api/v1/dashboard');
+  const approved = approvedSnapshot.forecasts.days[0].automatic_correction;
+  for (const [index, day] of approvedSnapshot.forecasts.days.entries()) {
+    const slot = day.slots.find((row) => Date.parse(row.end) === target + index * 86400000);
+    assert.equal(slot.correction_computed_at, iso(f.now));
+    assert.notEqual(slot.correction_computed_at, slot.correction_reference_end);
+  }
   assert.equal(approved.latest.sampling.clear_sky.status, 'clear');
   renderPvCorrection(display, approved);
   assert.match(display.title, /Volgens weer-API onbewolkt: 08:00–10:15/);

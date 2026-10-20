@@ -59,6 +59,7 @@ test('API corrigeert op alle drie dagen hetzelfde Nederlandse klokkwartier met d
     assert.deepEqual(corrected.map((slot) => slot.power_w), [200, 240, 280]);
     assert.deepEqual(corrected.map((slot) => slot.end), ['2026-10-24T10:00:00.000Z', '2026-10-25T11:00:00.000Z', '2026-10-26T11:00:00.000Z']);
     assert.ok(corrected.every((slot) => slot.correction_reference_end === new Date(now).toISOString()));
+    assert.ok(corrected.every((slot) => slot.correction_computed_at === new Date(now).toISOString()));
     assert.deepEqual(await (await fetch(`${base}/intern/api/v1/forecast/day`)).json(), result.days[0]);
     assert.deepEqual(await (await fetch(`${base}/intern/api/v1/forecast/day?date=2026-10-26`)).json(), result.days[2]);
     for (const value of ['2026-02-30', '2026-13-01', '2026-1-01', 'morgen']) assert.equal((await fetch(`${base}/intern/api/v1/forecast/day?date=${value}`)).status, 400);

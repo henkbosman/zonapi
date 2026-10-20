@@ -12,7 +12,8 @@ export function forecastResponse(rows, panels, panelErrors, location, now, stale
     return { ...slotMetadata(row), ghi_w_m2: row.ghi, dni_w_m2: row.dni, dhi_w_m2: row.dhi, power_w: result?.power_w ?? null,
       base_power_w: result?.base_power_w ?? result?.power_w ?? null, automatic_correction_factor: result?.correction_factor ?? 1,
       correction_source: result?.correction_source ?? 'none', correction_reference_start: result?.correction_reference_start ?? null,
-      correction_reference_end: result?.correction_reference_end ?? null, groups: result?.groups ?? null };
+      correction_reference_end: result?.correction_reference_end ?? null,
+      correction_computed_at: result?.correction_computed_at ?? null, groups: result?.groups ?? null };
   });
   const status = model?.status();
   if (status) delete status.quarters;

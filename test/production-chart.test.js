@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { productionSeries } from '../src/api/production-series.js';
 import { drawProductionChart } from '../public/dashboard-production-chart.js';
-import { forecastLinePoints, lineValueAt, blockCorrectionAt } from '../public/production-chart-series.js';
+import { forecastLinePoints, lineValueAt, blockCorrectionAt, blockCorrectionComputedAt } from '../public/production-chart-series.js';
 
 /** Maakt een kleine SVG/DOM-testnode; input: tagnaam; output: node met kinderen en attributen. */
 function element(tagName) {
@@ -194,6 +194,44 @@ test('lichte basisvoorspelling bepaalt mede de schaal en correctiepercentages bl
     assert.match(target.attributes['aria-valuetext'], /Correctie: -50%/);
     const baseDots = svg.children.filter((child) => child.attributes['data-series'] === 'base_forecast');
     assert.equal(baseDots.length, 3); assert.match(baseDots[0].children[0].textContent, /Zonder correctie/);
+  } finally { globalThis.document = before; }
+});
+
+test('datum en tijd van de berekende kwartiercorrectie blijven zichtbaar in popup en punttooltip op alle dagen en schermbreedtes', () => {
+  const before = globalThis.document;
+  globalThis.document = { createElementNS: (_, tag) => element(tag), createElement: (tag) => element(tag) };
+  try {
+    for (const width of [280, 780]) for (const day of [0, 1, 2]) {
+      const start = Date.parse('2026-10-20T10:00:00Z') + day * 86400000;
+      const dates = ['2026-10-19T09:00:00Z', '2026-10-20T08:30:00Z', null];
+      const slots = [0.8, 1, 1].map((factor, index) => ({ start: new Date(start + index * 900000).toISOString(),
+        end: new Date(start + (index + 1) * 900000).toISOString(), power_w: 1000 * factor, base_power_w: 1000,
+        automatic_correction_factor: factor, correction_computed_at: dates[index] }));
+      const container = element('div'); container.clientWidth = width;
+      drawProductionChart(container, { sunrise: new Date(start).toISOString(), sunset: new Date(start + 2700000).toISOString(),
+        now: new Date(start).toISOString(), points: [] }, slots, { forecastOnly: day > 0, baseloadW: 400 });
+      const svg = container.children[0], target = svg.children.find((child) => child.attributes.role === 'slider');
+      const dots = svg.children.filter((child) => child.attributes['data-series'] === 'forecast');
+      assert.match(dots[0].children[0].textContent, /Correctie berekend: 19-10-2026, 11:00/);
+      assert.match(dots[1].children[0].textContent, /Correctie 0%.*Correctie berekend: 20-10-2026, 10:30/);
+      assert.doesNotMatch(dots[2].children[0].textContent, /Correctie berekend/);
+      target.listeners.focus(); target.listeners.keydown({ key: 'End', preventDefault() {} });
+      assert.match(target.attributes['aria-valuetext'], /Correctie berekend: —/);
+      target.listeners.keydown({ key: 'ArrowLeft', preventDefault() {} });
+      assert.match(target.attributes['aria-valuetext'], /Correctie berekend: 20-10-2026, 10:30/);
+      target.listeners.keydown({ key: 'ArrowLeft', preventDefault() {} });
+      assert.match(target.attributes['aria-valuetext'], /Correctie berekend: 19-10-2026, 11:00/);
+      assert.equal(blockCorrectionComputedAt(slots, start + 900000), Date.parse(dates[0]));
+      assert.equal(blockCorrectionComputedAt(slots, start + 900001), Date.parse(dates[1]));
+      const cursor = svg.children.find((child) => 'data-chart-cursor' in child.attributes);
+      const values = cursor.children.find((child) => 'data-chart-values' in child.attributes), box = values.children[0];
+      const dateLabel = values.children.find((child) => child.textContent === 'Correctie berekend:');
+      const dateValue = values.children.find((child) => child.textContent === '19-10-2026, 11:00');
+      assert.ok(Number(dateValue.attributes.y) > Number(dateLabel.attributes.y));
+      assert.ok(Number(box.attributes.x) >= 52 && Number(box.attributes.x) + Number(box.attributes.width) <= width - 18);
+      assert.ok(values.children.filter((child) => child.tagName === 'text').every((child) => Number(child.attributes.y) < Number(box.attributes.y) + Number(box.attributes.height)));
+      assert.ok(svg.children.filter((child) => child.attributes['data-series'] === 'base_forecast').every((child) => !child.children[0].textContent.includes('Correctie berekend')));
+    }
   } finally { globalThis.document = before; }
 });
 

@@ -65,7 +65,8 @@ export function createPvForecastModel(repository, settings, panels, now) {
     return { ...applyPvCorrection(base, panels, reference?.factor ?? 1),
       correction_source: own ? 'block' : reference ? 'same_clock_quarter' : 'none',
       correction_reference_start: reference ? new Date(reference.start_ms).toISOString() : null,
-      correction_reference_end: reference ? new Date(reference.end_ms).toISOString() : null };
+      correction_reference_end: reference ? new Date(reference.end_ms).toISOString() : null,
+      correction_computed_at: reference ? new Date(reference.updated_ms).toISOString() : null };
   }
 
   /** Beschrijft de eigen gemeten blokken en terugval voor vandaag en later; input: geen; output: status met expliciete datums en tijdvakgrenzen. */

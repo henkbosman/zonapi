@@ -1,8 +1,9 @@
 import { attachTimeCursor } from './chart-cursor.js';
-import { forecastLinePoints, lineValueAt, canConnectPoints, clockAxisTicks, blockCorrectionAt } from './production-chart-series.js';
+import { forecastLinePoints, lineValueAt, canConnectPoints, clockAxisTicks, blockCorrectionAt, blockCorrectionComputedAt } from './production-chart-series.js';
 
 const timeLabel = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit' });
 const preciseTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const correctionDate = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const baseColor = '#efd7a2';
 
 /** Toont de automatische afwijking ten opzichte van de basisvoorspelling; input: percentage; output: tekst met teken. */
@@ -48,7 +49,8 @@ function drawLine(svg, points, x, y, color, maxGapMs, { base = false } = {}) {
       circle.setAttribute('data-interval-end', new Date(point.interval_end_ms).toISOString());
       const source = point.source_resolution_minutes > (point.interval_end_ms - point.interval_start_ms) / 60000 ? ` · bron ${point.source_resolution_minutes} min` : '';
       const correction = !base && Number.isFinite(point.correction_factor) ? ` · Correctie ${correctionLabel((point.correction_factor - 1) * 100)}` : '';
-      title.textContent = `${timeLabel.format(new Date(point.ms))} · ${Math.round(point.value)} W${base ? ' · Zonder correctie' : ''}${correction} · Gemiddelde ${timeLabel.format(new Date(point.sample_start_ms))}–${timeLabel.format(new Date(point.sample_end_ms))}${source}`;
+      const computed = !base && Number.isFinite(point.correction_computed_ms) ? ` · Correctie berekend: ${correctionDate.format(new Date(point.correction_computed_ms))}` : '';
+      title.textContent = `${timeLabel.format(new Date(point.ms))} · ${Math.round(point.value)} W${base ? ' · Zonder correctie' : ''}${correction} · Gemiddelde ${timeLabel.format(new Date(point.sample_start_ms))}–${timeLabel.format(new Date(point.sample_end_ms))}${source}${computed}`;
     }
     circle.append(title);
     svg.append(circle);
@@ -112,6 +114,8 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
     { label: 'Voorspelling', color: '#996200', valueAt: (ms) => lineValueAt(forecast, ms, 75 * 60000) },
     ...(baseForecast.length ? [{ label: 'Zonder correctie', color: '#8c7445', valueAt: (ms) => lineValueAt(baseForecast, ms, 75 * 60000) }] : []),
     ...(hasCorrection ? [{ label: 'Correctie', color: '#996200', valueAt: (ms) => blockCorrectionAt(slots, ms), formatValue: correctionLabel }] : []),
+    ...(hasCorrection ? [{ label: 'Correctie berekend', color: '#607477', valueAt: (ms) => blockCorrectionComputedAt(slots, ms),
+      formatValue: (ms) => correctionDate.format(new Date(ms)), multiline: true }] : []),
     ...(hasBaseload ? [{ label: 'Basislast', color: '#c64040', valueAt: () => baseloadW }] : [])
   ]);
   container.append(svg);

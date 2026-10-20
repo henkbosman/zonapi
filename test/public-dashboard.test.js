@@ -85,6 +85,7 @@ test('openbare snapshot behoudt alle dashboardgegevens en onafhankelijke dagcorr
   for (const index of [0, 1, 2]) {
     const slot = body.forecasts.days[index].slots.find((row) => Date.parse(row.end) === target + index * 86400000);
     assert.equal(slot.power_w, 500); assert.equal(slot.base_power_w, 1000); assert.equal(slot.automatic_correction_factor, 0.5);
+    assert.equal(slot.correction_computed_at, new Date(f.now).toISOString());
   }
   for (const index of [1, 2]) {
     const day = body.daily.days[index].appliances[0];

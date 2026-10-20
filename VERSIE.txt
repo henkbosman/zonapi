@@ -1,32 +1,26 @@
 ZonAPI
-Versie: 2026-10-20-Onbewolkt1
+Versie: 2026-10-20-Correctiedatum1
 
-Nieuwe kwartiercorrecties uitsluitend na achteraf gecontroleerde onbewolkte uren.
+Datum en tijd van de laatste berekening in de Zonopbrengst-popup.
 
-- Cloud_cover en weather_code worden in hetzelfde Open-Meteo-verzoek opgehaald.
-- Alleen exact 0% bewolking en weercode 0 gelden als volledig onbewolkt.
-- Controle van het hele kwartier plus minstens een uur ervoor en erna.
-- De omringende echte uurpunten moeten verstreken zijn en daarna opgehaald.
-- Voor 09:00–09:15: venster 08:00–10:15, controlepunten 08:00 tot en met 11:00.
-- Meetdrietallen en hun ongecorrigeerde basis wachten in de eigen database.
-- De factor wordt pas na goedkeuring berekend en toegepast, zonder stapeling.
-- Kandidaten overleven herstart en logs wissen; bewaartermijn 48 uur.
-- Bewolking vandaag op de interne Weer-pagina; concrete wachtreden op dashboard.
-- De laatste geldige factor blijft gelden zolang een nieuwe controle wacht.
-- Modelgegevens zijn geen garantie voor onbewolkt weer op de eigen locatie.
-- Databaseschema 7 voegt bewolkingspunten en kandidaatblokken toe.
-- Bestaande correcties, metingen, programma's en instellingen blijven behouden.
-- Geen extra weerverzoeken of nieuwe JSON-instellingen nodig.
+- Correctie berekend toont de laatste berekening van de toegepaste correctie.
+- De datum komt uit updated_ms van het bijbehorende correctieblok.
+- Weergave in Nederlandse datum en tijd, met tijdzone Europe/Amsterdam.
+- Geldt voor Vandaag, Morgen en Overmorgen en voor de gele punttooltips.
+- Overgenomen correcties behouden de oorspronkelijke berekendatum.
+- Ook een toegepaste correctie van 0% toont de berekendatum.
+- Zonder toegepaste correctie staat er een streepje in de popup.
+- De datum staat op een aparte regel zodat deze op smalle schermen past.
+- Voorspelslots bevatten correction_computed_at als UTC ISO-datum of null.
+- Geen nieuwe instellingen of databasemigratie nodig; schema blijft 7.
 
-Bevat ook de correcties voor vandaag/morgen/overmorgen, meerdere programma's
-en een eigen minimale zonnedekking per apparaat uit de voorgaande versies.
+Bevat ook de controle op achteraf onbewolkte uren, onafhankelijke kwartier-
+correcties en programma-adviezen uit de voorgaande versies.
 Alle volledige routes blijven onder /intern; alleen het dashboard is openbaar.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
-Behoud je eigen config/ en data/. De database wordt automatisch aangevuld.
-De update-ZIP bevat geen config/ of database.
+Behoud je eigen config/ en data/. De update-ZIP bevat geen config/ of database.
 Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-246 tests slagen, inclusief wachten op achteraf heldere uren, ontbrekende data,
-oorspronkelijke referentiebasis, herstart, migratie, dagelijkse herberekening,
-wintertijd, programma-adviezen en openbare gegevensafscherming.
+247 tests slagen. De berekendatum is gecontroleerd bij vertraagde goedkeuring,
+hergebruik op drie dagen, kwartiergrenzen, 0%-correcties en smalle popups.

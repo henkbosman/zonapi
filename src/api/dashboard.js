@@ -47,7 +47,7 @@ function publicCorrection(value) {
 function publicForecast(value) {
   return { ...pick(value, ['date', 'status', 'sunrise', 'sunset', 'now']), automatic_correction: publicCorrection(value.automatic_correction),
     slots: value.slots.map((row) => pick(row, ['start', 'end', 'time', 'sample_start', 'sample_end', 'resolution_minutes', 'source_resolution_minutes',
-      'ghi_w_m2', 'power_w', 'base_power_w', 'automatic_correction_factor', 'correction_source', 'correction_reference_start', 'correction_reference_end'])) };
+      'ghi_w_m2', 'power_w', 'base_power_w', 'automatic_correction_factor', 'correction_source', 'correction_reference_start', 'correction_reference_end', 'correction_computed_at'])) };
 }
 
 /** Selecteert de zichtbare start-/energiegegevens van een cyclus; input: berekend kandidaatadvies; output: openbaar kandidaatadvies of null. */
