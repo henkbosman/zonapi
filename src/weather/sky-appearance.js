@@ -1,8 +1,6 @@
-const cloudyCodes = new Set([3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 97, 99]);
-
-/** Groepeert de oorspronkelijke Open-Meteo-weercode voor de drie grafiekiconen; input: WMO-code; output: clear, partly_cloudy, cloudy of unknown. Dit verandert de strengere correctiecontrole niet. */
-export function skyAppearance(code) {
-  if (code === 0) return 'clear';
-  if (code === 1 || code === 2) return 'partly_cloudy';
-  return cloudyCodes.has(code) ? 'cloudy' : 'unknown';
+/** Groepeert de echte bewolkingsfractie voor de grafiek; input: cloud_cover in procent; output: clear bij 0%, partly_cloudy onder 80%, cloudy vanaf 80%, of unknown. De algemene weercode is geen bewolkingspercentage. */
+export function skyAppearance(cloudCover) {
+  if (!Number.isFinite(cloudCover) || cloudCover < 0 || cloudCover > 100) return 'unknown';
+  if (cloudCover === 0) return 'clear';
+  return cloudCover < 80 ? 'partly_cloudy' : 'cloudy';
 }

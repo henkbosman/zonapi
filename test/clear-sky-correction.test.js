@@ -124,6 +124,28 @@ test('de laatste Growatt-meting publiceert direct met eerder opgehaalde heldere 
   assert.equal(f.repository.countCalls('2026-10-20'), 0);
 });
 
+test('een echt meer-modelantwoord gebruikt dezelfde heldere ICON-D2-data voor de opgeslagen bewolking en de directe correctie', async (t) => {
+  const f = fixture(t); assert.equal(f.capture().status, 'clear_sky_data_missing');
+  const bounds = clearSkyBounds(target), times = f.conditionRows().map((row) => row.time_ms / 1000);
+  const quarters = [];
+  for (let time = bounds.from; time <= bounds.until; time += quarter) quarters.push(time / 1000);
+  const json = { hourly: { time: times, shortwave_radiation_best_match: times.map(() => 125), direct_normal_irradiance_best_match: times.map(() => 0), diffuse_radiation_best_match: times.map(() => 125),
+    cloud_cover_best_match: times.map(() => 100), weather_code_best_match: times.map(() => 3),
+    cloud_cover_icon_d2: times.map(() => 0), weather_code_icon_d2: times.map(() => 0) },
+    minutely_15: { time: quarters, shortwave_radiation_icon_d2: quarters.map(() => 125), direct_normal_irradiance_icon_d2: quarters.map(() => 0), diffuse_radiation_icon_d2: quarters.map(() => 125) } };
+  let processed;
+  const weather = createWeatherScheduler({ ...f, panelErrors: [], clock: () => f.now,
+    source: async () => normalizeOpenMeteo(json, f.now), onForecast: () => { processed = f.learner.learn(); } });
+  assert.equal((await weather.tick()).reason, 'ok');
+  assert.equal(processed.status, 'updated'); assert.equal(processed.factor, 0.81);
+  assert.equal(f.pending().length, 0); assert.equal(f.blocks().length, 1);
+  const stored = f.repository.weatherConditions(weatherLocationKey(f.settings.location), bounds.from, bounds.until);
+  assert.equal(stored.length, 4);
+  assert.ok(stored.every((row) => row.model === 'icon_d2' && row.cloud_cover === 0 && row.weather_code === 0));
+  assert.ok(processed.clear_sky.samples.every((row) => row.cloud_cover_percent === 0));
+  assert.equal(f.repository.countCalls('2026-10-20'), 1);
+});
+
 test('iedere bewolkte uurwaarde of niet-heldere weercode blokkeert het hele venster; ontbrekende uurpunten worden niet geïnterpoleerd', (t) => {
   const f = fixture(t);
   const times = f.conditionRows().map((row) => row.time_ms);

@@ -27,7 +27,10 @@ function drawWeatherIcons(svg, points, x, left, right) {
     const title = node('title');
     const name = weatherLabels[weatherKinds.indexOf(point.condition)];
     const cover = Number.isFinite(point.cloudCover) ? ` · ${point.cloudCover.toLocaleString('nl-NL')}% bewolking` : '';
-    title.textContent = `${timeLabel.format(new Date(point.ms - 900000))}–${timeLabel.format(new Date(point.ms))} · ${name}${cover} · Uurverwachting: ${weatherSourceTime.format(new Date(point.sourceMs))}`;
+    const model = { icon_d2: 'ICON-D2', best_match: 'Best Match' }[point.model] ?? 'onbekend';
+    const fetched = Number.isFinite(point.fetchedMs) ? ` · Opgehaald: ${weatherSourceTime.format(new Date(point.fetchedMs))}` : '';
+    const code = Number.isInteger(point.weatherCode) ? ` · Weercode: ${point.weatherCode}` : '';
+    title.textContent = `${timeLabel.format(new Date(point.ms - 900000))}–${timeLabel.format(new Date(point.ms))} · ${name}${cover} · Uurverwachting: ${weatherSourceTime.format(new Date(point.sourceMs))} · Model: ${model}${fetched}${code}${point.stale ? ' · Verouderde weerdata' : ''}`;
     const group = node('g', { transform: `translate(${x(point.ms) - 8},29) scale(0.666667)`, role: 'img', 'aria-label': title.textContent,
       'data-weather-time': new Date(point.ms).toISOString(), 'data-weather-source-time': new Date(point.sourceMs).toISOString(), 'data-weather-condition': point.condition });
     group.append(title);

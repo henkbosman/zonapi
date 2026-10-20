@@ -15,6 +15,8 @@ export function dayForecastResponse(repository, settings, panels, panelErrors, s
     .filter((row) => row.fetched_ms <= now) : [];
   return { ...result, status: valid ? result.status : 'sun_times_unavailable',
     conditions: { resolution_minutes: 60, time_basis: 'instant', rows: conditions.map((row) => ({ time: new Date(row.time_ms).toISOString(),
-      cloud_cover_percent: row.cloud_cover, weather_code: row.weather_code, condition: skyAppearance(row.weather_code) })) },
+      cloud_cover_percent: row.cloud_cover, weather_code: row.weather_code, condition: skyAppearance(row.cloud_cover),
+      weather_model: ['best_match', 'icon_d2'].includes(row.model) ? row.model : 'unknown', fetched_at: new Date(row.fetched_ms).toISOString(),
+      stale: now - row.fetched_ms > settings.weather.stale_after_hours * 3600000 })) },
     sunrise: valid ? sunlight.sunrise : null, sunset: valid ? sunlight.sunset : null, now: new Date(now).toISOString() };
 }

@@ -49,7 +49,8 @@ export function quarterWeatherPoints(conditions, start, end) {
     const sourceMs = Math.round((ms - quarter / 2) / hour) * hour;
     const row = byTime.get(sourceMs);
     const condition = ['clear', 'partly_cloudy', 'cloudy'].includes(row?.condition) ? row.condition : 'unknown';
-    points.push({ ms, sourceMs, condition, cloudCover: row?.cloud_cover_percent, weatherCode: row?.weather_code });
+    points.push({ ms, sourceMs, condition, cloudCover: row?.cloud_cover_percent, weatherCode: row?.weather_code,
+      model: row?.weather_model, fetchedMs: Date.parse(row?.fetched_at), stale: row?.stale === true });
   }
   return points;
 }

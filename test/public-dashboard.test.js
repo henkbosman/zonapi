@@ -109,11 +109,11 @@ test('openbare snapshot behoudt alle dashboardgegevens en onafhankelijke dagcorr
   assert.equal(f.repository.lastCall(), null); assert.deepEqual(f.calls, { weather: 0, homewizard: 0, growatt: 0 });
 });
 
-test('de drie daggrafieken krijgen eigen bewolkingspunten zonder locatie- of modelgegevens en het startadvies staat boven de grafieken', async (t) => {
+test('de drie daggrafieken volgen bewolkingspercentages met veilige bronmetadata, zonder privédetails, en het startadvies staat erboven', async (t) => {
   const f = await fixture(t), key = weatherLocationKey(f.settings.location);
   for (let day = 0; day < 3; day++) {
     const time = Math.floor(target / 3600000) * 3600000 + day * 86400000;
-    const row = { source: 'open-meteo', model: privateText, time_ms: time, cloud_cover: day * 50, weather_code: [0, 2, 3][day], fetched_ms: f.now };
+    const row = { source: 'open-meteo', model: [privateText, 'icon_d2', 'best_match'][day], time_ms: time, cloud_cover: day * 50, weather_code: [45, 3, 0][day], fetched_ms: f.now };
     f.repository.saveWeatherCondition(key, row);
     f.repository.saveWeatherCondition(weatherLocationKey({ latitude: 53, longitude: 6 }), { ...row, weather_code: 99 });
     f.repository.saveWeatherCondition(key, { ...row, time_ms: time + 3600000, fetched_ms: f.now + 1 });
@@ -125,9 +125,15 @@ test('de drie daggrafieken krijgen eigen bewolkingspunten zonder locatie- of mod
     assert.equal(conditions.rows.length, 1);
     assert.equal(conditions.rows[0].condition, ['clear', 'partly_cloudy', 'cloudy'][day]);
     assert.equal(conditions.rows[0].cloud_cover_percent, day * 50);
+    assert.equal(conditions.rows[0].weather_model, ['unknown', 'icon_d2', 'best_match'][day]);
+    assert.equal(conditions.rows[0].fetched_at, new Date(f.now).toISOString());
+    assert.equal(conditions.rows[0].stale, false);
     assert.deepEqual(conditions, internal.days[day].conditions);
-    assert.doesNotMatch(JSON.stringify(conditions), /PRIVATE|location_key|latitude|longitude|model|source/);
+    assert.doesNotMatch(JSON.stringify(conditions), /PRIVATE|location_key|latitude|longitude|source/);
+    assert.ok(conditions.rows.every((row) => !Object.hasOwn(row, 'model')));
   }
+  f.db.prepare('UPDATE weather_conditions SET fetched_ms=? WHERE location_key=? AND time_ms=?').run(f.now - 5 * 3600000, key, Math.floor(target / 3600000) * 3600000);
+  assert.equal((await f.get('/api/v1/dashboard')).forecasts.days[0].conditions.rows[0].stale, true);
   const page = await (await f.request('/dashboard')).text();
   assert.ok(page.indexOf('Startadvies per dag') < page.indexOf('id="pv-chart"'));
   assert.equal((page.match(/Startadvies per dag/g) ?? []).length, 1);

@@ -5,11 +5,11 @@ import { drawProductionChart } from '../public/dashboard-production-chart.js';
 import { forecastLinePoints, lineValueAt, blockCorrectionAt, blockCorrectionComputedAt, quarterWeatherPoints } from '../public/production-chart-series.js';
 import { skyAppearance } from '../src/weather/sky-appearance.js';
 
-test('weericonen onderscheiden helder, deels bewolkt en bewolkt; ontbrekende of onbekende WMO-codes worden niet helder', () => {
+test('weericonen volgen het echte bewolkingspercentage en behandelen onbekende percentages niet als nul', () => {
   assert.equal(skyAppearance(0), 'clear');
-  for (const code of [1, 2]) assert.equal(skyAppearance(code), 'partly_cloudy');
-  for (const code of [3, 45, 48, 51, 61, 71, 80, 95, 97, 99]) assert.equal(skyAppearance(code), 'cloudy');
-  for (const code of [null, undefined, '0', NaN, -1, 4, 100]) assert.equal(skyAppearance(code), 'unknown');
+  for (const cover of [0.01, 1, 20, 50, 79.999]) assert.equal(skyAppearance(cover), 'partly_cloudy');
+  for (const cover of [80, 95, 100]) assert.equal(skyAppearance(cover), 'cloudy');
+  for (const cover of [null, undefined, '0', NaN, Infinity, -1, 101]) assert.equal(skyAppearance(cover), 'unknown');
 });
 
 test('kwartiericonen gebruiken de dichtstbijzijnde uurbron zonder ontbrekende uren of herhaalde wintertijduren te vermengen', () => {
@@ -33,7 +33,8 @@ test('alle drie daggrafieken tonen een leesbaar icoon per klokkwartier boven de 
     for (const width of [280, 780, 1180]) for (const dayIndex of [0, 1, 2]) {
       const start = Date.parse('2026-10-20T06:00:00Z') + dayIndex * 86400000, end = start + 12 * 3600000;
       const rows = Array.from({ length: 13 }, (_, index) => ({ time: new Date(start + index * 3600000).toISOString(),
-        condition: ['clear', 'partly_cloudy', 'cloudy', 'unknown'][index % 4], cloud_cover_percent: index % 4 === 3 ? null : index % 4 * 50 }));
+        condition: ['clear', 'partly_cloudy', 'cloudy', 'unknown'][index % 4], cloud_cover_percent: index % 4 === 3 ? null : index % 4 * 50,
+        weather_model: 'icon_d2', fetched_at: '2026-10-20T04:00:00Z', weather_code: 45, stale: index % 4 === 2 }));
       const slots = Array.from({ length: 48 }, (_, index) => ({ start: new Date(start + index * 900000).toISOString(),
         end: new Date(start + (index + 1) * 900000).toISOString(), power_w: 800, base_power_w: 1000, automatic_correction_factor: 0.8,
         correction_computed_at: '2026-10-19T09:00:00Z' }));
@@ -52,6 +53,8 @@ test('alle drie daggrafieken tonen een leesbaar icoon per klokkwartier boven de 
         assert.equal(icon.attributes['data-weather-time'], dots[index].attributes['data-time']);
         assert.ok(Math.abs(positions[index] + 8 - Number(dots[index].attributes.cx)) < 0.000001);
         assert.match(icon.children[0].textContent, /Uurverwachting:/);
+        assert.match(icon.children[0].textContent, /Model: ICON-D2.*Opgehaald:.*Weercode: 45/);
+        if (icon.attributes['data-weather-condition'] === 'cloudy') assert.match(icon.children[0].textContent, /Verouderde weerdata/);
         assert.equal(icon.attributes['aria-label'], icon.children[0].textContent);
       }
       assert.ok(Number(strip.children[0].attributes.y) + Number(strip.children[0].attributes.height) < 64);

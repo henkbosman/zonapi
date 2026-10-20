@@ -75,16 +75,19 @@ function renderConditions(data) {
   body.replaceChildren();
   for (const row of data.conditions?.rows ?? []) {
     const tr = document.createElement('tr');
-    const labels = { clear: 'Onbewolkt', cloudy: 'Bewolkt', unknown: 'Onbekend' };
+    const labels = { clear: 'Helder', partly_cloudy: 'Deels bewolkt', cloudy: 'Bewolkt', unknown: 'Onbekend' };
+    const models = { icon_d2: 'ICON-D2', best_match: 'Best Match' };
+    const strict = { clear: 'Ja', cloudy: 'Nee', unknown: 'Onbekend' };
     for (const value of [time(row.time), row.cloud_cover_percent === null ? '—' : `${row.cloud_cover_percent}%`,
-      labels[row.condition] ?? 'Onbekend', row.weather_code ?? '—', time(row.fetched_at)]) {
+      labels[row.condition] ?? 'Onbekend', row.weather_code ?? '—', models[row.weather_model] ?? row.weather_model ?? '—',
+      strict[row.correction_condition] ?? 'Onbekend', `${time(row.fetched_at)}${row.stale ? ' · Verouderd' : ''}`]) {
       const td = document.createElement('td'); td.textContent = String(value); tr.append(td);
     }
     body.append(tr);
   }
   if (!body.children.length) {
     const tr = document.createElement('tr'), td = document.createElement('td');
-    td.colSpan = 5; td.textContent = 'Nog geen bewolkingsgegevens opgehaald'; tr.append(td); body.append(tr);
+    td.colSpan = 7; td.textContent = 'Nog geen bewolkingsgegevens opgehaald'; tr.append(td); body.append(tr);
   }
 }
 
