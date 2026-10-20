@@ -1,26 +1,29 @@
 ZonAPI
-Versie: 2026-10-20-Correctiedatum1
+Versie: 2026-10-20-DirecteCorrectie1
 
-Datum en tijd van de laatste berekening in de Zonopbrengst-popup.
+Kwartiercorrecties direct met de beschikbare bewolkingsverwachting.
 
-- Correctie berekend toont de laatste berekening van de toegepaste correctie.
-- De datum komt uit updated_ms van het bijbehorende correctieblok.
-- Weergave in Nederlandse datum en tijd, met tijdzone Europe/Amsterdam.
-- Geldt voor Vandaag, Morgen en Overmorgen en voor de gele punttooltips.
-- Overgenomen correcties behouden de oorspronkelijke berekendatum.
-- Ook een toegepaste correctie van 0% toont de berekendatum.
-- Zonder toegepaste correctie staat er een streepje in de popup.
-- De datum staat op een aparte regel zodat deze op smalle schermen past.
-- Voorspelslots bevatten correction_computed_at als UTC ISO-datum of null.
+- Geen wachttijd tot het einde van het onbewolkte controlevenster.
+- Geen verplichting om weerdata daarna opnieuw op te halen.
+- De beschikbare verwachtingen voor toekomstige uren tellen direct mee.
+- Het hele kwartier plus minstens een uur ervoor en erna blijft vereist.
+- Elk controlepunt vereist exact 0% bewolking en weercode 0.
+- De correctie volgt direct zodra het volledige Growatt-meetdrietal klaar is.
+- Ontbrekende of onbekende weerwaarden geven geen goedkeuring.
+- Bij bewolking blijft de vorige geldige kwartierfactor beschikbaar.
+- Oude wachtende kandidaten worden meteen beoordeeld, ook na herstart.
+- Tooltip vermeldt wanneer de bewolkingsverwachting direct is gebruikt.
+- Correctiedatum in de drie daggrafieken blijft behouden.
 - Geen nieuwe instellingen of databasemigratie nodig; schema blijft 7.
 
-Bevat ook de controle op achteraf onbewolkte uren, onafhankelijke kwartier-
-correcties en programma-adviezen uit de voorgaande versies.
+Bevat ook onafhankelijke kwartiercorrecties, dagelijkse herberekening en
+programma-adviezen uit de voorgaande versies.
 Alle volledige routes blijven onder /intern; alleen het dashboard is openbaar.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
 Behoud je eigen config/ en data/. De update-ZIP bevat geen config/ of database.
 Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-247 tests slagen. De berekendatum is gecontroleerd bij vertraagde goedkeuring,
-hergebruik op drie dagen, kwartiergrenzen, 0%-correcties en smalle popups.
+248 tests slagen, inclusief directe publicatie bij het laatste meetpunt,
+voorspelde bewolking, ontbrekende data, oude kandidaten, herstart, dagelijkse
+herberekening, onafhankelijke factoren en behoud van de correctiedatum.

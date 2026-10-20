@@ -17,21 +17,20 @@ export function clearSkyBounds(end) {
   return { start, end: until, from: Math.floor(start / hour) * hour, until: Math.ceil(until / hour) * hour };
 }
 
-/** Eist achteraf opgehaalde heldere uurpunten over het volledige venster; input: opslag, locatie, blokeinde en peiltijd; output: verklaarde wacht-/afwijsstatus of clear met onderbouwing. */
+/** Controleert de beschikbare heldere modelpunten, inclusief toekomstige uren; input: opslag, locatie, blokeinde en peiltijd; output: verklaarde afwijsstatus of clear zonder op het einde van het venster te wachten. */
 export function checkClearSky(repository, location, end, now) {
   const bounds = clearSkyBounds(end);
   const times = [];
   for (let time = bounds.from; time <= bounds.until; time += hour) times.push(time);
   const result = { window_start: iso(bounds.start), window_end: iso(bounds.end),
-    checked_from: iso(bounds.from), checked_until: iso(bounds.until), ready_at: iso(bounds.until),
+    checked_from: iso(bounds.from), checked_until: iso(bounds.until), uses_forecast: bounds.until > now,
     required_samples: times.length, resolution_minutes: 60, max_allowed_cloud_cover_percent: 0 };
-  if (now < bounds.until) return { status: 'waiting_for_clear_sky_window', ...result };
   const byTime = new Map(repository.weatherConditions(weatherLocationKey(location), bounds.from, bounds.until).map((row) => [row.time_ms, row]));
   const rows = times.map((time) => byTime.get(time));
   const missing = times.filter((time, index) => !rows[index] || skyCondition(rows[index]) === 'unknown');
   if (missing.length) return { status: 'clear_sky_data_missing', ...result, missing_times: missing.map(iso) };
-  const old = rows.filter((row) => row.fetched_ms < bounds.until || row.fetched_ms > now);
-  if (old.length) return { status: 'waiting_for_clear_sky_data', ...result, missing_times: old.map((row) => iso(row.time_ms)) };
+  const unavailable = rows.filter((row) => row.fetched_ms > now);
+  if (unavailable.length) return { status: 'waiting_for_clear_sky_data', ...result, missing_times: unavailable.map((row) => iso(row.time_ms)) };
   const samples = rows.map((row) => ({ time: iso(row.time_ms), cloud_cover_percent: row.cloud_cover,
     weather_code: row.weather_code, fetched_at: iso(row.fetched_ms) }));
   return { status: rows.every((row) => skyCondition(row) === 'clear') ? 'clear' : 'clouds_present', ...result,

@@ -4,7 +4,7 @@ import { currentProductionRows } from '../production/source.js';
 import { checkClearSky } from '../weather/clear-sky.js';
 import { publishPvCorrection } from './learn-correction.js';
 
-/** Bewaart verse meetdrietallen en publiceert uitsluitend na de achteraf gecontroleerde onbewolkte uren; input: instellingen, paneelmodel, opslag en optionele klok; output: leerfunctie met blijvende wachtstatus en hervatting na herstart/weeropvraag. */
+/** Bewaart verse meetdrietallen en publiceert direct bij heldere modelpunten aan beide kanten; input: instellingen, paneelmodel, opslag en optionele klok; output: leerfunctie met blijvende wachtstatus bij ontbrekende data of bewolking en hervatting na herstart/weeropvraag. */
 export function createPvCorrectionLearner({ settings, panels, panelErrors, repository, clock = () => Date.now() }) {
   /** Leert uit de gekozen bron of expliciete ronde en bewaart de reden als leren nog niet kan; input: optionele rijen en peiltijd; output: correctieresultaat. */
   function learn(rows = null, now = clock()) {

@@ -23,7 +23,7 @@ function publicActivity(value) {
 
 /** Behoudt alleen de zichtbare venstercontrole zonder bronlocatie of interne kandidaatgegevens; input: interne hemelcontrole; output: openbare onderbouwing. */
 function publicClearSky(value) {
-  return pick(value, ['status', 'window_start', 'window_end', 'checked_from', 'checked_until', 'ready_at',
+  return pick(value, ['status', 'window_start', 'window_end', 'checked_from', 'checked_until', 'ready_at', 'uses_forecast',
     'required_samples', 'checked_samples', 'max_cloud_cover_percent']);
 }
 

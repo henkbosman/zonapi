@@ -3,9 +3,9 @@ const time = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', ho
 /** Geeft een concrete reden waarom een correctie nog niet is opgeslagen; input: laatste leerpoging; output: korte Nederlandse tekst. */
 export function correctionAttemptText(attempt) {
   if (!attempt) return 'wachten op de eerste meetronde';
-  if (attempt.status === 'waiting_for_clear_sky_window') return `wachten op het onbewolkte venster${attempt.clear_sky?.ready_at ? ` tot ${time.format(new Date(attempt.clear_sky.ready_at))}` : ''}`;
+  if (['checking_clear_sky', 'waiting_for_clear_sky_window'].includes(attempt.status)) return 'bewolkingscontrole';
   if (attempt.status === 'clear_sky_data_missing') return 'bewolkingsgegevens ontbreken of zijn onbekend';
-  if (attempt.status === 'waiting_for_clear_sky_data') return 'wachten op achteraf opgehaalde bewolkingsgegevens';
+  if (attempt.status === 'waiting_for_clear_sky_data') return 'bewolkingsgegevens nog niet beschikbaar';
   if (attempt.status === 'clouds_present') return 'geen nieuwe correctie: venster niet volledig onbewolkt';
   if (attempt.status === 'waiting_for_samples') return `wachten op meetpunten (${attempt.received_samples ?? 0}/3)`;
   if (attempt.status === 'incomplete') return Number.isFinite(attempt.received_inverters)
@@ -33,7 +33,10 @@ export function renderPvCorrection(element, correction) {
     details.push('Vandaag en toekomstige dagen gebruiken per klokkwartier de eigen laatst gemeten factor, op de weerverwachting van die dag.');
   }
   if (sampling) details.push(...sampling.samples.map((sample) => `${time.format(new Date(sample.time))}: ${Math.round(sample.power_w)} W${sample.used ? '' : ' (genegeerd)'}`));
-  if (sampling?.clear_sky) details.push(`Volgens weer-API onbewolkt: ${time.format(new Date(sampling.clear_sky.window_start))}–${time.format(new Date(sampling.clear_sky.window_end))}`);
+  if (sampling?.clear_sky) {
+    details.push(`Volgens weer-API onbewolkt: ${time.format(new Date(sampling.clear_sky.window_start))}–${time.format(new Date(sampling.clear_sky.window_end))}`);
+    if (sampling.clear_sky.uses_forecast) details.push('De bewolkingsverwachting voor de komende uren is direct gebruikt.');
+  }
   if (attempt) {
     details.push(`Laatste poging: ${time.format(new Date(attempt.attempted_at))} · ${correctionAttemptText(attempt)}`);
     if (attempt.target_time) details.push(`Kwartier: ${time.format(new Date(attempt.target_time))}`);
