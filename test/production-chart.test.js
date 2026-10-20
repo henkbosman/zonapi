@@ -2,7 +2,70 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { productionSeries } from '../src/api/production-series.js';
 import { drawProductionChart } from '../public/dashboard-production-chart.js';
-import { forecastLinePoints, lineValueAt, blockCorrectionAt, blockCorrectionComputedAt } from '../public/production-chart-series.js';
+import { forecastLinePoints, lineValueAt, blockCorrectionAt, blockCorrectionComputedAt, quarterWeatherPoints } from '../public/production-chart-series.js';
+import { skyAppearance } from '../src/weather/sky-appearance.js';
+
+test('weericonen onderscheiden helder, deels bewolkt en bewolkt; ontbrekende of onbekende WMO-codes worden niet helder', () => {
+  assert.equal(skyAppearance(0), 'clear');
+  for (const code of [1, 2]) assert.equal(skyAppearance(code), 'partly_cloudy');
+  for (const code of [3, 45, 48, 51, 61, 71, 80, 95, 97, 99]) assert.equal(skyAppearance(code), 'cloudy');
+  for (const code of [null, undefined, '0', NaN, -1, 4, 100]) assert.equal(skyAppearance(code), 'unknown');
+});
+
+test('kwartiericonen gebruiken de dichtstbijzijnde uurbron zonder ontbrekende uren of herhaalde wintertijduren te vermengen', () => {
+  const start = Date.parse('2026-10-25T00:00:00Z'), hour = 3600000;
+  const conditions = { rows: [
+    { time: new Date(start).toISOString(), condition: 'clear', cloud_cover_percent: 0, weather_code: 0 },
+    { time: new Date(start + 2 * hour).toISOString(), condition: 'cloudy', cloud_cover_percent: 100, weather_code: 3 }
+  ] };
+  const points = quarterWeatherPoints(conditions, start, start + 2 * hour);
+  assert.equal(points.length, 8);
+  assert.deepEqual(points.map((point) => point.condition), ['clear', 'clear', 'unknown', 'unknown', 'unknown', 'unknown', 'cloudy', 'cloudy']);
+  assert.ok(points.every((point) => point.ms % 900000 === 0));
+  assert.ok(points.every((point) => Math.abs(point.sourceMs - (point.ms - 450000)) <= hour / 2));
+  assert.deepEqual(points.map((point) => point.sourceMs), [0, 0, 1, 1, 1, 1, 2, 2].map((offset) => start + offset * hour));
+});
+
+test('alle drie daggrafieken tonen een leesbaar icoon per klokkwartier boven de lijnen, met brontijd en weer in de cursor', () => {
+  const before = globalThis.document;
+  globalThis.document = { createElementNS: (_, tag) => element(tag), createElement: (tag) => element(tag) };
+  try {
+    for (const width of [280, 780, 1180]) for (const dayIndex of [0, 1, 2]) {
+      const start = Date.parse('2026-10-20T06:00:00Z') + dayIndex * 86400000, end = start + 12 * 3600000;
+      const rows = Array.from({ length: 13 }, (_, index) => ({ time: new Date(start + index * 3600000).toISOString(),
+        condition: ['clear', 'partly_cloudy', 'cloudy', 'unknown'][index % 4], cloud_cover_percent: index % 4 === 3 ? null : index % 4 * 50 }));
+      const slots = Array.from({ length: 48 }, (_, index) => ({ start: new Date(start + index * 900000).toISOString(),
+        end: new Date(start + (index + 1) * 900000).toISOString(), power_w: 800, base_power_w: 1000, automatic_correction_factor: 0.8,
+        correction_computed_at: '2026-10-19T09:00:00Z' }));
+      const container = element('div'); container.clientWidth = width;
+      drawProductionChart(container, { sunrise: new Date(start).toISOString(), sunset: new Date(end).toISOString(), now: new Date(start + 6 * 3600000).toISOString(), points: [] }, slots,
+        { forecastOnly: dayIndex > 0, baseloadW: 400, conditions: { rows } });
+      const svg = container.children[0], strip = svg.children.find((child) => 'data-weather-icons' in child.attributes);
+      const icons = strip.children.filter((child) => 'data-weather-time' in child.attributes);
+      assert.equal(icons.length, 48); assert.equal(Number(svg.attributes.height), 400);
+      assert.ok(Number(svg.attributes.width) >= Math.max(width, 934));
+      assert.deepEqual(new Set(icons.map((icon) => icon.attributes['data-weather-condition'])), new Set(['clear', 'partly_cloudy', 'cloudy', 'unknown']));
+      const positions = icons.map((icon) => Number(icon.attributes.transform.match(/translate\(([^,]+)/)[1]));
+      assert.ok(positions.slice(1).every((x, index) => x - positions[index] >= 17.99));
+      const dots = svg.children.filter((child) => child.attributes['data-series'] === 'forecast');
+      for (const [index, icon] of icons.entries()) {
+        assert.equal(icon.attributes['data-weather-time'], dots[index].attributes['data-time']);
+        assert.ok(Math.abs(positions[index] + 8 - Number(dots[index].attributes.cx)) < 0.000001);
+        assert.match(icon.children[0].textContent, /Uurverwachting:/);
+        assert.equal(icon.attributes['aria-label'], icon.children[0].textContent);
+      }
+      assert.ok(Number(strip.children[0].attributes.y) + Number(strip.children[0].attributes.height) < 64);
+      const target = svg.children.find((child) => child.attributes.role === 'slider');
+      target.listeners.keydown({ key: 'End', preventDefault() {} });
+      assert.match(target.attributes['aria-valuetext'], /Weer: Helder/);
+      assert.match(target.attributes['aria-valuetext'], /Correctie berekend: 19-10-2026, 11:00/);
+      const cursor = svg.children.find((child) => 'data-chart-cursor' in child.attributes);
+      const box = cursor.children.find((child) => 'data-chart-values' in child.attributes).children[0];
+      assert.ok(Number(box.attributes.x) >= (container.scrollLeft || 0));
+      assert.ok(Number(box.attributes.x) + Number(box.attributes.width) <= (container.scrollLeft || 0) + width);
+    }
+  } finally { globalThis.document = before; }
+});
 
 /** Maakt een kleine SVG/DOM-testnode; input: tagnaam; output: node met kinderen en attributen. */
 function element(tagName) {

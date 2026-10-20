@@ -40,6 +40,20 @@ export function blockCorrectionComputedAt(slots, ms) {
   return Number.isFinite(computed) ? computed : null;
 }
 
+/** Koppelt elk zichtbaar kwartiereinde aan het dichtstbijzijnde oorspronkelijke uurpunt bij het kwartiermidden; input: bewolkingsuurpunten en zonuren; output: kwartiericonen zonder interpolatie of hergebruik over ontbrekende uren. */
+export function quarterWeatherPoints(conditions, start, end) {
+  const hour = 3600000, quarter = 900000;
+  const byTime = new Map((conditions?.rows ?? []).map((row) => [Date.parse(row.time), row]));
+  const points = [];
+  for (let ms = Math.floor(start / quarter) * quarter + quarter; ms <= end; ms += quarter) {
+    const sourceMs = Math.round((ms - quarter / 2) / hour) * hour;
+    const row = byTime.get(sourceMs);
+    const condition = ['clear', 'partly_cloudy', 'cloudy'].includes(row?.condition) ? row.condition : 'unknown';
+    points.push({ ms, sourceMs, condition, cloudCover: row?.cloud_cover_percent, weatherCode: row?.weather_code });
+  }
+  return points;
+}
+
 /** Zet tijdvakgemiddelden op hun eindtijd, zoals de Open-Meteo-bronklok; input: slots en zonuren in ms; output: punten met expliciete tijdvakken en ongemarkeerde lijnranden. */
 export function forecastLinePoints(slots, start, end) {
   const samples = new Map();

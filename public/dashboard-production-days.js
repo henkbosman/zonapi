@@ -13,7 +13,7 @@ export function setupProductionDayCharts() {
       const forecast = days[index];
       if (!forecast) continue;
       const day = index === 0 ? { ...production, sunrise: forecast.sunrise, sunset: forecast.sunset } : { ...forecast, points: [] };
-      drawProductionChart(containers[index], day, forecast.slots, { forecastOnly: index > 0, baseloadW });
+      drawProductionChart(containers[index], day, forecast.slots, { forecastOnly: index > 0, baseloadW, conditions: forecast.conditions });
       const legend = document.getElementById(`pv-baseload-${index}`);
       if (legend) legend.textContent = Number.isFinite(baseloadW) ? `Basislast · ${Math.round(baseloadW)} W` : 'Basislast ontbreekt';
       document.getElementById(`pv-date-${index}`).textContent = dayLabel.format(new Date(`${forecast.date}T12:00:00Z`));

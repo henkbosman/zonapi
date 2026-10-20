@@ -25,12 +25,19 @@
       <div class="tile"><div class="label">Weerupdates vandaag</div><strong id="quota">—</strong><small id="next-fetch">Volgende ophaalmoment —</small></div>
     </section>
 
+    <section class="appliances">
+      <div class="section-heading"><div><p class="eyebrow">Startadvies per dag</p><h2>Apparaten</h2></div></div>
+      <p class="chart-footer">Meeste zon toont het beste startmoment als de cyclus niet volledig op zonne-energie kan draaien. Het percentage geldt voor de hele cyclus.</p>
+      <div id="appliance-list" class="appliance-grid"></div>
+    </section>
+
     <section class="chart-card pv-chart-card">
       <div class="section-heading"><div><p class="eyebrow">Vandaag · <span id="pv-date-0">—</span></p><h2>Zonopbrengst</h2></div><span class="unit">Vermogen · W</span></div>
       <div class="chart" id="pv-chart" aria-label="Gemeten en voorspelde zonopbrengst van zonsopkomst tot zonsondergang"></div>
       <div class="chart-legend"><span><i class="legend-measured"></i>Gemeten totaal · meettijd</span><span><i class="legend-forecast"></i>Voorspelling · hele dag · tijdvakgemiddelde</span><span><i class="legend-base-forecast"></i>Zonder correctie</span><span><i class="legend-baseload"></i><span id="pv-baseload-0">Basislast</span></span><span id="chart-coverage"></span><span id="pv-correction"></span></div>
       <p class="chart-footer">Geel: gecorrigeerde voorspelling. Lichtgeel: zonder automatische correctie. Blauw: werkelijke meettijd. Wijs een punt aan voor de tijden. De lijn tussen punten is een schatting; het correctiepercentage hoort bij het eigen kwartier.</p>
       <div class="chart-footer" id="forecast-note" hidden></div>
+      <p class="chart-footer">Bovenaan: weer per kwartier uit de dichtstbijzijnde uurverwachting. ? betekent onbekend. Schuif zo nodig horizontaal.</p>
     </section>
 
     <section class="chart-card pv-chart-card">
@@ -39,6 +46,7 @@
       <p class="chart-footer">Elk voorspeld punt toont het gemiddelde over het voorafgaande tijdvak. Wijs een punt aan om dat tijdvak te zien.</p>
       <div class="chart-legend"><span><i class="legend-forecast"></i>Voorspelling</span><span><i class="legend-base-forecast"></i>Zonder correctie</span><span><i class="legend-baseload"></i><span id="pv-baseload-1">Basislast</span></span></div>
       <div class="chart-footer" id="forecast-note-1" hidden></div>
+      <p class="chart-footer">Bovenaan: weer per kwartier uit de dichtstbijzijnde uurverwachting. ? betekent onbekend. Schuif zo nodig horizontaal.</p>
     </section>
 
     <section class="chart-card pv-chart-card">
@@ -47,6 +55,7 @@
       <p class="chart-footer">Elk voorspeld punt toont het gemiddelde over het voorafgaande tijdvak. Wijs een punt aan om dat tijdvak te zien.</p>
       <div class="chart-legend"><span><i class="legend-forecast"></i>Voorspelling</span><span><i class="legend-base-forecast"></i>Zonder correctie</span><span><i class="legend-baseload"></i><span id="pv-baseload-2">Basislast</span></span></div>
       <div class="chart-footer" id="forecast-note-2" hidden></div>
+      <p class="chart-footer">Bovenaan: weer per kwartier uit de dichtstbijzijnde uurverwachting. ? betekent onbekend. Schuif zo nodig horizontaal.</p>
     </section>
 
     <section class="chart-card">
@@ -59,11 +68,7 @@
       <div class="chart short" id="history-chart" aria-label="Grafiek historisch gemeten PV-vermogen"></div>
     </section>
 
-    <section class="appliances">
-      <div class="section-heading"><div><p class="eyebrow">Startadvies per dag</p><h2>Apparaten</h2></div></div>
-      <p class="chart-footer">Meeste zon toont het beste startmoment als de cyclus niet volledig op zonne-energie kan draaien. Het percentage geldt voor de hele cyclus.</p>
-      <div id="appliance-list" class="appliance-grid"></div>
-    </section>
+
 
     <section class="appliance-charts" aria-label="Apparaatverbruik per cyclus">
       <div class="section-heading"><div><p class="eyebrow">Gemeten en vorige cyclus</p><h2>Apparaatverbruik</h2></div><span class="unit">Vermogen · W</span></div>

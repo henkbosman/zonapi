@@ -1,29 +1,28 @@
 ZonAPI
-Versie: 2026-10-20-DirecteCorrectie1
+Versie: 2026-10-20-Weericonen1
 
-Kwartiercorrecties direct met de beschikbare bewolkingsverwachting.
+Startadvies boven de grafieken en weericonen per kwartier.
 
-- Geen wachttijd tot het einde van het onbewolkte controlevenster.
-- Geen verplichting om weerdata daarna opnieuw op te halen.
-- De beschikbare verwachtingen voor toekomstige uren tellen direct mee.
-- Het hele kwartier plus minstens een uur ervoor en erna blijft vereist.
-- Elk controlepunt vereist exact 0% bewolking en weercode 0.
-- De correctie volgt direct zodra het volledige Growatt-meetdrietal klaar is.
-- Ontbrekende of onbekende weerwaarden geven geen goedkeuring.
-- Bij bewolking blijft de vorige geldige kwartierfactor beschikbaar.
-- Oude wachtende kandidaten worden meteen beoordeeld, ook na herstart.
-- Tooltip vermeldt wanneer de bewolkingsverwachting direct is gebruikt.
-- Correctiedatum in de drie daggrafieken blijft behouden.
+- Startadvies per dag staat direct boven de Zonopbrengst-grafieken.
+- Vandaag, Morgen en Overmorgen tonen bovenaan een weericoon per kwartier.
+- Zon: helder. Zon met wolk: deels bewolkt. Wolk: bewolkt.
+- Ontbrekende of onbekende weersituaties krijgen een vraagteken.
+- Ieder kwartier gebruikt het dichtstbijzijnde uurpunt bij het kwartiermidden.
+- De tooltip noemt kwartier, weersituatie, percentage en oorspronkelijke uurbron.
+- Weericonen en vermogenspunten delen dezelfde kwartiertijdas.
+- Smalle grafieken zijn horizontaal schuifbaar met leesbare weericonen.
+- De popup blijft binnen het zichtbare deel; toetsenbordbediening schuift mee.
+- De bestaande bewolkingsdata wordt gebruikt zonder extra weeropvragen.
+- Openbare weergegevens bevatten geen locatie, model of interne velden.
 - Geen nieuwe instellingen of databasemigratie nodig; schema blijft 7.
 
-Bevat ook onafhankelijke kwartiercorrecties, dagelijkse herberekening en
-programma-adviezen uit de voorgaande versies.
+Bevat ook directe correctie op basis van de bewolkingsverwachting,
+correctiedatums in de popup en onafhankelijke dagelijkse kwartiercorrecties.
 Alle volledige routes blijven onder /intern; alleen het dashboard is openbaar.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
 Behoud je eigen config/ en data/. De update-ZIP bevat geen config/ of database.
 Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-248 tests slagen, inclusief directe publicatie bij het laatste meetpunt,
-voorspelde bewolking, ontbrekende data, oude kandidaten, herstart, dagelijkse
-herberekening, onafhankelijke factoren en behoud van de correctiedatum.
+252 tests slagen. SVG-grafieken zijn visueel gecontroleerd op 280 en 1180 pixels,
+inclusief de popup na horizontaal schuiven.

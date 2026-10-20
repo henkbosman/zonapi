@@ -13,6 +13,7 @@ import { startHttpServer } from '../src/api/http-server.js';
 import { correctionModelKey } from '../src/pv/correction-key.js';
 import { learnPvCorrection } from '../src/pv/learn-correction.js';
 import { socketConfig, socketConfigKey } from '../src/appliances/socket-config.js';
+import { weatherLocationKey } from '../src/weather/clear-sky.js';
 
 const target = Date.parse('2026-10-18T12:15:00Z'), quarter = 900000;
 const privateText = 'PRIVATE-ONLY-do-not-publish', serial = 'SECRET0001', host = '192.168.13.37';
@@ -106,6 +107,31 @@ test('openbare snapshot behoudt alle dashboardgegevens en onafhankelijke dagcorr
   assert.equal((await f.get('/intern/api/v1/appliances')).profiles[0].homewizard.host, host);
   assert.ok(JSON.stringify(await f.get('/intern/api/v1/status')).includes(privateText));
   assert.equal(f.repository.lastCall(), null); assert.deepEqual(f.calls, { weather: 0, homewizard: 0, growatt: 0 });
+});
+
+test('de drie daggrafieken krijgen eigen bewolkingspunten zonder locatie- of modelgegevens en het startadvies staat boven de grafieken', async (t) => {
+  const f = await fixture(t), key = weatherLocationKey(f.settings.location);
+  for (let day = 0; day < 3; day++) {
+    const time = Math.floor(target / 3600000) * 3600000 + day * 86400000;
+    const row = { source: 'open-meteo', model: privateText, time_ms: time, cloud_cover: day * 50, weather_code: [0, 2, 3][day], fetched_ms: f.now };
+    f.repository.saveWeatherCondition(key, row);
+    f.repository.saveWeatherCondition(weatherLocationKey({ latitude: 53, longitude: 6 }), { ...row, weather_code: 99 });
+    f.repository.saveWeatherCondition(key, { ...row, time_ms: time + 3600000, fetched_ms: f.now + 1 });
+  }
+  const snapshot = await f.get('/api/v1/dashboard'), internal = await f.get('/intern/api/v1/forecast/days');
+  for (let day = 0; day < 3; day++) {
+    const conditions = snapshot.forecasts.days[day].conditions;
+    assert.equal(conditions.time_basis, 'instant'); assert.equal(conditions.resolution_minutes, 60);
+    assert.equal(conditions.rows.length, 1);
+    assert.equal(conditions.rows[0].condition, ['clear', 'partly_cloudy', 'cloudy'][day]);
+    assert.equal(conditions.rows[0].cloud_cover_percent, day * 50);
+    assert.deepEqual(conditions, internal.days[day].conditions);
+    assert.doesNotMatch(JSON.stringify(conditions), /PRIVATE|location_key|latitude|longitude|model|source/);
+  }
+  const page = await (await f.request('/dashboard')).text();
+  assert.ok(page.indexOf('Startadvies per dag') < page.indexOf('id="pv-chart"'));
+  assert.equal((page.match(/Startadvies per dag/g) ?? []).length, 1);
+  assert.deepEqual(f.calls, { weather: 0, homewizard: 0, growatt: 0 });
 });
 
 test('alle volledige leesroutes en beheerpagina’s bestaan alleen onder /intern; oude aliassen geven geen toegang', async (t) => {
