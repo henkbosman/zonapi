@@ -202,7 +202,7 @@ test('grafiek en cursor verbinden kwartieren met uurterugval en laten ontbrekend
   assert.equal(points.at(-1).ms, start + 120 * minute);
 });
 
-test('HTTP-endpoints tonen kwartiermodel, gemengde resoluties en behouden één quotumverzoek bij logging uit', async () => {
+test('HTTP-endpoints tonen kwartiermodel, gemengde resoluties en behouden één weerverzoek bij logging uit', async () => {
   const { settings: defaults } = loadConfiguration();
   const now = Date.now(), start = Math.floor(now / (60 * minute)) * 60 * minute;
   const day = localDay(now);

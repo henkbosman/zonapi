@@ -1,4 +1,4 @@
-/** Bewaart weerquota en actuele status los van uitschakelbare logs; input: SQLite en diagnoseopslag; output: weerpogingmethoden. */
+/** Bewaart de informatieve weeropvraagteller en actuele status los van uitschakelbare logs; input: SQLite en diagnoseopslag; output: weerpogingmethoden. */
 export function createWeatherCallStore(db, diagnostics) {
   /** Reserveert een weeraanvraag binnen een transactie; input: lokale datum, tijd-ms en bron; output: pogingobject. */
   function beginCall(day, now, source = null) {
@@ -36,7 +36,7 @@ export function createWeatherCallStore(db, diagnostics) {
     lastCall() { return diagnostics.diagnosticState('weather', 'last_call'); },
     /** Leest de laatste succesvolle poging; input: geen; output: object of null. */
     lastSuccessfulWeatherCall() { return diagnostics.diagnosticState('weather', 'last_success'); },
-    /** Wist het weerlog met behoud van quota en voorspellingen; input: geen; output: verwijderd aantal. */
+    /** Wist het weerlog met behoud van teller, planning en voorspellingen; input: geen; output: verwijderd aantal. */
     clearWeatherDiagnostics() { return { calls_deleted: db.prepare('DELETE FROM weather_calls').run().changes }; }
   };
 }

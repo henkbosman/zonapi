@@ -50,7 +50,7 @@ test('scheduler haalt ook na zonsondergang op en voorkomt dubbele verzoeken binn
   const sun = offlineSunTimes(day, 52.2, 5.2);
   let now = (sun.sunrise_ms + sun.sunset_ms) / 2;
   let calls = 0;
-  const settings = { location: { latitude: 52.2, longitude: 5.2 }, weather: { source: 'open-meteo', max_requests_per_local_day: 2, forecast_days: 3, retry_minutes: 60 } };
+  const settings = { location: { latitude: 52.2, longitude: 5.2 }, weather: { source: 'open-meteo', poll_minutes: 720, forecast_days: 3, retry_minutes: 60 } };
   const source = async () => { calls++; return { rows: [{ source: 'open-meteo', start_ms: now, end_ms: now + 3600000, ghi: 200, dni: 150, dhi: 50, fetched_ms: now }], sun: [{ day, ...sun }] }; };
   const scheduler = createWeatherScheduler({ settings, panels: {}, panelErrors: ['wp ontbreekt'], repository, clock: () => now, source });
   await scheduler.tick();
@@ -64,14 +64,14 @@ test('scheduler haalt ook na zonsondergang op en voorkomt dubbele verzoeken binn
   db.close();
 });
 
-test('handmatig weer ophalen bewaart fouten en successen en respecteert de daglimiet', async () => {
+test('handmatig weer ophalen bewaart fouten en successen zonder daglimiet', async () => {
   const db = openDatabase(':memory:');
   const repository = createRepository(db);
   const day = '2026-10-14';
   const sun = offlineSunTimes(day, 52.2, 5.2);
   let now = (sun.sunrise_ms + sun.sunset_ms) / 2;
   let attempts = 0;
-  const settings = { location: { latitude: 52.2, longitude: 5.2 }, weather: { source: 'open-meteo', max_requests_per_local_day: 2, forecast_days: 3, retry_minutes: 60 } };
+  const settings = { location: { latitude: 52.2, longitude: 5.2 }, weather: { source: 'open-meteo', poll_minutes: 720, forecast_days: 3, retry_minutes: 60 } };
   const source = async () => {
     attempts++;
     if (attempts === 1) throw Object.assign(new Error('Open-Meteo HTTP 400: invalid model'), { http_status: 400, duration_ms: 11, request_url: 'https://api.open-meteo.com/v1/forecast' });
@@ -85,10 +85,11 @@ test('handmatig weer ophalen bewaart fouten en successen en respecteert de dagli
   assert.equal(repository.lastSuccessfulWeatherCall().forecast_rows, 1);
   assert.equal(repository.countCalls(day), 2);
   assert.equal(scheduler.status().last_error, null);
-  assert.deepEqual(await scheduler.refresh(), { attempted: false, reason: 'quota', status: scheduler.status() });
-  assert.equal(attempts, 2);
+  assert.equal((await scheduler.refresh()).reason, 'ok');
+  assert.equal(attempts, 3);
   now = sun.sunset_ms + 1000;
-  assert.equal((await scheduler.refresh()).reason, 'quota');
+  assert.equal((await scheduler.refresh()).reason, 'ok');
+  assert.equal(attempts, 4);
   db.close();
 });
 

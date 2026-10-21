@@ -11,9 +11,9 @@
   },
   "weather": {
     "source": "open-meteo",
-    "max_requests_per_local_day": 12,
+    "poll_minutes": 30,
     "forecast_days": 3,
-    "retry_minutes": 60,
+    "retry_minutes": 15,
     "stale_after_hours": 4
   },
   "pv": {

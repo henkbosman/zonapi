@@ -35,7 +35,7 @@ test('debug.json wordt aangemaakt met logs uit en valideert booleans en bewaarli
   } finally { rmSync(folder, { recursive: true, force: true }); }
 });
 
-test('debug.json bepaalt logopslag ook bij bestaande database-instellingen; metingen, status en weerquotum blijven bestaan', () => {
+test('debug.json bepaalt logopslag ook bij bestaande database-instellingen; metingen, status en weeropvraagteller blijven bestaan', () => {
   const folder = mkdtempSync(join(tmpdir(), 'zonapi-debug-storage-')), path = join(folder, 'debug.json');
   const db = openDatabase(':memory:');
   try {

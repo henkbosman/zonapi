@@ -12,7 +12,7 @@ import { offlineSunTimes } from '../src/weather/solar-position.js';
 import { createHomeWizardPoller } from '../src/homewizard/poller.js';
 import { startHttpServer } from '../src/api/http-server.js';
 
-test('weerlogs wissen en uitschakelen behoudt quota, planning en actuele status na herstart', async () => {
+test('weerlogs wissen en uitschakelen behoudt teller, minutenplanning en actuele status na herstart', async () => {
   const folder = mkdtempSync(join(tmpdir(), 'zonapi-log-state-'));
   const path = join(folder, 'data.sqlite');
   let db = openDatabase(path);
@@ -21,8 +21,8 @@ test('weerlogs wissen en uitschakelen behoudt quota, planning en actuele status 
     const { settings: defaults, panels } = loadConfiguration();
     const day = '2026-10-16';
     const sun = offlineSunTimes(day, 52, 5);
-    const now = (sun.sunrise_ms + sun.sunset_ms) / 2;
-    const settings = { ...defaults, location: { latitude: 52, longitude: 5 }, weather: { ...defaults.weather, max_requests_per_local_day: 2 } };
+    const now = Math.floor((sun.sunrise_ms + sun.sunset_ms) / 2);
+    const settings = { ...defaults, location: { latitude: 52, longitude: 5 }, weather: { ...defaults.weather, poll_minutes: 720 } };
     let resolveRequest;
     const weather = createWeatherScheduler({ settings, panels, panelErrors: ['test'], repository, clock: () => now,
       source: () => new Promise((resolve) => { resolveRequest = resolve; }) });
@@ -38,7 +38,7 @@ test('weerlogs wissen en uitschakelen behoudt quota, planning en actuele status 
     const again = weather.refresh();
     resolveRequest({ rows: [], sun: [{ day, ...sun }] });
     await again;
-    assert.equal((await weather.refresh()).reason, 'quota');
+    assert.equal((await weather.tick()).reason, 'interval');
     assert.equal(repository.countCalls(day), 2);
     db.close(); db = openDatabase(path);
     const restarted = createRepository(db);
@@ -46,6 +46,10 @@ test('weerlogs wissen en uitschakelen behoudt quota, planning en actuele status 
     assert.equal(restarted.countCalls(day), 2);
     assert.equal(restarted.lastCall().status, 'ok');
     assert.equal(restarted.recentWeatherCalls('all', 10, 0).rows.length, 0);
+    const afterRestart = createWeatherScheduler({ settings, panels, panelErrors: ['test'], repository: restarted, clock: () => now,
+      source: async () => { throw new Error('De bewaarde interval mag niet worden overgeslagen'); } });
+    assert.equal((await afterRestart.tick()).reason, 'interval');
+    assert.equal(Date.parse(afterRestart.status().next_fetch), now + 720 * 60000);
   } finally { db.close(); rmSync(folder, { recursive: true, force: true }); }
 });
 

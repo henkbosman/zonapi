@@ -12,4 +12,5 @@
 .weather-layout .tile .time-value { font-size:18px }
 .weather-layout .timeline-error td:first-child { border-left:3px solid #c35e42 }
 .weather-layout .refresh-button:disabled { opacity:.5; cursor:default }
-@media (max-width:790px) { .weather-layout .weather-kv { grid-template-columns:1fr; gap:5px } .weather-chart { min-height:175px } }
+@media (max-width:790px) { .weather-layout .growatt-highlights { grid-template-columns:repeat(2,minmax(0,1fr)) } .weather-layout .weather-kv { grid-template-columns:1fr; gap:5px } .weather-chart { min-height:175px } }
+.weather-layout .growatt-highlights { grid-template-columns:repeat(3,minmax(0,1fr)) }

@@ -4,6 +4,7 @@ import { getCalibrationFactor } from '../pv/calibration.js';
 import { getWeatherResolution } from '../weather/resolution.js';
 import { growattCloudConfig } from '../growatt/cloud/config.js';
 import { automaticCorrectionConfig } from '../pv/automatic-config.js';
+import { getWeatherPollMinutes } from '../weather/poll-interval.js';
 
 export const root = resolve(import.meta.dirname, '../..');
 
@@ -18,12 +19,12 @@ export function validateSettings(config) {
   try { getCalibrationFactor(config); } catch (error) { errors.push(error.message); }
   try { automaticCorrectionConfig(config); } catch (error) { errors.push(error.message); }
   try { getWeatherResolution(config); } catch (error) { errors.push(error.message); }
+  try { getWeatherPollMinutes(config); } catch (error) { errors.push(error.message); }
   try { growattCloudConfig(config); } catch (error) { errors.push(error.message); }
   if (config.timezone !== 'Europe/Amsterdam') errors.push('timezone moet Europe/Amsterdam zijn');
   for (const [name, item] of [['http', config.http], ['growatt', config.growatt]]) {
     if (!item || typeof item.host !== 'string' || !Number.isInteger(item.port) || item.port < 0 || item.port > 65535) errors.push(`${name}.host/port ongeldig`);
   }
-  if (!Number.isInteger(config.weather?.max_requests_per_local_day) || config.weather.max_requests_per_local_day < 0 || config.weather.max_requests_per_local_day > 48) errors.push('weather.max_requests_per_local_day moet 0..48 zijn');
   if (!Number.isInteger(config.weather?.forecast_days) || config.weather.forecast_days < 2 || config.weather.forecast_days > 16) errors.push('weather.forecast_days moet 2..16 zijn');
   if (!(config.weather?.retry_minutes >= 5 && config.weather.retry_minutes <= 1440)) errors.push('weather.retry_minutes moet 5..1440 zijn');
   if (!(config.weather?.stale_after_hours > 0 && config.weather.stale_after_hours <= 72)) errors.push('weather.stale_after_hours moet 0..72 zijn');
@@ -82,6 +83,7 @@ export function loadConfiguration() {
   const panels = readConfig('config/panels.json');
   const errors = validateSettings(settings);
   if (errors.length) throw new Error(`Configuratie ongeldig: ${errors.join('; ')}`);
+  settings.weather.poll_minutes = getWeatherPollMinutes(settings);
   settings.weather.forecast_days = Math.max(3, settings.weather.forecast_days);
   const panel_errors = validatePanels(panels);
   if (panels.inverters.length !== settings.growatt.expected_inverters) panel_errors.push(`configureer precies ${settings.growatt.expected_inverters} omvormers`);

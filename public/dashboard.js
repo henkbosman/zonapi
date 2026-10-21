@@ -73,7 +73,7 @@ function renderStatus(status) {
   $('#net-now').textContent = watts(status.homewizard.net_power_w);
   const netPower = status.homewizard.net_power_w;
   $('#net-sub').textContent = !Number.isFinite(netPower) ? 'Geen recente netmeting' : netPower < 0 ? 'Teruglevering aan het net' : netPower > 0 ? 'Afname van het net' : 'Geen afname of teruglevering';
-  $('#quota').textContent = `${status.weather.used_requests} / ${status.weather.max_requests}`;
+  $('#weather-interval').textContent = status.weather.poll_minutes === 0 ? 'Gepauzeerd' : `${status.weather.poll_minutes} min`;
   $('#next-fetch').textContent = status.weather.next_fetch ? `Volgende: ${dutchTime.format(new Date(status.weather.next_fetch))}` : 'Volgende: —';
 }
 

@@ -10,7 +10,7 @@ test('API en dashboard geven ontbrekende configuratie expliciet terug', async ()
   const { settings, panels, panel_errors: panelErrors } = loadConfiguration();
   const db = openDatabase(':memory:');
   const repository = createRepository(db);
-  const server = startHttpServer({ settings: { ...settings, http: { host: '127.0.0.1', port: 0 } }, panels, panelErrors, repository, weather: { status: () => ({ source: 'open-meteo', used_requests: 0, max_requests: 12, location_configured: false }) }, homewizard: { status: () => ({ p1: null, kwh: null }) } });
+  const server = startHttpServer({ settings: { ...settings, http: { host: '127.0.0.1', port: 0 } }, panels, panelErrors, repository, weather: { status: () => ({ source: 'open-meteo', used_requests: 0, poll_minutes: 120, location_configured: false }) }, homewizard: { status: () => ({ p1: null, kwh: null }) } });
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
   const forecast = await (await fetch(`${base}/intern/api/v1/forecast?hours=3`)).json();
@@ -45,7 +45,7 @@ test('daggrafiek toont alleen totalen en logs wissen bewaart ook losse omvormerm
   const sunset = new Date(now + 2 * 3600000).toISOString();
   const server = startHttpServer({
     settings: { ...settings, http: { host: '127.0.0.1', port: 0 } }, panels, panelErrors, repository,
-    weather: { status: () => ({ source: 'open-meteo', sunrise, sunset, used_requests: 0, max_requests: 12, location_configured: true }) },
+    weather: { status: () => ({ source: 'open-meteo', sunrise, sunset, used_requests: 0, poll_minutes: 120, location_configured: true }) },
     homewizard: { status: () => ({ p1: null, kwh: null }) }
   });
   await once(server, 'listening');

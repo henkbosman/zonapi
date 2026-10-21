@@ -110,7 +110,7 @@ test('een kalibratie verandert zowel het ESP32-advies als het startadvies per da
   } finally { db.close(); }
 });
 
-test('ophalen en herstart-herberekening bewaren gekalibreerde PV met dezelfde brondata en quota', async () => {
+test('ophalen en herstart-herberekening bewaren gekalibreerde PV met dezelfde brondata en weeropvraagteller', async () => {
   const { settings: defaults } = loadConfiguration();
   const settings = { ...defaults, location: { latitude: 52, longitude: 5 }, pv: { calibration_factor: 1 } };
   const now = Date.parse('2026-10-16T10:00:00Z');

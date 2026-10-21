@@ -285,7 +285,7 @@ test('bewolkingscontrole gebruikt echte UTC-uren bij middernacht en beide winter
 test('de interne weerpagina toont bewolking en de openbare correctiestatus geeft alleen de toegestane wachtinformatie', async (t) => {
   const f = fixture(t); f.capture(); f.sky();
   t.mock.method(Date, 'now', () => f.now);
-  const weather = { status: () => ({ source: 'open-meteo', location_configured: true, max_requests: 12, used_requests: 0,
+  const weather = { status: () => ({ source: 'open-meteo', location_configured: true, poll_minutes: 120, used_requests: 0,
     sunrise: iso(target - 2 * hour), sunset: iso(target + 10 * hour) }) };
   const server = startHttpServer({ ...f, panelErrors: [], weather, homewizard: { status: () => ({}) } });
   await once(server, 'listening'); t.after(() => new Promise((resolve) => server.close(resolve)));

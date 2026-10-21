@@ -1,33 +1,36 @@
 ZonAPI
-Versie: 2026-10-20-Cyclusbronnen1
+Versie: 2026-10-21-PollMinuten1
 
-Verbruik per cyclus uitgebreid met zonne- en netverbruik.
+Weerplanning op basis van een vast minuteninterval.
 
-- Groen: het aan het apparaat toegerekende verbruik uit zonne-energie.
-- Rood: het aan het apparaat toegerekende verbruik uit het net.
-- Beide extra lijnen volgen de huidige/laatste cyclus, naast het gemeten
-  totale vermogen en de vorige cyclus als verwachting.
-- Popup en legenda tonen de vier vermogensreeksen.
-- De verdeling gebruikt historische socket-, Growatt- en netmetingen;
-  weersvoorspellingen en instellingen voor basislast/reserve tellen niet mee.
-- Zon en net worden evenredig verdeeld volgens het gemeten huisverbruik.
-  De socket meet de herkomst niet afzonderlijk; de grafiek vermeldt dit.
-- P1 en kWh worden niet dubbel geteld. Bekende omvormers, de bronkeuze
-  en de bestaande versheidsmarges blijven gelden.
-- Ontbrekende, oude of tegenstrijdige bronmetingen laten gaten open.
-- Bestaande cycli krijgen bronlijnen wanneer hun bronmetingen aanwezig zijn.
-- Groen en rood tellen bij geldige bronmetingen op tot het apparaatvermogen.
-- Geen extra API-verzoeken, nieuwe instellingen of databasemigratie.
+- weather.poll_minutes vervangt het maximumaantal verzoeken per dag.
+- De voorbeeldinstelling is 120 minuten, gelijk aan de eerdere standaard.
+- Hele waarden 0..1440 zijn geldig; 0 pauzeert de weerbron.
+- De volgende normale poging volgt na het ingestelde aantal minuten,
+  gerekend vanaf de laatste poging, ook na herstart en rond middernacht.
+- Het interval blijft gelijk op dagen van 23, 24 en 25 uur.
+- De dagelijkse aanvraaglimiet en de bijbehorende stop zijn verwijderd.
+- De dagteller is alleen informatief; bestaande historie blijft behouden.
+- Bij fouten geldt voor automatische pogingen minimaal retry_minutes.
+- Nu ophalen slaat het interval over; pauze en overlapbeveiliging blijven gelden.
+- Dashboard en Weer-pagina tonen het ophaalinterval zonder dagmaximum.
 
-Bevat ook de kleinere Open-Meteo-opvraag, weericonen en modelinformatie,
-onafhankelijke directe kwartiercorrecties en programma-/startadviezen.
+In je eigen settings.json: verwijder binnen weather de oude regel met
+max_requests_per_local_day en voeg bijvoorbeeld "poll_minutes": 15 toe.
+Als poll_minutes ontbreekt, wordt standaard 120 minuten gebruikt.
+Een oude daglimiet wordt niet meer gelezen of omgerekend.
+
+Bevat ook de zonne-/netlijnen per cyclus, compacte Open-Meteo-opvraag,
+weericonen, onafhankelijke kwartiercorrecties en programma-/startadviezen.
 Alle volledige routes blijven onder /intern; alleen het dashboard is openbaar.
 
-Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
-Behoud je eigen config/ en data/. Schema blijft 7.
+Bestaande installatie: stop ZonAPI, vervang src/ en public/, pas de genoemde
+weerinstelling in je eigen config/settings.json aan en herstart.
+Behoud je overige instellingen en data/. Schema blijft 7.
+De update-ZIP bevat geen config/ of database. De volledige ZIP bevat de
+bijgewerkte voorbeeldconfiguratie met poll_minutes: 120.
 Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-267 tests slagen, inclusief bronverdeling, import/export, gelijktijdige
-apparaten, metervoorkeur, meetuitval, onvolledige omvormerrondes, lokale/
-cloudbronkeuze, historische cycli na herstart en openbare gegevensafscherming.
-De vier grafieklijnen en popup zijn visueel gecontroleerd op 280 en 1180 pixels.
+269 tests slagen, inclusief intervalvalidatie, doorlopen zonder dagmaximum,
+pauzeren, foutwachttijd, overlapbeveiliging, behoud van planning na herstart,
+zomer-/wintertijd en de echte dashboardweergave van interval en pauzestatus.

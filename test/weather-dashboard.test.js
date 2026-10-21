@@ -17,7 +17,7 @@ test('weerpagina toont configuratie, verzendt handmatig verzoek en registreert H
   const day = '2026-10-14';
   const sun = offlineSunTimes(day, 52.2, 5.2);
   const now = (sun.sunrise_ms + sun.sunset_ms) / 2;
-  const settings = { ...defaults, http: { host: '127.0.0.1', port: 0 }, location: { latitude: 52.2, longitude: 5.2 }, weather: { ...defaults.weather, max_requests_per_local_day: 1 } };
+  const settings = { ...defaults, http: { host: '127.0.0.1', port: 0 }, location: { latitude: 52.2, longitude: 5.2 }, weather: { ...defaults.weather, poll_minutes: 15 } };
   const weather = createWeatherScheduler({
     settings, panels, panelErrors, repository, clock: () => now,
     source: async () => ({ rows: [{ source: 'open-meteo', start_ms: sun.sunrise_ms, end_ms: sun.sunrise_ms + 3600000, ghi: 200, dni: 120, dhi: 80, fetched_ms: now }], sun: [{ day, ...sun }], request: { url: 'https://api.open-meteo.com/v1/forecast', http_status: 200, duration_ms: 20 } })
@@ -33,6 +33,9 @@ test('weerpagina toont configuratie, verzendt handmatig verzoek en registreert H
     const before = await (await fetch(`${base}/intern/api/v1/weather`)).json();
     assert.match(before.request_url, /latitude=52\.2/);
     assert.equal(before.status.used_requests, 0);
+    assert.equal(before.status.poll_minutes, 15);
+    assert.ok(!Object.hasOwn(before.status, 'max_requests'));
+    assert.match(page, /id="poll-minutes"/);
     const request = await fetch(`${base}/intern/api/v1/weather/refresh`, { method: 'POST' });
     assert.equal(request.status, 200);
     assert.equal((await request.json()).attempted, true);
@@ -46,7 +49,8 @@ test('weerpagina toont configuratie, verzendt handmatig verzoek en registreert H
     assert.equal(cleared.status.used_requests, 1);
     assert.equal(cleared.calls.rows.length, 0);
     assert.equal(cleared.forecast.rows[0].ghi_w_m2, 200);
-    assert.equal((await (await fetch(`${base}/intern/api/v1/weather/refresh`, { method: 'POST' })).json()).reason, 'quota');
+    assert.equal((await (await fetch(`${base}/intern/api/v1/weather/refresh`, { method: 'POST' })).json()).reason, 'ok');
+    assert.equal((await (await fetch(`${base}/intern/api/v1/weather`)).json()).status.used_requests, 2);
     assert.equal((await fetch(`${base}/intern/api/v1/weather?status=unknown`)).status, 400);
   } finally {
     await new Promise((resolve) => server.close(resolve));

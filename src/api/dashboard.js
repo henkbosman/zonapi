@@ -92,7 +92,7 @@ export function dashboardResponse({ settings, panels, panelErrors, repository, w
     latitude: settings.location.latitude, longitude: settings.location.longitude }, repository);
   return { generated_at: new Date(now).toISOString(),
     status: { time: new Date(now).toISOString(),
-      weather: pick(sunlight, ['source', 'sunrise', 'sunset', 'used_requests', 'max_requests', 'next_fetch']),
+      weather: pick(sunlight, ['source', 'sunrise', 'sunset', 'used_requests', 'poll_minutes', 'next_fetch']),
       growatt: pick(pv, ['status', 'source', 'expected_inverters', 'active_inverters', 'power_w']),
       homewizard: { net_power_w: meters.net_power_w }, baseload: baseload ? { power_w: baseload.power_w } : null },
     forecasts: { generated_at: forecasts.generated_at, days: forecasts.days.map(publicForecast) },

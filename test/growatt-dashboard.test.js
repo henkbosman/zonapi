@@ -76,7 +76,7 @@ test('Growatt-pagina en API tonen pakketmetadata, ruwe inhoud en ontvangerfouten
   const { settings, panels, panel_errors: panelErrors } = loadConfiguration();
   const server = startHttpServer({
     settings: { ...settings, http: { host: '127.0.0.1', port: 0 } }, panels, panelErrors, repository,
-    weather: { status: () => ({ source: 'open-meteo', used_requests: 0, max_requests: 12, location_configured: false }) },
+    weather: { status: () => ({ source: 'open-meteo', used_requests: 0, poll_minutes: 120, location_configured: false }) },
     homewizard: { status: () => ({ p1: null, kwh: null }) }
   });
   await once(server, 'listening');

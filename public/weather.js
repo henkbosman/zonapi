@@ -27,8 +27,9 @@ function renderStatus(data) {
   const state = data.status;
   element('#weather-source').textContent = `Bron: ${state.source}`;
   element('#weather-location').textContent = data.location.latitude === null ? 'Locatie: —' : `Locatie: ${data.location.latitude}, ${data.location.longitude}`;
-  element('#weather-state').textContent = `Status: ${state.fetching ? 'Bezig' : state.last_error ? 'Fout' : !state.location_configured ? 'Geen locatie' : !state.max_requests ? 'Gepauzeerd' : 'Actief'}`;
-  element('#requests-today').textContent = `${state.used_requests}/${state.max_requests}`;
+  element('#weather-state').textContent = `Status: ${state.fetching ? 'Bezig' : !state.location_configured ? 'Geen locatie' : state.poll_minutes === 0 ? 'Gepauzeerd' : state.last_error ? 'Fout' : 'Actief'}`;
+  element('#poll-minutes').textContent = state.poll_minutes === 0 ? 'Gepauzeerd' : `${state.poll_minutes} min`;
+  element('#requests-today').textContent = String(state.used_requests);
   element('#last-attempt').textContent = time(state.last_call?.attempted_ms);
   element('#last-success').textContent = time(data.last_success?.attempted_ms);
   element('#next-fetch').textContent = time(state.next_fetch);
@@ -120,14 +121,14 @@ async function refresh() {
   } catch (error) { if (id === refreshId) element('#connection').textContent = `Fout: ${error.message}`; }
 }
 
-/** Vraagt één weerupdate binnen daglicht en dagquotum aan; input: geen; output: Promise<void>. */
+/** Vraagt één weerupdate aan met behoud van pauze en overlapbeveiliging; input: geen; output: Promise<void>. */
 async function fetchNow() {
   const button = element('#fetch-now'); button.disabled = true;
   try {
     const result = await request('/intern/api/v1/weather/refresh', { method: 'POST' });
     await refresh();
     if (!result.attempted) {
-      const reasons = { quota: 'Daglimiet bereikt', paused: 'Weerbron gepauzeerd', busy: 'Verzoek loopt al', interval: 'Nog niet gepland', location: 'Locatie ontbreekt' };
+      const reasons = { paused: 'Weerbron gepauzeerd', busy: 'Verzoek loopt al', interval: 'Nog niet gepland', location: 'Locatie ontbreekt' };
       element('#connection').textContent = reasons[result.reason] ?? result.reason;
     }
   } catch (error) { element('#connection').textContent = `Fout: ${error.message}`; }

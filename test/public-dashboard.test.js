@@ -59,7 +59,7 @@ async function fixture(t) {
   const calls = { weather: 0, homewizard: 0, growatt: 0 };
   const dependencies = { settings, panels, panelErrors: [], repository, profilesDirectory: directory,
     weather: { status: () => ({ source: 'open-meteo', sunrise: new Date(target - quarter).toISOString(), sunset: new Date(target + quarter).toISOString(),
-      used_requests: 1, max_requests: 12, next_fetch: new Date(now + 3600000).toISOString(),
+      used_requests: 1, poll_minutes: 120, next_fetch: new Date(now + 3600000).toISOString(),
       request_url: `https://example.test/${privateText}`, last_call: { private_extra: privateText }, last_error: privateText }),
     refresh: async () => { calls.weather++; return { attempted: true }; } },
     homewizard: { status: () => ({ p1: privateText }), poll: async () => { calls.homewizard++; return {}; } },
@@ -78,6 +78,8 @@ test('openbare snapshot behoudt alle dashboardgegevens en onafhankelijke dagcorr
   const f = await fixture(t), body = await f.get('/api/v1/dashboard');
   assert.equal(body.status.growatt.power_w, 1000); assert.equal(body.status.growatt.active_inverters, 1);
   assert.equal(body.status.baseload.power_w, 100); assert.equal(body.profiles.profiles[0].name, 'Wasmachine');
+  assert.equal(body.status.weather.poll_minutes, 120);
+  assert.ok(!Object.hasOwn(body.status.weather, 'max_requests'));
   assert.equal(body.profiles.profiles[0].activity.state, 'unavailable');
   assert.equal(body.profiles.profiles[0].activity.error, 'Geen actuele socketmeting beschikbaar');
   assert.equal(body.production.points.length, 1); assert.equal(body.production.points[0].power_w, 1000);
@@ -233,6 +235,7 @@ test('de echte dashboardmodule tekent met uitsluitend de openbare snapshot en ve
   await import('../public/dashboard.js');
   for (let attempt = 0; nodes.get('connection').textContent === '' && attempt < 200; attempt++) await pause(5);
   assert.equal(nodes.get('connection').textContent, 'Online'); assert.equal(nodes.get('pv-now').textContent, '1.0 kW');
+  assert.equal(nodes.get('weather-interval').textContent, '120 min');
   for (const id of ['pv-chart', 'pv-chart-tomorrow', 'pv-chart-after-tomorrow', 'ghi-chart', 'history-chart', 'appliance-list', 'appliance-cycle-charts']) {
     assert.ok(nodes.get(id).children.length > 0, id);
   }
@@ -241,4 +244,11 @@ test('de echte dashboardmodule tekent met uitsluitend de openbare snapshot en ve
   for (let attempt = 0; nodes.get('connection').textContent === '' && attempt < 200; attempt++) await pause(5);
   assert.deepEqual(calls, ['/api/v1/dashboard', '/api/v1/dashboard']);
   assert.equal(nodes.get('connection').textContent, 'Online');
+  const previousStatus = f.weather.status();
+  f.weather.status = () => ({ ...previousStatus, poll_minutes: 0, next_fetch: null });
+  nodes.get('connection').textContent = '';
+  intervals.find((item) => item.milliseconds === 30000).callback();
+  for (let attempt = 0; nodes.get('connection').textContent === '' && attempt < 200; attempt++) await pause(5);
+  assert.equal(nodes.get('weather-interval').textContent, 'Gepauzeerd');
+  assert.equal(nodes.get('next-fetch').textContent, 'Volgende: —');
 });
