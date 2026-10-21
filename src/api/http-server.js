@@ -126,7 +126,7 @@ export function startHttpServer({ settings, panels, panelErrors, repository, wea
       if (url.pathname === '/intern/api/v1/appliances/cycles') {
         const { profiles, errors } = loadProfiles(profilesDirectory);
         return sendJson(response, 200, { generated_at: new Date(now).toISOString(),
-          appliances: [...profiles.values()].map((profile) => applianceCycleResponse(profile, repository, settings, now)), errors });
+          appliances: [...profiles.values()].map((profile) => applianceCycleResponse(profile, repository, settings, now, panels)), errors });
       }
       if (url.pathname === '/intern/api/v1/appliances/daily') {
         const { profiles, errors } = loadProfiles(profilesDirectory);

@@ -59,7 +59,7 @@ test('cyclus begint bij de eerste startmeting en bewaart de startbuffer; stand-b
     assert.equal(result.current.complete, true);
     assert.equal(result.elapsed_seconds, 35);
     assert.equal(result.live, true);
-    assert.deepEqual(result.current.points, [0, 10, 20, 30].map((elapsed_seconds, index) => ({ elapsed_seconds, power_w: [100, 200, 300, 1900][index] })));
+    assert.deepEqual(result.current.points, [0, 10, 20, 30].map((elapsed_seconds, index) => ({ elapsed_seconds, power_w: [100, 200, 300, 1900][index], solar_power_w: null, grid_power_w: null })));
   } finally { f.db.close(); }
 });
 

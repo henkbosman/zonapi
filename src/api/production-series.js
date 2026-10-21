@@ -1,8 +1,8 @@
 import { localDay } from '../weather/local-day.js';
 import { productionFreshnessMinutes } from '../production/freshness.js';
 
-/** Bundelt complete omvormerrondes tot één dagtotaal per meetmoment; input: historie, nu, zonuren, omvormeraantal, versheid, serienummers en optionele groepeertijd in seconden; output: chronologische totaalpunten zonder individuele tussenstanden. */
-export function productionSeries(rows, now, sunrise, sunset, expected, freshnessMinutes, serials = [], groupSeconds = 60) {
+/** Bundelt complete omvormerrondes tot totalen per meetmoment; input: historie, nu, zonuren, omvormeraantal, versheid, serienummers, optionele groepeertijd en dagbeperking; output: chronologische totaalpunten zonder individuele tussenstanden. */
+export function productionSeries(rows, now, sunrise, sunset, expected, freshnessMinutes, serials = [], groupSeconds = 60, sameDayOnly = true) {
   const day = localDay(now);
   const start = sunrise ? Date.parse(sunrise) : -Infinity;
   const end = sunset ? Date.parse(sunset) : Infinity;
@@ -33,7 +33,7 @@ export function productionSeries(rows, now, sunrise, sunset, expected, freshness
 
   for (const row of [...rows].sort((a, b) => a.measured_ms - b.measured_ms)) {
     const at = row.measured_ms;
-    if (!Number.isFinite(at) || at > now || at < start || at > end || localDay(at) !== day) continue;
+    if (!Number.isFinite(at) || at > now || at < start || at > end || (sameDayOnly && localDay(at) !== day)) continue;
     if (allowed.size && !allowed.has(row.serial)) continue;
     if (!Number.isFinite(row.power_w) || row.power_w < 0) continue;
     if (pending.size && at - roundStart >= groupSeconds * 1000) finishRound();

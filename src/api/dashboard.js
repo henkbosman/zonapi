@@ -72,8 +72,8 @@ function publicAdvice(value) {
 
 /** Selecteert een gemeten cyclus zonder interne database-id; input: cyclus; output: vermogensverloop of null. */
 function publicRun(value) {
-  return value ? { ...pick(value, ['state', 'complete', 'started_at', 'ended_at', 'duration_seconds', 'max_gap_seconds']),
-    points: value.points.map((row) => pick(row, ['elapsed_seconds', 'power_w'])) } : null;
+  return value ? { ...pick(value, ['state', 'complete', 'started_at', 'ended_at', 'duration_seconds', 'max_gap_seconds', 'energy_split_method']),
+    points: value.points.map((row) => pick(row, ['elapsed_seconds', 'power_w', 'solar_power_w', 'grid_power_w'])) } : null;
 }
 
 /** Bouwt één alleen-lezen dashboardsnapshot met expliciet toegestane velden; input: dienstafhankelijkheden, profielmap en peiltijd; output: alle zichtbare grafieken en adviezen zonder intern beheer of apparaatadressen. */
@@ -106,7 +106,7 @@ export function dashboardResponse({ settings, panels, panelErrors, repository, w
       pick(row, ['time', 'power_w', 'measured_from', 'active_inverters', 'expected_inverters'])) },
     daily: publicAdvice(daily),
     cycles: { generated_at: new Date(now).toISOString(), appliances: profiles.map((profile) => {
-      const value = applianceCycleResponse(profile, repository, settings, now);
+      const value = applianceCycleResponse(profile, repository, settings, now, panels);
       return { ...pick(value, ['id', 'name', 'configured', 'live', 'elapsed_seconds', 'fresh_seconds']),
         activity: publicActivity(value.activity), current: publicRun(value.current), previous: publicRun(value.previous) };
     }) } };

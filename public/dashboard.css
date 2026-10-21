@@ -29,6 +29,8 @@ body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 5%,#
 .chart-legend i { display:inline-block; width:17px; height:3px; border-radius:3px }
 .legend-measured { background:#137771 }
 .legend-forecast { background:#e6a321 }
+.legend-cycle-solar { background:#2e9d44 }
+.legend-cycle-grid { background:#d84945 }
 .legend-base-forecast { background:#efd7a2 }
 .legend-baseload { background:#c64040 }
 .section-heading { display:flex; justify-content:space-between; align-items:center; gap:18px }

@@ -48,7 +48,8 @@ export function setupApplianceCharts(container, clock = Date.now) {
       names.append(node('p', 'eyebrow', caption), node('h3', '', data.name));
       const progress = node('span', 'cycle-progress'); heading.append(names, progress);
       const chart = node('div', 'chart'), legend = node('div', 'chart-legend');
-      for (const [className, text] of [['legend-measured', 'Gemeten verbruik'], ['legend-forecast', 'Vorige cyclus · verwachting']]) {
+      for (const [className, text] of [['legend-measured', 'Gemeten verbruik'], ['legend-forecast', 'Vorige cyclus · verwachting'],
+        ['legend-cycle-solar', 'Verbruik uit zon'], ['legend-cycle-grid', 'Verbruik uit net']]) {
         const item = node('span'); item.append(node('i', className), node('span', '', text)); legend.append(item);
       }
       const note = node('p', 'chart-footer cycle-note');
@@ -56,6 +57,7 @@ export function setupApplianceCharts(container, clock = Date.now) {
         : !data.previous ? 'Na een volledig gemeten cyclus is er bij de volgende start een verwachting beschikbaar.'
           : `Verwachting gebaseerd op de cyclus van ${dateFormat.format(new Date(data.previous.started_at))}.`;
       if (data.current?.state === 'active' && !data.live) note.textContent = 'Geen actuele socketmeting. De voortgang staat op de laatste meting.';
+      if (data.current) note.textContent += ' Zon/net is berekend naar verhouding van het gemeten huisverbruik; ontbrekende bronmetingen blijven leeg.';
       card.append(heading, chart, legend, note); container.append(card);
       const entry = { data, chart, progress, width: chart.clientWidth, update: drawApplianceCycleChart(chart, data) };
       entries.push(entry); observer?.observe(chart);

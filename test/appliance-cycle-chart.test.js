@@ -72,6 +72,39 @@ test('meetgaten blijven open en een ontbrekende vorige cyclus wordt niet verzonn
   } finally { globalThis.document = before; }
 });
 
+test('groene en rode bronlijnen volgen de huidige cyclus, tonen cursorwaarden en overbruggen geen ontbrekende bronmeting', () => {
+  const before = globalThis.document;
+  globalThis.document = { createElementNS: (_, tag) => element(tag), createElement: element };
+  try {
+    for (const width of [280, 500, 1180]) {
+      const container = element('div'); container.clientWidth = width;
+      const data = fixture();
+      data.current.duration_seconds = 240;
+      data.current.points = [0, 60, 120, 180, 240].map((elapsed_seconds, index) => ({ elapsed_seconds, power_w: 1000,
+        solar_power_w: index === 2 ? null : 400, grid_power_w: index === 2 ? null : 600 }));
+      drawApplianceCycleChart(container, data);
+      const svg = container.children[0];
+      const paths = svg.children.filter((node) => node.tagName === 'path');
+      assert.equal(paths.length, 4);
+      for (const [series, color] of [['solar', '#2e9d44'], ['grid', '#d84945']]) {
+        const path = paths.find((node) => node.attributes['data-cycle-series'] === series);
+        assert.equal(path.attributes.stroke, color);
+        assert.equal((path.attributes.d.match(/M/g) ?? []).length, 2);
+      }
+      const target = svg.children.find((node) => node.attributes.role === 'slider');
+      target.listeners.keydown({ key: 'End', preventDefault() {} });
+      assert.match(target.attributes['aria-valuetext'], /Uit zon: 400 W, Uit net: 600 W/);
+      target.listeners.keydown({ key: 'ArrowLeft', preventDefault() {} });
+      target.listeners.keydown({ key: 'ArrowLeft', preventDefault() {} });
+      assert.match(target.attributes['aria-valuetext'], /Gemeten: 1\.000 W.*Uit zon: —, Uit net: —/);
+      const cursor = svg.children.find((node) => 'data-chart-cursor' in node.attributes);
+      const box = cursor.children.find((node) => 'data-chart-values' in node.attributes).children[0];
+      assert.ok(Number(box.attributes.x) >= 56 && Number(box.attributes.x) + Number(box.attributes.width) <= width - 18);
+      assert.equal(Number(box.attributes.height), 106);
+    }
+  } finally { globalThis.document = before; }
+});
+
 test('de secondewijzer beweegt zonder opnieuw te tekenen of op te halen en bevriest wanneer socketmetingen te oud zijn', () => {
   const old = { document: globalThis.document, setInterval: globalThis.setInterval, clearInterval: globalThis.clearInterval, ResizeObserver: globalThis.ResizeObserver };
   let tick, cleared = false, clock = 1000;
@@ -85,6 +118,11 @@ test('de secondewijzer beweegt zonder opnieuw te tekenen of op te halen en bevri
     render = setupApplianceCharts(container, () => clock);
     render({ generated_at: data.activity.measured_at, appliances: [data] });
     const card = container.children[0], chart = card.children.find((node) => node.className === 'chart'), svg = chart.children[0];
+    const legend = card.children.find((node) => node.className === 'chart-legend');
+    assert.equal(legend.children.length, 4);
+    assert.ok(legend.children.some((node) => node.children[1].textContent === 'Verbruik uit zon'));
+    assert.ok(legend.children.some((node) => node.children[1].textContent === 'Verbruik uit net'));
+    assert.match(card.children.find((node) => node.className.includes('cycle-note')).textContent, /naar verhouding van het gemeten huisverbruik/);
     const line = svg.children.find((node) => 'data-cycle-progress' in node.attributes), before = Number(line.attributes.x1);
     clock += 15000; tick();
     assert.ok(Number(line.attributes.x1) > before);

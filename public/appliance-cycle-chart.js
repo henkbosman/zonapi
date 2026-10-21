@@ -20,17 +20,20 @@ function label(svg, content, x, y, anchor = 'middle', fill = '#607477') {
   result.textContent = content; svg.append(result); return result;
 }
 
-/** Kiest vermogen tegen verstreken tijd; input: cyclus of null; output: geordende geldige meetpunten. */
-function points(run) {
-  return (run?.points ?? []).filter((point) => Number.isFinite(point.elapsed_seconds) && point.elapsed_seconds >= 0 && Number.isFinite(point.power_w))
-    .map((point) => ({ ms: point.elapsed_seconds * 1000, value: point.power_w })).sort((a, b) => a.ms - b.ms);
+/** Kiest vermogen tegen verstreken tijd en bewaart gaten in een bronreeks; input: cyclus en vermogensveld; output: geordende geldige punten met expliciete verbindingsgrenzen. */
+function points(run, field = 'power_w') {
+  const rows = (run?.points ?? []).filter((point) => Number.isFinite(point.elapsed_seconds) && point.elapsed_seconds >= 0).sort((a, b) => a.elapsed_seconds - b.elapsed_seconds);
+  return rows.flatMap((point, index) => !Number.isFinite(point[field]) || point[field] < 0 ? [] : [{ ms: point.elapsed_seconds * 1000, value: point[field],
+    interval_start_ms: Number.isFinite(rows[index - 1]?.[field]) ? rows[index - 1].elapsed_seconds * 1000 : point.elapsed_seconds * 1000,
+    interval_end_ms: point.elapsed_seconds * 1000 }]);
 }
 
 /** Verbindt meetpunten en laat meetgaten open; input: SVG, punten, projecties, kleur en maximale meetpauze; output: void. */
-function drawLine(svg, values, x, y, color, maxGapMs) {
+function drawLine(svg, values, x, y, color, maxGapMs, series) {
   if (!values.length) return;
   const d = values.map((point, index) => `${canConnectPoints(values[index - 1], point, maxGapMs) ? 'L' : 'M'}${x(point.ms).toFixed(1)},${y(point.value).toFixed(1)}`).join(' ');
-  svg.append(node('path', { d, fill: 'none', stroke: color, 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  svg.append(node('path', { d, fill: 'none', stroke: color, 'stroke-width': series === 'solar' || series === 'grid' ? 2 : 2.5,
+    'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'data-cycle-series': series }));
   for (const [index, point] of values.entries()) {
     if (!canConnectPoints(values[index - 1], point, maxGapMs) && !canConnectPoints(point, values[index + 1], maxGapMs)) {
       svg.append(node('circle', { cx: x(point.ms), cy: y(point.value), r: 4, fill: color }));
@@ -47,6 +50,7 @@ export function drawApplianceCycleChart(container, data, elapsedSeconds = data.e
     container.append(empty); return () => {};
   }
   const measured = points(data.current), expected = points(data.previous);
+  const solar = points(data.current, 'solar_power_w'), grid = points(data.current, 'grid_power_w');
   const width = Math.max(280, container.clientWidth || 780), height = 360;
   const left = 56, right = width - 18, top = 36, bottom = height - 48;
   const end = Math.max(60000, data.current.duration_seconds * 1000, (data.previous?.duration_seconds ?? 0) * 1000, (elapsedSeconds ?? 0) * 1000);
@@ -66,8 +70,10 @@ export function drawApplianceCycleChart(container, data, elapsedSeconds = data.e
     label(svg, text, x(value), height - 12, fraction === 0 ? 'start' : fraction === 1 ? 'end' : 'middle');
   }
   const measuredGap = data.current.max_gap_seconds * 1000, expectedGap = (data.previous?.max_gap_seconds ?? 120) * 1000;
-  drawLine(svg, expected, x, y, '#e6a321', expectedGap);
-  drawLine(svg, measured, x, y, '#137771', measuredGap);
+  drawLine(svg, expected, x, y, '#e6a321', expectedGap, 'previous');
+  drawLine(svg, measured, x, y, '#137771', measuredGap, 'measured');
+  drawLine(svg, solar, x, y, '#2e9d44', measuredGap, 'solar');
+  drawLine(svg, grid, x, y, '#d84945', measuredGap, 'grid');
   const marker = node('line', { y1: top, y2: bottom, stroke: '#172629', 'stroke-width': 1.5, 'stroke-dasharray': '5 4', 'data-cycle-progress': '' });
   svg.append(marker);
   const progress = label(svg, '', left, 16, 'start', '#172629');
@@ -75,7 +81,9 @@ export function drawApplianceCycleChart(container, data, elapsedSeconds = data.e
   attachTimeCursor(svg, { start: 0, end, left, right, top, bottom, width, formatTime: elapsedTime,
     ariaLabel: 'Tijd sinds de start van het apparaat', stepMs: 60000, labelWidth: 88 }, [
     { label: 'Gemeten', color: '#137771', valueAt: (ms) => lineValueAt(measured, ms, measuredGap) },
-    { label: 'Vorige cyclus', color: '#996200', valueAt: (ms) => lineValueAt(expected, ms, expectedGap) }
+    { label: 'Vorige cyclus', color: '#996200', valueAt: (ms) => lineValueAt(expected, ms, expectedGap) },
+    { label: 'Uit zon', color: '#2e9d44', valueAt: (ms) => lineValueAt(solar, ms, measuredGap) },
+    { label: 'Uit net', color: '#d84945', valueAt: (ms) => lineValueAt(grid, ms, measuredGap) }
   ]);
   container.append(svg);
 

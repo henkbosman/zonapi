@@ -1,33 +1,33 @@
 ZonAPI
-Versie: 2026-10-20-Weeropvraag1
+Versie: 2026-10-20-Cyclusbronnen1
 
-Open-Meteo-opvraag beperkt tot de benodigde kalenderperiode.
+Verbruik per cyclus uitgebreid met zonne- en netverbruik.
 
-- Geen past_days=2: eerdere kalenderdagen worden niet opnieuw opgevraagd.
-- Geen past_minutely_15=96 of los forecast_minutely_15=192-venster.
-- Uur-, kwartier- en dagreeksen volgen nu dezelfde forecast_days-periode,
-  standaard vandaag, morgen en overmorgen vanaf vandaag 00:00 Nederlandse tijd.
-- Het verstreken deel van vandaag blijft beschikbaar voor de grafiek.
-- Een hoger ingesteld aantal voorspellingsdagen blijft gelden voor dagadviezen.
-- De gebruikte velden en beide modellen blijven behouden: GHI/DNI/DHI,
-  bewolking, weercode, zonsopkomst en zonsondergang, met uurterugval.
-- Actueel verzoek en het echte verzoek gebruiken dezelfde URL-opbouw.
-- De aanvraaggeschiedenis bewaart de URL van de werkelijk uitgevoerde poging.
-- Bestaande correcties en opgeslagen weerhistorie blijven behouden.
-- Geen extra verzoeken, nieuwe instellingen of databasemigratie.
+- Groen: het aan het apparaat toegerekende verbruik uit zonne-energie.
+- Rood: het aan het apparaat toegerekende verbruik uit het net.
+- Beide extra lijnen volgen de huidige/laatste cyclus, naast het gemeten
+  totale vermogen en de vorige cyclus als verwachting.
+- Popup en legenda tonen de vier vermogensreeksen.
+- De verdeling gebruikt historische socket-, Growatt- en netmetingen;
+  weersvoorspellingen en instellingen voor basislast/reserve tellen niet mee.
+- Zon en net worden evenredig verdeeld volgens het gemeten huisverbruik.
+  De socket meet de herkomst niet afzonderlijk; de grafiek vermeldt dit.
+- P1 en kWh worden niet dubbel geteld. Bekende omvormers, de bronkeuze
+  en de bestaande versheidsmarges blijven gelden.
+- Ontbrekende, oude of tegenstrijdige bronmetingen laten gaten open.
+- Bestaande cycli krijgen bronlijnen wanneer hun bronmetingen aanwezig zijn.
+- Groen en rood tellen bij geldige bronmetingen op tot het apparaatvermogen.
+- Geen extra API-verzoeken, nieuwe instellingen of databasemigratie.
 
-Bevat ook de eerdere bewolkingsherstelpunten, model- en ophaaltijdinformatie,
-weericonen, directe onafhankelijke kwartiercorrecties en de correctiedatum.
-Deze beperking van de aanvraag bevestigt geen oorzaak voor een onjuist lokaal
-bewolkingspercentage; de bewolkingswaarden blijven modelverwachtingen.
+Bevat ook de kleinere Open-Meteo-opvraag, weericonen en modelinformatie,
+onafhankelijke directe kwartiercorrecties en programma-/startadviezen.
 Alle volledige routes blijven onder /intern; alleen het dashboard is openbaar.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
-Behoud je eigen config/ en data/. Gebruik daarna desgewenst Nu ophalen op de
-interne Weer-pagina om de kleinere aanvraag uit te voeren binnen het dagquotum.
-De update-ZIP bevat geen config/ of database. Schema blijft 7.
+Behoud je eigen config/ en data/. Schema blijft 7.
 Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-257 tests slagen. De extra integratietest controleert dat de getoonde,
-verzonden en gelogde URL gelijk zijn, de drie daggrafieken gegevens hebben,
-het eerdere deel van vandaag behouden blijft en lokale weerhistorie blijft staan.
+267 tests slagen, inclusief bronverdeling, import/export, gelijktijdige
+apparaten, metervoorkeur, meetuitval, onvolledige omvormerrondes, lokale/
+cloudbronkeuze, historische cycli na herstart en openbare gegevensafscherming.
+De vier grafieklijnen en popup zijn visueel gecontroleerd op 280 en 1180 pixels.
