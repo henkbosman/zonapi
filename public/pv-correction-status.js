@@ -6,7 +6,7 @@ export function correctionAttemptText(attempt) {
   if (['checking_clear_sky', 'waiting_for_clear_sky_window'].includes(attempt.status)) return 'bewolkingscontrole';
   if (attempt.status === 'clear_sky_data_missing') return 'bewolkingsgegevens ontbreken of zijn onbekend';
   if (attempt.status === 'waiting_for_clear_sky_data') return 'bewolkingsgegevens nog niet beschikbaar';
-  if (attempt.status === 'clouds_present') return 'geen nieuwe correctie: venster niet volledig onbewolkt';
+  if (attempt.status === 'clouds_present') return `geen nieuwe correctie: bewolking boven ${attempt.clear_sky?.max_allowed_cloud_cover_percent ?? 0}%`;
   if (attempt.status === 'waiting_for_samples') return `wachten op meetpunten (${attempt.received_samples ?? 0}/3)`;
   if (attempt.status === 'incomplete') return Number.isFinite(attempt.received_inverters)
     ? `wachten op omvormers (${attempt.received_inverters}/${attempt.expected_inverters})` : 'meetronde onvolledig';
@@ -34,7 +34,7 @@ export function renderPvCorrection(element, correction) {
   }
   if (sampling) details.push(...sampling.samples.map((sample) => `${time.format(new Date(sample.time))}: ${Math.round(sample.power_w)} W${sample.used ? '' : ' (genegeerd)'}`));
   if (sampling?.clear_sky) {
-    details.push(`Volgens weer-API onbewolkt: ${time.format(new Date(sampling.clear_sky.window_start))}–${time.format(new Date(sampling.clear_sky.window_end))}`);
+    details.push(`Bewolking binnen ${sampling.clear_sky.max_allowed_cloud_cover_percent ?? 0}%: ${time.format(new Date(sampling.clear_sky.window_start))}–${time.format(new Date(sampling.clear_sky.window_end))}`);
     if (sampling.clear_sky.uses_forecast) details.push('De bewolkingsverwachting voor de komende uren is direct gebruikt.');
   }
   if (attempt) {
@@ -46,7 +46,7 @@ export function renderPvCorrection(element, correction) {
     if (attempt.message) details.push(attempt.message);
     if (attempt.clear_sky) {
       const sky = attempt.clear_sky;
-      details.push(`Onbewolkt vereist van ${time.format(new Date(sky.window_start))} tot ${time.format(new Date(sky.window_end))}`);
+      details.push(`Maximaal ${sky.max_allowed_cloud_cover_percent ?? 0}% bewolking van ${time.format(new Date(sky.window_start))} tot ${time.format(new Date(sky.window_end))}`);
       details.push(`Controle van de omringende uurpunten tot ${time.format(new Date(sky.checked_until))}`);
       if (Number.isFinite(sky.max_cloud_cover_percent)) details.push(`Hoogste bewolking: ${sky.max_cloud_cover_percent}%`);
     }

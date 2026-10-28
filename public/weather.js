@@ -73,15 +73,16 @@ function renderCalls(data) {
 /** Toont oorspronkelijke bewolkingsuurpunten, zonder ze naar instralingskwartieren te verschuiven; input: weeroverzicht; output: void. */
 function renderConditions(data) {
   const body = element('#weather-conditions');
+  element('#correction-cloud-limit').textContent = `Maximale bewolking voor correcties: ${data.conditions?.max_allowed_cloud_cover_percent ?? 0}%`;
   body.replaceChildren();
   for (const row of data.conditions?.rows ?? []) {
     const tr = document.createElement('tr');
     const labels = { clear: 'Helder', partly_cloudy: 'Deels bewolkt', cloudy: 'Bewolkt', unknown: 'Onbekend' };
     const models = { icon_d2: 'ICON-D2', best_match: 'Best Match' };
-    const strict = { clear: 'Ja', cloudy: 'Nee', unknown: 'Onbekend' };
+    const allowed = { clear: 'Ja', cloudy: 'Nee', unknown: 'Onbekend' };
     for (const value of [time(row.time), row.cloud_cover_percent === null ? '—' : `${row.cloud_cover_percent}%`,
       labels[row.condition] ?? 'Onbekend', row.weather_code ?? '—', models[row.weather_model] ?? row.weather_model ?? '—',
-      strict[row.correction_condition] ?? 'Onbekend', `${time(row.fetched_at)}${row.stale ? ' · Verouderd' : ''}`]) {
+      allowed[row.correction_condition] ?? 'Onbekend', `${time(row.fetched_at)}${row.stale ? ' · Verouderd' : ''}`]) {
       const td = document.createElement('td'); td.textContent = String(value); tr.append(td);
     }
     body.append(tr);

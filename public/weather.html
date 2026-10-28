@@ -46,8 +46,9 @@
 
     <section class="full-card">
       <h2>Bewolking vandaag</h2>
-      <p>De grafiek volgt het bewolkingspercentage: 0% is helder, meer dan 0% en minder dan 80% is deels bewolkt en vanaf 80% is bewolkt. Dit zijn modelverwachtingen, geen lokale waarnemingen. Model en ophaaltijd maken de herkomst zichtbaar. Strikt helder vereist 0% bewolking én weercode 0. Nieuwe correcties gebruiken de beschikbare uurpunten ervoor en erna direct, inclusief toekomstige verwachtingen.</p>
-      <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Bewolking</th><th>Toestand</th><th>Weercode</th><th>Model</th><th>Strikt helder</th><th>Opgehaald</th></tr></thead><tbody id="weather-conditions"></tbody></table></div>
+      <p>De grafiek volgt het bewolkingspercentage: 0% is helder, meer dan 0% en minder dan 80% is deels bewolkt en vanaf 80% is bewolkt. Dit zijn modelverwachtingen, geen lokale waarnemingen. Model en ophaaltijd maken de herkomst zichtbaar. De correctiegrens is instelbaar; alle uurpunten van het controlevenster moeten daarbinnen vallen. Weercode 0 is geen extra eis. Nieuwe correcties gebruiken de beschikbare uurpunten ervoor en erna direct, inclusief toekomstige verwachtingen.</p>
+      <p id="correction-cloud-limit">Maximale bewolking voor correcties: —</p>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>Tijd</th><th>Bewolking</th><th>Toestand</th><th>Weercode</th><th>Model</th><th>Binnen correctiegrens</th><th>Opgehaald</th></tr></thead><tbody id="weather-conditions"></tbody></table></div>
     </section>
 
     <section class="full-card">

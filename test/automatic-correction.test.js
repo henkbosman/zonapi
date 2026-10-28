@@ -65,6 +65,22 @@ test('per_block is de standaard; bestaande modi worden zonder configuratieaanpas
   assert.equal(correctionModelKey(f.settings, reordered), correctionModelKey(f.settings, f.panels));
 });
 
+test('de bewolkingsgrens is standaard nul, accepteert 0..100 procent en verandert de sleutel van bestaande correcties niet', (t) => {
+  const f = fixture(t);
+  assert.equal(automaticCorrectionConfig(f.settings).max_cloud_cover_percent, 0);
+  const configured = (value) => ({ ...f.settings, pv: { ...f.settings.pv,
+    automatic_correction: { ...f.settings.pv.automatic_correction, max_cloud_cover_percent: value } } });
+  for (const value of [0, 0.5, 20, 50, 100]) {
+    assert.deepEqual(validateSettings(configured(value)), []);
+    assert.equal(automaticCorrectionConfig(configured(value)).max_cloud_cover_percent, value);
+    assert.equal(correctionModelKey(configured(value), f.panels), correctionModelKey(f.settings, f.panels));
+  }
+  for (const value of [-1, 100.1, '20', null, false, NaN, Infinity]) {
+    assert.ok(validateSettings(configured(value)).some((error) => error.includes('max_cloud_cover_percent')));
+    assert.throws(() => automaticCorrectionConfig(configured(value)), /max_cloud_cover_percent/);
+  }
+});
+
 test('14:15-correctie wijzigt het eigen blok en hetzelfde klokkwartier op toekomstige dagen; buurblokken blijven exact gelijk', (t) => {
   const f = fixture(t), before = f.repository.pv(f.target - 2 * quarter, f.target + 2 * 86400000).map((row) => ({ ...row }));
   assert.equal(f.learn(600).factor, 0.6);

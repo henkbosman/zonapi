@@ -1,36 +1,35 @@
 ZonAPI
-Versie: 2026-10-21-PollMinuten1
+Versie: 2026-10-28-Bewolkingsgrens1
 
-Weerplanning op basis van een vast minuteninterval.
+Instelbare maximale bewolking voor nieuwe kwartiercorrecties.
 
-- weather.poll_minutes vervangt het maximumaantal verzoeken per dag.
-- De voorbeeldinstelling is 120 minuten, gelijk aan de eerdere standaard.
-- Hele waarden 0..1440 zijn geldig; 0 pauzeert de weerbron.
-- De volgende normale poging volgt na het ingestelde aantal minuten,
-  gerekend vanaf de laatste poging, ook na herstart en rond middernacht.
-- Het interval blijft gelijk op dagen van 23, 24 en 25 uur.
-- De dagelijkse aanvraaglimiet en de bijbehorende stop zijn verwijderd.
-- De dagteller is alleen informatief; bestaande historie blijft behouden.
-- Bij fouten geldt voor automatische pogingen minimaal retry_minutes.
-- Nu ophalen slaat het interval over; pauze en overlapbeveiliging blijven gelden.
-- Dashboard en Weer-pagina tonen het ophaalinterval zonder dagmaximum.
+- Nieuwe eigenschap onder pv.automatic_correction:
+  "max_cloud_cover_percent": 0
+- Geldige waarden zijn percentages van 0 tot en met 100, ook met decimalen.
+- Zonder de instelling geldt standaard 0% bewolking.
+- Ieder uurpunt van het bestaande controlevenster moet binnen de grens vallen.
+- De grenswaarde zelf is toegestaan; een hogere waarde blokkeert de berekening.
+- Weercode 0 is geen extra eis meer: ook code 3 wordt binnen de grens geaccepteerd.
+- Ontbrekende of ongeldige bronvelden en toekomstige ontvangst blijven blokkeren.
+- Grens 100 accepteert alle geldige bewolkingspercentages, inclusief 100%.
+- Interne Weer-pagina, Growatt-blok en dashboardtoelichting tonen de grens.
+- De weericonen houden hun eigen werkelijke bewolkingsklasse.
+- Wachtende blokken worden bij de volgende beoordeling tegen de nieuwe grens
+  getoetst, ook na herstart. Hun oorspronkelijke berekeningsbasis blijft behouden.
+- Bestaande correcties, modelidentiteit en historie blijven behouden.
+- Geen extra weerverzoeken, nieuwe routes of databasemigratie.
 
-In je eigen settings.json: verwijder binnen weather de oude regel met
-max_requests_per_local_day en voeg bijvoorbeeld "poll_minutes": 15 toe.
-Als poll_minutes ontbreekt, wordt standaard 120 minuten gebruikt.
-Een oude daglimiet wordt niet meer gelezen of omgerekend.
-
-Bevat ook de zonne-/netlijnen per cyclus, compacte Open-Meteo-opvraag,
-weericonen, onafhankelijke kwartiercorrecties en programma-/startadviezen.
-Alle volledige routes blijven onder /intern; alleen het dashboard is openbaar.
+Voeg in je eigen config/settings.json onder pv > automatic_correction bijvoorbeeld
+"max_cloud_cover_percent": 20 toe voor maximaal 20% bewolking en herstart ZonAPI.
+Behoud alle andere instellingen in deze secties. De volledige ZIP bevat een
+bijgewerkte voorbeeldconfiguratie met de standaardwaarde 0.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/, pas de genoemde
-weerinstelling in je eigen config/settings.json aan en herstart.
-Behoud je overige instellingen en data/. Schema blijft 7.
-De update-ZIP bevat geen config/ of database. De volledige ZIP bevat de
-bijgewerkte voorbeeldconfiguratie met poll_minutes: 120.
+instelling in je eigen settings.json aan en herstart.
+Behoud je overige config/ en data/. Schema blijft 7.
+De update-ZIP bevat geen config/ of database.
 Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-269 tests slagen, inclusief intervalvalidatie, doorlopen zonder dagmaximum,
-pauzeren, foutwachttijd, overlapbeveiliging, behoud van planning na herstart,
-zomer-/wintertijd en de echte dashboardweergave van interval en pauzestatus.
+275 tests slagen, inclusief percentagevalidatie, alle uurpunten van het venster,
+100% met weercode 3, ontbrekende gegevens, herstart, hervatting van wachtende
+correcties, behoud van bestaande factoren en publieke/interne grensinformatie.

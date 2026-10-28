@@ -3,6 +3,7 @@ import { correctionModelKey } from './correction-key.js';
 import { currentProductionRows } from '../production/source.js';
 import { checkClearSky } from '../weather/clear-sky.js';
 import { publishPvCorrection } from './learn-correction.js';
+import { automaticCorrectionConfig } from './automatic-config.js';
 
 /** Bewaart verse meetdrietallen en publiceert direct bij heldere modelpunten aan beide kanten; input: instellingen, paneelmodel, opslag en optionele klok; output: leerfunctie met blijvende wachtstatus bij ontbrekende data of bewolking en hervatting na herstart/weeropvraag. */
 export function createPvCorrectionLearner({ settings, panels, panelErrors, repository, clock = () => Date.now() }) {
@@ -15,10 +16,11 @@ export function createPvCorrectionLearner({ settings, panels, panelErrors, repos
       if (!['disabled', 'configuration_incomplete'].includes(captured.status)) {
         repository.pruneClearSkyHistory(now);
         const pending = repository.pvCorrectionCandidates(correctionModelKey(settings, panels), now);
+        const maxCloudCoverPercent = automaticCorrectionConfig(settings).max_cloud_cover_percent;
         const applied = [];
         let waiting = null;
         for (const item of pending) {
-          const clearSky = checkClearSky(repository, settings.location, item.end_ms, now);
+          const clearSky = checkClearSky(repository, settings.location, item.end_ms, now, maxCloudCoverPercent);
           if (clearSky.status !== 'clear') {
             waiting = { status: clearSky.status, target_time: new Date(item.end_ms).toISOString(), clear_sky: clearSky };
             continue;

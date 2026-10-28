@@ -17,7 +17,8 @@
     "stale_after_hours": 4
   },
   "pv": {
-  "calibration_factor": 1
+  "calibration_factor": 1,
+  "max_cloud_cover_percent": 5
   },
   "homewizard": {
     "poll_seconds": 30,

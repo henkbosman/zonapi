@@ -5,6 +5,7 @@ import { slotMetadata } from './forecast.js';
 import { localDayRange } from '../weather/local-calendar.js';
 import { skyCondition, weatherLocationKey } from '../weather/clear-sky.js';
 import { skyAppearance } from '../weather/sky-appearance.js';
+import { automaticCorrectionConfig } from '../pv/automatic-config.js';
 
 /** Leest statusfilter en paginering voor weerpogingen; input: URLSearchParams; output: {status,limit,offset} of fout. */
 export function weatherCallParams(params) {
@@ -29,6 +30,7 @@ export function weatherOverview(repository, settings, scheduler, now, filters) {
   const resolutionMinutes = getWeatherResolution(settings);
   const range = localDayRange(day);
   const conditions = validLocation ? repository.weatherConditions(weatherLocationKey(location), range.start_ms, range.end_ms - 1) : [];
+  const maxCloudCoverPercent = automaticCorrectionConfig(settings).max_cloud_cover_percent;
   return {
     server_time: new Date(now).toISOString(),
     logging: repository.loggingStatus('weather'),
@@ -37,9 +39,9 @@ export function weatherOverview(repository, settings, scheduler, now, filters) {
     forecast_days: Math.max(3, settings.weather.forecast_days),
     request_url: validLocation ? irradianceRequestUrl(settings.weather.source, { ...location, days: Math.max(3, settings.weather.forecast_days), resolutionMinutes }) : null,
     last_success: repository.lastSuccessfulWeatherCall() ?? null,
-    conditions: { time_basis: 'instant', resolution_minutes: 60, rows: conditions.map((row) => ({
+    conditions: { time_basis: 'instant', resolution_minutes: 60, max_allowed_cloud_cover_percent: maxCloudCoverPercent, rows: conditions.map((row) => ({
       time: new Date(row.time_ms).toISOString(), cloud_cover_percent: row.cloud_cover, weather_code: row.weather_code,
-      condition: skyAppearance(row.cloud_cover), correction_condition: skyCondition(row), weather_model: row.model,
+      condition: skyAppearance(row.cloud_cover), correction_condition: skyCondition(row, maxCloudCoverPercent), weather_model: row.model,
       fetched_at: new Date(row.fetched_ms).toISOString(), stale: now - row.fetched_ms > settings.weather.stale_after_hours * 3600000 })) },
     forecast: { day, ...sunshine, ...forecastResolution(rows), rows: rows.map((row) => ({
       ...slotMetadata(row), ghi_w_m2: row.ghi, dni_w_m2: row.dni, dhi_w_m2: row.dhi

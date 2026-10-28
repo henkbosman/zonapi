@@ -8,9 +8,10 @@ function correctionText(result) {
   if (!result) return '—';
   if (['checking_clear_sky', 'waiting_for_clear_sky_window'].includes(result.status)) return 'Bewolkingscontrole';
   if (result.status === 'waiting_for_samples') return `${result.received_samples}/3 ontvangen · wachten op ${result.missing_times.map(time).join(', ')}`;
+  if (result.status === 'clouds_present') return `Geen nieuwe correctie: bewolking boven ${result.clear_sky?.max_allowed_cloud_cover_percent ?? 0}%`;
   if (['updated', 'unchanged'].includes(result.status) && result.sampling) return `${result.time} · ${result.sampling.used_samples}/3 metingen${result.sampling.ignored_times.length ? ' · 1 uitschieter genegeerd' : ''}`;
   const labels = { disabled: 'Uitgeschakeld', incomplete: 'Meetronde onvolledig', stale: 'Metingen verouderd', low_forecast: 'Te weinig voorspelde opwek', forecast_unavailable: 'Voorspelling ontbreekt', forecast_stale: 'Voorspelling verouderd',
-    clear_sky_data_missing: 'Bewolkingsgegevens ontbreken of zijn onbekend', waiting_for_clear_sky_data: 'Bewolkingsgegevens nog niet beschikbaar', clouds_present: 'Geen nieuwe correctie: niet volledig onbewolkt' };
+    clear_sky_data_missing: 'Bewolkingsgegevens ontbreken of zijn onbekend', waiting_for_clear_sky_data: 'Bewolkingsgegevens nog niet beschikbaar' };
   return labels[result.status] ?? result.status;
 }
 
@@ -28,7 +29,7 @@ export function renderGrowattCloud(cloud) {
   if (correction) correction.title = cloud.forecast_correction?.sampling?.samples.map((sample) => `${time(sample.time)} · ${Math.round(sample.power_w)} W${sample.used ? '' : ' · genegeerd'}`).join('\n') ?? '';
   if (correction && cloud.forecast_correction?.clear_sky) {
     const sky = cloud.forecast_correction.clear_sky;
-    correction.title += `${correction.title ? '\n' : ''}Onbewolkt vereist: ${time(sky.window_start)}–${time(sky.window_end)}; controle tot ${time(sky.checked_until)}`;
+    correction.title += `${correction.title ? '\n' : ''}Maximaal ${sky.max_allowed_cloud_cover_percent ?? 0}% bewolking: ${time(sky.window_start)}–${time(sky.window_end)}; controle tot ${time(sky.checked_until)}`;
     if (sky.uses_forecast) correction.title += '\nDe bewolkingsverwachting voor de komende uren is direct gebruikt.';
   }
   document.getElementById('cloud-poll').disabled = !cloud.enabled || !cloud.configured || cloud.fetching;

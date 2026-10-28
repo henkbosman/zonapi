@@ -88,7 +88,7 @@ test('bewolking wordt in hetzelfde verzoek opgehaald als echte uurpunten; null, 
     assert.equal(rows[0].cloud_cover, null); assert.equal(skyCondition(rows[0]), 'unknown');
   }
   assert.equal(skyCondition({ cloud_cover: 0.1, weather_code: 0 }), 'cloudy');
-  assert.equal(skyCondition({ cloud_cover: 0, weather_code: 1 }), 'cloudy');
+  assert.equal(skyCondition({ cloud_cover: 0, weather_code: 1 }), 'clear');
 });
 
 test('het hele kwartier plus een uur ervoor en erna gebruikt alle beschikbare uurpunten direct, inclusief voorspellingen', (t) => {
@@ -146,13 +146,13 @@ test('een echt meer-modelantwoord gebruikt dezelfde heldere ICON-D2-data voor de
   assert.equal(f.repository.countCalls('2026-10-20'), 1);
 });
 
-test('iedere bewolkte uurwaarde of niet-heldere weercode blokkeert het hele venster; ontbrekende uurpunten worden niet geïnterpoleerd', (t) => {
+test('iedere uurwaarde boven de grens blokkeert het hele venster; ontbrekende uurpunten worden niet geïnterpoleerd', (t) => {
   const f = fixture(t);
   const times = f.conditionRows().map((row) => row.time_ms);
-  for (const time of times) for (const field of ['cloud_cover', 'weather_code']) {
+  for (const time of times) {
     f.now++;
     for (const row of f.conditionRows()) f.repository.saveWeatherCondition(weatherLocationKey(f.settings.location), {
-      ...row, ...(row.time_ms === time ? { [field]: field === 'cloud_cover' ? 0.01 : 1 } : {}) });
+      ...row, ...(row.time_ms === time ? { cloud_cover: 0.01 } : {}) });
     assert.equal(checkClearSky(f.repository, f.settings.location, target, f.now).status, 'clouds_present');
   }
   f.now++; f.sky();
@@ -172,6 +172,106 @@ test('latere onbekende bewolkingsdata vervangen oude heldere waarden; een andere
   f.now++; f.sky(target, { fetched: f.now + 1 });
   assert.equal(checkClearSky(f.repository, f.settings.location, target, f.now).status, 'waiting_for_clear_sky_data');
   assert.equal(checkClearSky(f.repository, { latitude: 53, longitude: 5 }, target, f.now).status, 'clear_sky_data_missing');
+});
+
+test('de procentgrens geldt inclusief de grenswaarde voor ieder uurpunt; weercode 3 is geen extra blokkade', (t) => {
+  const f = fixture(t);
+  f.sky(target, { cover: 20, code: 3 });
+  const allowed = checkClearSky(f.repository, f.settings.location, target, f.now, 20);
+  assert.equal(allowed.status, 'clear');
+  assert.equal(allowed.max_allowed_cloud_cover_percent, 20);
+  assert.equal(allowed.max_cloud_cover_percent, 20);
+  assert.ok(allowed.samples.every((row) => row.weather_code === 3));
+  assert.equal(checkClearSky(f.repository, f.settings.location, target, f.now).status, 'clouds_present');
+  for (const time of f.conditionRows().map((row) => row.time_ms)) {
+    f.now++;
+    f.sky(target, { cover: (at) => at === time ? 20.01 : 0, code: 3 });
+    assert.equal(checkClearSky(f.repository, f.settings.location, target, f.now, 20).status, 'clouds_present');
+  }
+  f.now++; f.sky(target, { cover: 0.5, code: 1 });
+  assert.equal(checkClearSky(f.repository, f.settings.location, target, f.now, 0.5).status, 'clear');
+});
+
+test('100 procent staat volledig bewolkte uurpunten toe, maar ontbrekende of ongeldige gegevens blijven blokkeren', (t) => {
+  const f = fixture(t); f.sky(target, { cover: 100, code: 3 });
+  assert.equal(checkClearSky(f.repository, f.settings.location, target, f.now, 100).status, 'clear');
+  f.now++; f.sky(target, { cover: null, code: 3 });
+  assert.equal(checkClearSky(f.repository, f.settings.location, target, f.now, 100).status, 'clear_sky_data_missing');
+  f.now++; f.sky(target, { cover: 100, code: null });
+  assert.equal(checkClearSky(f.repository, f.settings.location, target, f.now, 100).status, 'clear_sky_data_missing');
+  f.now++; f.sky(target, { cover: 100, code: 3, fetched: f.now + 1 });
+  assert.equal(checkClearSky(f.repository, f.settings.location, target, f.now, 100).status, 'waiting_for_clear_sky_data');
+});
+
+test('de productiedienst berekent bij een grens van 100 procent ook met weercode 3 een echte kwartiercorrectie', (t) => {
+  const f = fixture(t);
+  f.settings.pv.automatic_correction.max_cloud_cover_percent = 100;
+  f.sky(target, { cover: 100, code: 3 });
+  const learned = f.capture();
+  assert.equal(learned.status, 'updated'); assert.equal(learned.factor, 0.81);
+  assert.equal(learned.clear_sky.max_allowed_cloud_cover_percent, 100);
+  assert.equal(learned.clear_sky.max_cloud_cover_percent, 100);
+  assert.ok(learned.clear_sky.samples.every((row) => row.weather_code === 3));
+  assert.equal(f.blocks().length, 1);
+});
+
+test('de interne weerpagina en openbare correctieonderbouwing tonen de ingestelde grens zonder het weericoon aan te passen', async (t) => {
+  const f = fixture(t);
+  f.settings.pv.automatic_correction.max_cloud_cover_percent = 40;
+  f.sky(target, { cover: 40, code: 3 });
+  assert.equal(f.capture().status, 'updated');
+  t.mock.method(Date, 'now', () => f.now);
+  const weather = { status: () => ({ source: 'open-meteo', location_configured: true, poll_minutes: 120, used_requests: 0,
+    sunrise: iso(target - 2 * hour), sunset: iso(target + 10 * hour) }) };
+  const server = startHttpServer({ ...f, panelErrors: [], weather, homewizard: { status: () => ({}) } });
+  await once(server, 'listening'); t.after(() => new Promise((resolve) => server.close(resolve)));
+  const get = async (path) => {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`);
+    assert.equal(response.status, 200); return response.json();
+  };
+  const overview = await get('/intern/api/v1/weather');
+  assert.equal(overview.conditions.max_allowed_cloud_cover_percent, 40);
+  assert.ok(overview.conditions.rows.length > 0);
+  assert.ok(overview.conditions.rows.every((row) => row.correction_condition === 'clear' && row.condition === 'partly_cloudy' && row.weather_code === 3));
+  const snapshot = await get('/api/v1/dashboard');
+  const correction = snapshot.forecasts.days[0].automatic_correction;
+  assert.equal(correction.latest.sampling.clear_sky.max_allowed_cloud_cover_percent, 40);
+  assert.equal(correction.last_attempt.clear_sky.max_allowed_cloud_cover_percent, 40);
+  assert.ok(snapshot.forecasts.days[0].conditions.rows.every((row) => row.condition === 'partly_cloudy'));
+  const display = {};
+  renderPvCorrection(display, correction);
+  assert.match(display.title, /Bewolking binnen 40%/);
+  const page = await (await fetch(`http://127.0.0.1:${server.address().port}/intern/weather`)).text();
+  assert.match(page, /Binnen correctiegrens/);
+  assert.match(page, /id="correction-cloud-limit"/);
+});
+
+test('een ruimere grens hervat een wachtende correctie na herstart op de oorspronkelijke basis; aanscherpen wist eerdere factoren niet', (t) => {
+  const folder = mkdtempSync(join(tmpdir(), 'zonapi-cloud-limit-'));
+  const f = fixture(t, join(folder, 'data.sqlite'));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  f.capture(); f.sky(target, { cover: 40, code: 3 });
+  assert.equal(f.learner.learn().status, 'clouds_present');
+  const modelKey = f.key();
+  assert.equal(f.pending().length, 1);
+  f.settings.pv.automatic_correction.max_cloud_cover_percent = 40;
+  f.now++; f.restart();
+  const learned = f.learner.learn();
+  assert.equal(learned.status, 'updated'); assert.equal(learned.factor, 0.81);
+  assert.equal(learned.clear_sky.max_allowed_cloud_cover_percent, 40);
+  assert.equal(f.key(), modelKey); assert.equal(f.pending().length, 0);
+  const approved = { ...f.blocks()[0] };
+  assert.equal(JSON.parse(approved.sampling_json).clear_sky.max_allowed_cloud_cover_percent, 40);
+  f.settings.pv.automatic_correction.max_cloud_cover_percent = 10;
+  f.now++; f.sky(target + quarter, { cover: 40, code: 3 });
+  assert.equal(f.capture(target + quarter).status, 'clouds_present');
+  assert.equal(f.blocks().length, 1);
+  assert.deepEqual({ ...f.blocks()[0] }, approved);
+  const display = {};
+  renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
+  assert.match(display.textContent, /bewolking boven 10%/);
+  assert.match(display.title, /Bewolking binnen 40%/);
+  assert.match(display.title, /Maximaal 10% bewolking/);
 });
 
 test('de productiedienst bewaart eerst het meetdrietal en berekent de factor pas na goedkeuring op de oorspronkelijke basis', (t) => {
@@ -208,7 +308,7 @@ test('voorspelde bewolking voorkomt een nieuwe factor; een heldere weerupdate he
   assert.equal(result.status, 'clouds_present'); assert.equal(f.blocks().length, 0); assert.equal(f.pending().length, 1);
   const display = {};
   renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
-  assert.match(display.textContent, /niet volledig onbewolkt/); assert.match(display.title, /Hoogste bewolking: 1%/);
+  assert.match(display.textContent, /bewolking boven 0%/); assert.match(display.title, /Hoogste bewolking: 1%/);
   f.now++; f.sky();
   assert.equal(f.learner.learn().status, 'updated'); assert.equal(f.blocks()[0].factor, 0.81);
 });
@@ -317,7 +417,7 @@ test('de interne weerpagina toont bewolking en de openbare correctiestatus geeft
   assert.equal(approved.latest.sampling.clear_sky.status, 'clear');
   assert.equal(approved.latest.sampling.clear_sky.uses_forecast, true);
   renderPvCorrection(display, approved);
-  assert.match(display.title, /Volgens weer-API onbewolkt: 08:00–10:15/);
+  assert.match(display.title, /Bewolking binnen 0%: 08:00–10:15/);
   assert.match(display.title, /bewolkingsverwachting.*direct gebruikt/);
   f.capture(target + 2 * hour);
   const waiting = (await get('/api/v1/dashboard')).forecasts.days[0].automatic_correction;
