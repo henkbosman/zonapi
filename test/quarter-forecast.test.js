@@ -33,20 +33,21 @@ function row(start, duration = 60, power = 100, fetched = 1) {
     start_ms: start, end_ms: start + duration * minute, ghi: power, dni: 0, dhi: power, fetched_ms: fetched };
 }
 
-/** Maakt een Open-Meteo-antwoord met beide modellen en ontbrekende kwartieren; input: uurstart-ms; output: JSON met verschillende modelwaarden en vier uur dekking. */
+/** Maakt een Best Match-antwoord met ontbrekende kwartieren en afwijkende oude ICON-velden; input: uurstart-ms; output: JSON met verschillende modelwaarden en vier uur dekking. */
 function payload(start) {
   return {
     hourly: { time: [1, 2, 3, 4].map((hour) => start / 1000 + hour * 3600),
       shortwave_radiation_best_match: [100, 100, 100, 100], direct_normal_irradiance_best_match: [0, 0, 0, 0], diffuse_radiation_best_match: [100, 100, 100, 100],
       shortwave_radiation_icon_d2: [999, 999, 999, 999], direct_normal_irradiance_icon_d2: [0, 0, 0, 0], diffuse_radiation_icon_d2: [999, 999, 999, 999] },
     minutely_15: { time: [1, 2, 3, 4, 5].map((quarter) => start / 1000 + quarter * 900),
-      shortwave_radiation_icon_d2: [0, 500, null, 200, null], direct_normal_irradiance_icon_d2: [0, 0, null, 0, null], diffuse_radiation_icon_d2: [0, 500, null, 200, null],
-      shortwave_radiation_best_match: [999, 999, 999, 999, 999], direct_normal_irradiance_best_match: [0, 0, 0, 0, 0], diffuse_radiation_best_match: [999, 999, 999, 999, 999] },
+      shortwave_radiation_best_match: [0, 500, null, 200, null], direct_normal_irradiance_best_match: [0, 0, null, 0, null], diffuse_radiation_best_match: [0, 500, null, 200, null],
+      shortwave_radiation_icon_d2: [999, 999, 999, 999, 999], direct_normal_irradiance_icon_d2: [0, 0, 0, 0, 0], diffuse_radiation_icon_d2: [999, 999, 999, 999, 999] },
     daily: { sunrise_best_match: [start / 1000 - 4 * 3600], sunset_best_match: [start / 1000 + 8 * 3600] }
   };
 }
 
-test('kwartiermodus is standaard, blijft optioneel en vraagt beide resoluties in één HTTP-verzoek', async () => {
+test('kwartiermodus is standaard, blijft optioneel en vraagt beide resoluties in één HTTP-verzoek', async (t) => {
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-28T09:37:12Z'));
   const { settings } = loadConfiguration();
   const legacy = { ...settings, weather: { ...settings.weather } };
   delete legacy.weather.resolution_minutes;
@@ -55,14 +56,17 @@ test('kwartiermodus is standaard, blijft optioneel en vraagt beide resoluties in
   for (const value of [15, 60]) assert.deepEqual(validateSettings({ ...legacy, weather: { ...legacy.weather, resolution_minutes: value } }), []);
   for (const value of [null, '15', 0, 30, false]) assert.ok(validateSettings({ ...legacy, weather: { ...legacy.weather, resolution_minutes: value } }).some((error) => error.includes('weather.resolution_minutes')));
   const url = forecastUrl(52, 5, 3);
-  assert.equal(url.searchParams.get('models'), 'best_match,icon_d2');
+  assert.equal(url.searchParams.get('models'), 'best_match');
   assert.deepEqual(url.searchParams.get('hourly').split(',').slice(0, 3), url.searchParams.get('minutely_15').split(','));
   assert.ok(url.searchParams.get('hourly').includes('cloud_cover,weather_code'));
   assert.equal(url.searchParams.get('forecast_days'), '3');
-  for (const name of ['past_days', 'past_hours', 'past_minutely_15', 'forecast_hours', 'forecast_minutely_15']) assert.equal(url.searchParams.has(name), false);
+  assert.equal(url.searchParams.has('past_days'), false);
+  assert.equal(url.searchParams.get('past_hours'), '3'); assert.equal(url.searchParams.get('past_minutely_15'), '12');
+  assert.ok(Number(url.searchParams.get('forecast_hours')) > 0); assert.ok(Number(url.searchParams.get('forecast_minutely_15')) > 0);
   const hourUrl = forecastUrl(52, 5, 3, 60);
   assert.equal(hourUrl.searchParams.has('minutely_15'), false);
-  assert.equal(hourUrl.searchParams.has('models'), false);
+  assert.equal(hourUrl.searchParams.get('models'), 'best_match');
+  assert.equal(hourUrl.searchParams.get('past_hours'), '3'); assert.equal(hourUrl.searchParams.has('past_minutely_15'), false);
   let requests = 0;
   const result = await fetchOpenMeteo({ latitude: 52, longitude: 5, days: 3, fetcher: async (target) => {
     requests++;
@@ -74,18 +78,19 @@ test('kwartiermodus is standaard, blijft optioneel en vraagt beide resoluties in
   assert.equal(result.request.http_status, 200);
 });
 
-test('normalisatie kiest native ICON-kwartieren, houdt UTC rond wintertijd en gebruikt uurterugval voor nullwaarden', () => {
+test('normalisatie kiest Best Match-kwartieren, houdt UTC rond wintertijd en gebruikt uurterugval voor nullwaarden', () => {
   const start = Date.parse('2026-10-25T01:00:00Z');
   const data = normalizeOpenMeteo(payload(start), 2000);
-  const quarters = data.rows.filter((item) => item.model === 'icon_d2');
+  const quarters = data.rows.filter((item) => item.end_ms - item.start_ms === 15 * minute);
+  assert.ok(data.rows.every((item) => item.model === 'best_match'));
   assert.deepEqual(quarters.map((item) => [item.start_ms - start, item.end_ms - start, item.ghi]), [[0, 15 * minute, 0], [15 * minute, 30 * minute, 500], [45 * minute, 60 * minute, 200]]);
-  assert.ok(data.rows.filter((item) => item.model === 'best_match').every((item) => item.ghi === 100));
+  assert.ok(data.rows.filter((item) => item.end_ms - item.start_ms === 60 * minute).every((item) => item.ghi === 100));
   assert.equal(localDay(quarters[0].start_ms), '2026-10-25');
   const noQuarters = payload(start);
   delete noQuarters.minutely_15;
   assert.equal(normalizeOpenMeteo(noQuarters, 2000).rows.length, 4);
   const invalid = payload(start);
-  invalid.minutely_15.diffuse_radiation_icon_d2.pop();
+  invalid.minutely_15.diffuse_radiation_best_match.pop();
   assert.throws(() => normalizeOpenMeteo(invalid, 2000), /Onvolledige Open-Meteo-kwartierreeks/);
   const noSun = payload(start);
   noSun.daily.sunrise_best_match = [null];
@@ -230,7 +235,7 @@ test('HTTP-endpoints tonen kwartiermodel, gemengde resoluties en behouden één 
     assert.equal(result.mixed_resolution, true);
     assert.deepEqual(result.resolutions_minutes, [15, 60]);
     assert.equal(result.calibration_factor, 1.78);
-    assert.ok(result.slots.some((slot) => slot.model === 'icon_d2' && slot.resolution_minutes === 15 && slot.power_w === 890));
+    assert.ok(result.slots.some((slot) => slot.model === 'best_match' && slot.resolution_minutes === 15 && slot.power_w === 890));
     assert.ok(result.slots.some((slot) => slot.model === 'best_match' && slot.source_resolution_minutes === 60 && slot.power_w === 178));
     const irradiance = await (await fetch(`${base}/intern/api/v1/irradiance?hours=3`)).json();
     assert.ok(irradiance.slots.length);
@@ -238,7 +243,7 @@ test('HTTP-endpoints tonen kwartiermodel, gemengde resoluties en behouden één 
     const overview = await (await fetch(`${base}/intern/api/v1/weather`)).json();
     assert.deepEqual(overview.forecast.resolutions_minutes, [15, 60]);
     assert.equal(overview.status.preferred_resolution_minutes, 15);
-    assert.equal(new URL(overview.request_url).searchParams.get('models'), 'best_match,icon_d2');
+    assert.equal(new URL(overview.request_url).searchParams.get('models'), 'best_match');
     assert.equal(overview.calls.rows.length, 0);
     assert.equal(overview.status.used_requests, 1);
     assert.equal(calls, 1);

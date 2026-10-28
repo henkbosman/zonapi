@@ -37,7 +37,7 @@ export function weatherOverview(repository, settings, scheduler, now, filters) {
     status: state,
     location: { latitude: location.latitude ?? null, longitude: location.longitude ?? null },
     forecast_days: Math.max(3, settings.weather.forecast_days),
-    request_url: validLocation ? irradianceRequestUrl(settings.weather.source, { ...location, days: Math.max(3, settings.weather.forecast_days), resolutionMinutes }) : null,
+    request_url: validLocation ? irradianceRequestUrl(settings.weather.source, { ...location, days: Math.max(3, settings.weather.forecast_days), resolutionMinutes, now }) : null,
     last_success: repository.lastSuccessfulWeatherCall() ?? null,
     conditions: { time_basis: 'instant', resolution_minutes: 60, max_allowed_cloud_cover_percent: maxCloudCoverPercent, rows: conditions.map((row) => ({
       time: new Date(row.time_ms).toISOString(), cloud_cover_percent: row.cloud_cover, weather_code: row.weather_code,

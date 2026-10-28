@@ -8,7 +8,7 @@ export function getIrradianceSource(name) {
 }
 
 /** Bepaalt het te verzenden weeradres zonder netwerkverkeer; input: bron, locatie, aantal dagen en optionele resolutie; output: URL-string of null. */
-export function irradianceRequestUrl(name, { latitude, longitude, days, resolutionMinutes = 15 }) {
+export function irradianceRequestUrl(name, { latitude, longitude, days, resolutionMinutes = 15, now = Date.now() }) {
   const urls = { 'open-meteo': forecastUrl };
-  return urls[name] ? urls[name](latitude, longitude, days, resolutionMinutes).toString() : null;
+  return urls[name] ? urls[name](latitude, longitude, days, resolutionMinutes, now).toString() : null;
 }

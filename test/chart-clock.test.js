@@ -58,7 +58,7 @@ function payload() {
   const series = (times, values, model) => ({ time: times.map((time) => at(time) / 1000),
     [`shortwave_radiation_${model}`]: values, [`direct_normal_irradiance_${model}`]: values.map(() => 0), [`diffuse_radiation_${model}`]: values });
   return { hourly: series(['13:00:00', '14:00:00', '15:00:00'], [50, 80, 40], 'best_match'),
-    minutely_15: series(['12:45:00', '13:00:00', '13:15:00', '13:30:00'], [10, 20, 30, 40], 'icon_d2') };
+    minutely_15: series(['12:45:00', '13:00:00', '13:15:00', '13:30:00'], [10, 20, 30, 40], 'best_match') };
 }
 
 test('Open-Meteo-klok blijft van JSON via SQLite en dag-API tot SVG op kwartieren, inclusief uurterugval', (t) => {

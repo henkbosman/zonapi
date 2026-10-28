@@ -1,34 +1,37 @@
 ZonAPI
-Versie: 2026-10-28-Dagafsluiting1
+Versie: 2026-10-28-BestMatch3uur1
 
-Correcties na afloop van de meetdag en lichtgroene kwartierkolommen.
+Open-Meteo Best Match met drie uur terugblik.
 
-- Overdag worden complete Growatt-meetdrietallen en hun ongecorrigeerde
-  referentiebasis bewaard; er wordt dan nog geen nieuwe factor berekend.
-- De berekening begint pas na 00:00 Europe/Amsterdam, zodra de meetdag
-  voorbij is. Een zelfstandige minuutcontrole werkt ook zonder nachtelijke
-  Growatt-metingen of extra weeropvraag. Normaal volgt verwerking binnen
-  een minuut na middernacht.
-- De daggrens houdt rekening met dagen van 23, 24 en 25 uur. Het kwartier
-  23:45–00:00 hoort bij de vorige meetdag en wacht niet nog een extra dag.
-- De laatst opgeslagen bewolkingspunten worden bij de dagafsluiting getoetst
-  aan pv.automatic_correction.max_cloud_cover_percent. Ontbrekende gegevens
-  of een overschrijding blijven blokkeren; bestaande factoren blijven gelden.
-- Een herstart haalt afgesloten dagen in binnen de bestaande bewaartermijn
-  van 48 uur. Nieuwe kwartieren van de lopende dag blijven wachten.
-- Dashboard en Growatt-blok tonen de wachtstatus en het dagafsluittijdstip.
-- In alle drie zonopbrengstgrafieken krijgen kwartieren met een beschikbare
-  correctie een heel lichtgroene achtergrond, ook bij hergebruik van een
-  eerdere meetdag en bij een berekende afwijking van 0%.
-- Zonder opgeslagen correctie blijft de achtergrond ongemarkeerd.
-- Iedere factor blijft onafhankelijk en behoudt de echte berekendatum.
+- Iedere weeropvraag gebruikt uitsluitend models=best_match.
+- Uurgegevens krijgen past_hours=3; kwartiergegevens past_minutely_15=12.
+- De terugblik schuift op de echte uur-/kwartierklok mee en werkt ook rond
+  middernacht, inclusief de laatste uren van de vorige Nederlandse dag.
+- De toekomst blijft begrensd op de ingestelde kalenderdagen, standaard
+  vandaag, morgen en overmorgen. De resterende aantallen uur- en
+  kwartierpunten worden bij iedere aanroep berekend, ook rond wintertijd.
+- Nieuwere antwoorden vervangen oudere bewolkingswaarden voor hetzelfde
+  tijdstip. De correctie gebruikt na afloop van de meetdag de laatst
+  opgeslagen gegevens en de ingestelde maximale bewolking.
+- De terugblik bevat bijgewerkte modelgegevens, geen afzonderlijke lokale
+  metingen of garantie dat de bewolkingsschatting exact overeenkomt.
+- Instraling, bewolking en weercode worden uit Best Match gelezen, zowel
+  bij standaardvelden als bij velden met _best_match. Ontbrekende velden
+  worden niet met ICON-D2 of een andere antwoordvorm aangevuld.
+- De oorspronkelijke ongecorrigeerde correctiebasis blijft bewaard.
+- Het ingestelde poll_minutes-interval blijft gelden. Er komt geen aparte
+  historische opvraag bij en er worden geen hele eerdere dagen toegevoegd.
+- Code en Actueel verzoek op de Weer-pagina gebruiken dezelfde URL-opbouw;
+  de exacte verzonden URL blijft bij iedere uitgevoerde poging beschikbaar.
+- Dagafsluiting en lichtgroene correctiekolommen blijven behouden.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
-Er zijn geen nieuwe instellingen nodig; de bewolkingsgrens uit de vorige
-versie blijft in gebruik. Behoud je eigen config/ en data/.
-Schema blijft 7. De update-ZIP bevat geen config/ of database.
+Je hoeft settings.json niet aan te passen. Behoud je eigen config/ en data/.
+De nieuwe bronkeuze geldt vanaf de eerstvolgende geslaagde weeropvraag;
+via Nu ophalen op de interne Weer-pagina kan dat direct.
+Oudere historie en correcties blijven behouden. Schema blijft 7.
+De update-ZIP bevat geen config/ of database.
 Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-283 tests slagen, inclusief dagafsluiting, minuutcontrole, herstart,
-zomer-/wintertijd, bewolkingsgrens, drie daggrafieken, groene kolommen,
-voorspellingen, programma-adviezen en afscherming van interne gegevens.
+287 tests slagen, inclusief Best Match-selectie, terugblik, tijdstippen,
+middernacht, zomer-/wintertijd, dagafsluiting en behoud van correctiebasis.
