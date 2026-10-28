@@ -82,6 +82,53 @@ function element(tagName) {
   };
 }
 
+test('alle daggrafieken kleuren uitsluitend echte correctiekwartieren groen, inclusief factor 0 en 1, met afkapping op de zonranden', () => {
+  const before = globalThis.document;
+  globalThis.document = { createElementNS: (_, tag) => element(tag), createElement: (tag) => element(tag) };
+  try {
+    for (const width of [280, 1180]) for (const dayIndex of [0, 1, 2]) {
+      const start = Date.parse('2026-10-28T10:00:00Z') + dayIndex * 86400000, sunrise = start + 3 * 60000, sunset = start + 42 * 60000;
+      const sources = [dayIndex ? 'same_clock_quarter' : 'block', 'none', 'same_clock_quarter'];
+      const slots = sources.map((source, index) => ({ start: new Date(start + index * 900000).toISOString(),
+        end: new Date(start + (index + 1) * 900000).toISOString(), power_w: index ? 1000 : 0, base_power_w: 1000,
+        automatic_correction_factor: index ? 1 : 0, correction_source: source }));
+      const container = element('div'); container.clientWidth = width;
+      drawProductionChart(container, { sunrise: new Date(sunrise).toISOString(), sunset: new Date(sunset).toISOString(), now: new Date(start).toISOString(), points: [] }, slots, { forecastOnly: dayIndex > 0 });
+      const svg = container.children[0], bands = svg.children.find((child) => 'data-correction-bands' in child.attributes);
+      assert.equal(svg.children[0], bands); assert.equal(bands.attributes['pointer-events'], 'none');
+      assert.equal(bands.children.length, 2);
+      assert.deepEqual(bands.children.map((child) => child.attributes['data-correction-start']), [slots[0].start, slots[2].start]);
+      assert.deepEqual(bands.children.map((child) => child.attributes['data-correction-source']), [sources[0], sources[2]]);
+      const plotWidth = width - 18 - 52, [first, last] = bands.children.map((child) => child.attributes);
+      assert.equal(Number(first.x), 52); assert.equal(Number(first.width), plotWidth * 12 / 39);
+      assert.equal(Number(last.x) + Number(last.width), width - 18);
+      for (const band of [first, last]) { assert.equal(band.y, '24'); assert.equal(band.height, '288'); assert.equal(band.fill, '#edf8ee'); }
+      const quarterLine = svg.children.find((child) => child.attributes['data-clock-quarter'] === slots[0].end);
+      assert.equal(Number(first.x) + Number(first.width), Number(quarterLine.attributes.x1));
+    }
+  } finally { globalThis.document = before; }
+});
+
+test('ontbrekende correcties, ongeldige slots en correcties buiten de zonuren maken geen groene kolommen of verschuiven de lijnen', () => {
+  const before = globalThis.document;
+  globalThis.document = { createElementNS: (_, tag) => element(tag), createElement: (tag) => element(tag) };
+  try {
+    const start = Date.parse('2026-10-28T10:00:00Z'), at = (offset) => new Date(start + offset * 900000).toISOString();
+    const slot = { start: at(0), end: at(1), power_w: 1000, automatic_correction_factor: 1, correction_source: 'none' };
+    const slots = [slot, { ...slot, start: at(-1), end: at(0), correction_source: 'block' },
+      { ...slot, start: at(1), end: at(2), correction_source: 'block', power_w: null },
+      { ...slot, start: at(2), end: at(3), correction_source: 'same_clock_quarter', automatic_correction_factor: null },
+      { ...slot, start: at(3), end: at(4), correction_source: 'block' },
+      { ...slot, start: at(1), end: at(0), correction_source: 'block' }];
+    const container = element('div');
+    drawProductionChart(container, { sunrise: at(0), sunset: at(3), now: at(0), points: [] }, slots);
+    const svg = container.children[0], bands = svg.children.find((child) => 'data-correction-bands' in child.attributes);
+    assert.equal(bands.children.length, 0);
+    const dot = svg.children.find((child) => child.attributes['data-series'] === 'forecast' && child.attributes['data-time'] === at(1));
+    assert.equal(Number(dot.attributes.cx), 52 + (780 - 18 - 52) / 3);
+  } finally { globalThis.document = before; }
+});
+
 test('de daggrafiek tekent geen individuele omvormers of onvolledige totalen', () => {
   const noon = Date.parse('2026-10-14T10:00:00Z');
   const sunrise = '2026-10-14T05:00:00Z';

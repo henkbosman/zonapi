@@ -5,6 +5,8 @@ import { clockQuarter, quarterLabel } from './quarter.js';
 import { basePvAtPeriodEnd } from './base-at-time.js';
 import { refreshPvForecast } from './refresh-forecast.js';
 import { productionFreshnessMinutes } from '../production/freshness.js';
+import { localDay } from '../weather/local-day.js';
+import { localDayRange } from '../weather/local-calendar.js';
 
 /** Valideert een meetblok en bewaart standaard uitsluitend de invoer tot de hemelcontrole; input: opslag, model, omvormerwaarden, ontvangsttijd en venstermetadata; output: wachtstatus. De afzonderlijke rekenlaag kan direct worden getoetst met defer:false. */
 export function learnPvCorrection(repository, settings, panels, panelErrors, rows, now, options = {}) {
@@ -41,8 +43,9 @@ export function learnPvCorrection(repository, settings, panels, panelErrors, row
       forecast: { start: predicted.start, end: predicted.end, source_resolution_minutes: predicted.source_resolution_minutes,
         power_w: predicted.power_w, groups: predicted.groups } }) };
   if (options.defer !== false) {
-    repository.savePvCorrectionCandidate(row, now, now);
-    return { status: 'checking_clear_sky', time: quarterLabel(quarter), ...bounds };
+    const ready = localDayRange(localDay(row.start_ms)).end_ms;
+    repository.savePvCorrectionCandidate(row, now, ready);
+    return { status: now < ready ? 'waiting_for_day_end' : 'checking_clear_sky', ready_at: new Date(ready).toISOString(), time: quarterLabel(quarter), ...bounds };
   }
   return publishPvCorrection(repository, settings, panels, panelErrors, row, now);
 }

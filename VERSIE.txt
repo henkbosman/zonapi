@@ -1,35 +1,34 @@
 ZonAPI
-Versie: 2026-10-28-Bewolkingsgrens1
+Versie: 2026-10-28-Dagafsluiting1
 
-Instelbare maximale bewolking voor nieuwe kwartiercorrecties.
+Correcties na afloop van de meetdag en lichtgroene kwartierkolommen.
 
-- Nieuwe eigenschap onder pv.automatic_correction:
-  "max_cloud_cover_percent": 0
-- Geldige waarden zijn percentages van 0 tot en met 100, ook met decimalen.
-- Zonder de instelling geldt standaard 0% bewolking.
-- Ieder uurpunt van het bestaande controlevenster moet binnen de grens vallen.
-- De grenswaarde zelf is toegestaan; een hogere waarde blokkeert de berekening.
-- Weercode 0 is geen extra eis meer: ook code 3 wordt binnen de grens geaccepteerd.
-- Ontbrekende of ongeldige bronvelden en toekomstige ontvangst blijven blokkeren.
-- Grens 100 accepteert alle geldige bewolkingspercentages, inclusief 100%.
-- Interne Weer-pagina, Growatt-blok en dashboardtoelichting tonen de grens.
-- De weericonen houden hun eigen werkelijke bewolkingsklasse.
-- Wachtende blokken worden bij de volgende beoordeling tegen de nieuwe grens
-  getoetst, ook na herstart. Hun oorspronkelijke berekeningsbasis blijft behouden.
-- Bestaande correcties, modelidentiteit en historie blijven behouden.
-- Geen extra weerverzoeken, nieuwe routes of databasemigratie.
+- Overdag worden complete Growatt-meetdrietallen en hun ongecorrigeerde
+  referentiebasis bewaard; er wordt dan nog geen nieuwe factor berekend.
+- De berekening begint pas na 00:00 Europe/Amsterdam, zodra de meetdag
+  voorbij is. Een zelfstandige minuutcontrole werkt ook zonder nachtelijke
+  Growatt-metingen of extra weeropvraag. Normaal volgt verwerking binnen
+  een minuut na middernacht.
+- De daggrens houdt rekening met dagen van 23, 24 en 25 uur. Het kwartier
+  23:45–00:00 hoort bij de vorige meetdag en wacht niet nog een extra dag.
+- De laatst opgeslagen bewolkingspunten worden bij de dagafsluiting getoetst
+  aan pv.automatic_correction.max_cloud_cover_percent. Ontbrekende gegevens
+  of een overschrijding blijven blokkeren; bestaande factoren blijven gelden.
+- Een herstart haalt afgesloten dagen in binnen de bestaande bewaartermijn
+  van 48 uur. Nieuwe kwartieren van de lopende dag blijven wachten.
+- Dashboard en Growatt-blok tonen de wachtstatus en het dagafsluittijdstip.
+- In alle drie zonopbrengstgrafieken krijgen kwartieren met een beschikbare
+  correctie een heel lichtgroene achtergrond, ook bij hergebruik van een
+  eerdere meetdag en bij een berekende afwijking van 0%.
+- Zonder opgeslagen correctie blijft de achtergrond ongemarkeerd.
+- Iedere factor blijft onafhankelijk en behoudt de echte berekendatum.
 
-Voeg in je eigen config/settings.json onder pv > automatic_correction bijvoorbeeld
-"max_cloud_cover_percent": 20 toe voor maximaal 20% bewolking en herstart ZonAPI.
-Behoud alle andere instellingen in deze secties. De volledige ZIP bevat een
-bijgewerkte voorbeeldconfiguratie met de standaardwaarde 0.
-
-Bestaande installatie: stop ZonAPI, vervang src/ en public/, pas de genoemde
-instelling in je eigen settings.json aan en herstart.
-Behoud je overige config/ en data/. Schema blijft 7.
-De update-ZIP bevat geen config/ of database.
+Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
+Er zijn geen nieuwe instellingen nodig; de bewolkingsgrens uit de vorige
+versie blijft in gebruik. Behoud je eigen config/ en data/.
+Schema blijft 7. De update-ZIP bevat geen config/ of database.
 Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-275 tests slagen, inclusief percentagevalidatie, alle uurpunten van het venster,
-100% met weercode 3, ontbrekende gegevens, herstart, hervatting van wachtende
-correcties, behoud van bestaande factoren en publieke/interne grensinformatie.
+283 tests slagen, inclusief dagafsluiting, minuutcontrole, herstart,
+zomer-/wintertijd, bewolkingsgrens, drie daggrafieken, groene kolommen,
+voorspellingen, programma-adviezen en afscherming van interne gegevens.

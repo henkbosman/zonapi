@@ -3,6 +3,7 @@ const time = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', ho
 /** Geeft een concrete reden waarom een correctie nog niet is opgeslagen; input: laatste leerpoging; output: korte Nederlandse tekst. */
 export function correctionAttemptText(attempt) {
   if (!attempt) return 'wachten op de eerste meetronde';
+  if (attempt.status === 'waiting_for_day_end') return 'wachten tot de meetdag voorbij is';
   if (['checking_clear_sky', 'waiting_for_clear_sky_window'].includes(attempt.status)) return 'bewolkingscontrole';
   if (attempt.status === 'clear_sky_data_missing') return 'bewolkingsgegevens ontbreken of zijn onbekend';
   if (attempt.status === 'waiting_for_clear_sky_data') return 'bewolkingsgegevens nog niet beschikbaar';
@@ -24,7 +25,7 @@ export function renderPvCorrection(element, correction) {
   element.textContent = active
     ? `Correctie ${correction.latest.correction_percent > 0 ? '+' : ''}${correction.latest.correction_percent.toLocaleString('nl-NL')}%${correction.latest.start ? ` · Blok ${time.format(new Date(correction.latest.start))}–${time.format(new Date(correction.latest.end))}` : ''} · Blokken vandaag ${correction.learned_blocks_today ?? correction.learned_quarters}/${correction.total_blocks_in_day ?? 96}${sampling ? ` · ${sampling.used_samples}/3 metingen${sampling.ignored_times.length ? ' · 1 uitschieter genegeerd' : ''}` : ''}`
     : `Correctie: ${correction?.status === 'disabled' ? 'uitgeschakeld' : correctionAttemptText(attempt)}`;
-  if (active && ['waiting_for_clear_sky_window', 'clear_sky_data_missing', 'waiting_for_clear_sky_data', 'clouds_present'].includes(attempt?.status)) {
+  if (active && ['waiting_for_day_end', 'waiting_for_clear_sky_window', 'clear_sky_data_missing', 'waiting_for_clear_sky_data', 'clouds_present'].includes(attempt?.status)) {
     element.textContent += ` · ${correctionAttemptText(attempt)}`;
   }
   const details = [];
@@ -40,6 +41,7 @@ export function renderPvCorrection(element, correction) {
   if (attempt) {
     details.push(`Laatste poging: ${time.format(new Date(attempt.attempted_at))} · ${correctionAttemptText(attempt)}`);
     if (attempt.target_time) details.push(`Kwartier: ${time.format(new Date(attempt.target_time))}`);
+    if (attempt.status === 'waiting_for_day_end' && attempt.ready_at) details.push(`Berekening na afloop van de meetdag, vanaf ${new Date(attempt.ready_at).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' })}`);
     if (attempt.moments) details.push(...attempt.moments.map((moment) => `${time.format(new Date(moment.time))}: ${moment.received_inverters}/${moment.expected_inverters} omvormers${moment.complete ? '' : ' · onvolledig'}`));
     if (attempt.diagnostics?.rejected_timing) details.push(`${attempt.diagnostics.rejected_timing} metingen buiten de ingestelde tijdsmarge`);
     if (attempt.diagnostics?.rejected_skew) details.push(`${attempt.diagnostics.rejected_skew} meetmomenten met te grote onderlinge tijdsverschillen`);

@@ -126,6 +126,16 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
   const maxPower = Math.max(500, Math.ceil(Math.max(hasBaseload ? baseloadW : 0, ...measured.map((point) => point.value), ...forecast.map((point) => point.value), ...baseForecast.map((point) => point.value)) / 500) * 500);
   const x = (ms) => left + (right - left) * (ms - start) / (end - start);
   const y = (value) => bottom - (bottom - top) * value / maxPower;
+  const correctionBands = node('g', { 'data-correction-bands': '', 'pointer-events': 'none', 'aria-hidden': 'true' });
+  for (const slot of slots) {
+    const from = Date.parse(slot.start), to = Date.parse(slot.end);
+    // Een factor 1 is ook de standaard zonder correctie. Alleen een echte bron markeren, inclusief een geleerde 0%-correctie.
+    if (!['block', 'same_clock_quarter'].includes(slot.correction_source) || !Number.isFinite(slot.automatic_correction_factor)
+      || !Number.isFinite(slot.power_w) || !Number.isFinite(from) || !Number.isFinite(to) || to <= from || to <= start || from >= end) continue;
+    correctionBands.append(node('rect', { x: x(Math.max(start, from)), y: top, width: x(Math.min(end, to)) - x(Math.max(start, from)), height: bottom - top,
+      fill: '#edf8ee', 'data-correction-start': slot.start, 'data-correction-end': slot.end, 'data-correction-source': slot.correction_source }));
+  }
+  svg.append(correctionBands);
   for (let i = 0; i <= 3; i++) {
     const yy = bottom - (bottom - top) * i / 3;
     svg.append(node('line', { x1: left, x2: right, y1: yy, y2: yy, stroke: '#e4ece8' }));

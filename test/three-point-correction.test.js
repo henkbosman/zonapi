@@ -21,6 +21,8 @@ import { createPvCorrectionLearner } from '../src/pv/correction-learner.js';
 import { createWeatherScheduler } from '../src/weather/scheduler.js';
 import { renderPvCorrection } from '../public/pv-correction-status.js';
 import { clearSkyBounds, weatherLocationKey } from '../src/weather/clear-sky.js';
+import { localDay } from '../src/weather/local-day.js';
+import { localDayRange } from '../src/weather/local-calendar.js';
 
 const five = 300000, quarter = 900000, minute = 60000;
 const target = Date.parse('2026-10-18T07:15:00Z'); // 09:15 in Nederland.
@@ -57,6 +59,7 @@ function fixture(t, { automatic = {}, path = ':memory:', weather = true, center 
       source: 'open-meteo', model: 'best_match', time_ms: time, cloud_cover: 0, weather_code: 0, fetched_ms: f.now });
   };
   f.pattern = () => f.repository.pvBlockCorrections(correctionModelKey(f.settings, f.panels));
+  f.finish = (learner) => { f.now = Math.max(f.now, localDayRange(localDay(f.target - quarter)).end_ms); return learner.learn([], f.now); };
   f.trio = (powers = [800, 820, 840], options = {}) => { for (let i = 0; i < 3; i++) f.add(f.target + (i - 1) * five, powers[i], options); };
   t.after(() => f.db.close());
   return f;
@@ -290,10 +293,13 @@ test('vijfminutenopvragen met vertraagde Growatt-antwoorden sturen de driepuntsc
     if (time < target + 2 * five) assert.equal(f.pattern().length, 0);
   }
   assert.equal(calls, 16);
+  assert.equal(f.pattern().length, 0);
+  assert.equal(cloud.status().forecast_correction.status, 'waiting_for_day_end');
+  assert.ok(f.now < clearSkyBounds(target).until);
+  assert.equal(f.finish(learner).status, 'updated');
   assert.equal(f.pattern().length, 1);
   assert.equal(cloud.status().forecast_correction.status, 'updated');
-  assert.equal(cloud.status().forecast_correction.clear_sky.uses_forecast, true);
-  assert.ok(f.now < clearSkyBounds(target).until);
+  assert.equal(cloud.status().forecast_correction.clear_sky.uses_forecast, false);
   assert.equal(cloud.status().forecast_correction.factor, 0.81);
   const server = startHttpServer({ ...f, panelErrors: [], growattCloud: cloud, homewizard: { status: () => ({}) }, weather: { status: () => ({}) } });
   await once(server, 'listening');
@@ -319,14 +325,14 @@ test('vijfminutenopvragen met vertraagde Growatt-antwoorden sturen de driepuntsc
   assert.equal(f.repository.countCalls('2026-10-18'), 0);
 });
 
-test('opgeslagen afwijkende meetklokken gebruiken heldere verwachtingen direct en behouden de correctie buiten de logs', async (t) => {
+test('opgeslagen afwijkende meetklokken worden na de dagafsluiting verwerkt en behouden de correctie buiten de logs', async (t) => {
   const f = fixture(t, { automatic: { sample_tolerance_seconds: 90 } });
   f.trio([800, 2000, 820], { skew: serials.map(() => -134000) });
   const learner = createPvCorrectionLearner({ ...f, panelErrors: [], clock: () => f.now });
-  assert.equal(learner.learn().status, 'clear_sky_data_missing');
+  assert.equal(learner.learn().status, 'waiting_for_day_end');
   assert.equal(f.pattern().length, 0);
   f.clearWindow();
-  const result = learner.learn();
+  const result = f.finish(learner);
   assert.equal(result.status, 'updated'); assert.equal(result.factor, 0.81);
   assert.equal(f.pattern().length, 1); assert.equal(JSON.parse(f.pattern()[0].sampling_json).used_samples, 2);
   const cached = f.repository.pv(target - quarter, target);
@@ -345,10 +351,10 @@ test('opgeslagen afwijkende meetklokken gebruiken heldere verwachtingen direct e
   renderPvCorrection(display, corrections); assert.match(display.textContent, /Correctie -19%/); assert.match(display.textContent, /2\/3 metingen/);
   assert.equal((await fetch(`${base}/pv-correction-status.js`)).status, 200);
   const signature = f.pattern()[0].signature;
-  assert.equal(learner.learn().status, 'unchanged'); assert.equal(f.pattern().length, 1); assert.equal(f.pattern()[0].signature, signature);
+  assert.equal(learner.tick(), null); assert.equal(f.pattern().length, 1); assert.equal(f.pattern()[0].signature, signature);
 });
 
-test('nieuwe weerdata hervat een eerder geblokkeerde correctie direct en pas na de weertransactie', async (t) => {
+test('nieuwe weerdata bereidt invoer na de weertransactie voor; publicatie volgt pas na de meetdag', async (t) => {
   const f = fixture(t, { weather: false });
   f.trio([800, 820, 840], { skew: serials.map(() => 134000) });
   const learner = createPvCorrectionLearner({ ...f, panelErrors: [], clock: () => f.now });
@@ -361,9 +367,11 @@ test('nieuwe weerdata hervat een eerder geblokkeerde correctie direct en pas na 
     source: async () => ({ rows: [{ source: 'open-meteo', model: 'icon_d2', start_ms: target - quarter, end_ms: target,
       ghi: 125, dni: 0, dhi: 125, fetched_ms: f.now }, { source: 'open-meteo', model: 'icon_d2', start_ms: target, end_ms: target + quarter,
       ghi: 125, dni: 0, dhi: 125, fetched_ms: f.now }], conditions, sun: [] }),
-    onForecast: (at) => { callbacks++; assert.equal(at, f.now); assert.equal(learner.learn(null, at).status, 'updated'); } });
+    onForecast: (at) => { callbacks++; assert.equal(at, f.now); assert.equal(learner.learn(null, at).status, 'waiting_for_day_end'); } });
   assert.equal((await weather.refresh()).reason, 'ok'); assert.equal(callbacks, 1);
-  assert.equal(f.pattern().length, 1); assert.ok(f.now < bounds.until);
+  assert.equal(f.pattern().length, 0); assert.ok(f.now < bounds.until);
+  assert.equal(f.finish(learner).status, 'updated');
+  assert.equal(f.pattern().length, 1);
   assert.equal(f.pattern()[0].factor, 0.82); assert.equal(f.repository.diagnosticState('growatt', 'pv_correction').status, 'updated');
   assert.equal(weather.status().last_error, null);
 });
@@ -379,9 +387,10 @@ test('wachtredenen zijn zichtbaar op het dashboard, inclusief het aantal ontvang
   assert.match(display.textContent, /wachten op meetpunten \(2\/3\)/); assert.match(display.title, /09:15: 3\/4 omvormers · onvolledig/);
   assert.equal(f.pattern().length, 0);
   f.add(target, 820, { received: f.now + 1 });
-  assert.equal(learner.learn().status, 'clear_sky_data_missing'); assert.equal(f.pattern().length, 0);
+  assert.equal(learner.learn().status, 'waiting_for_day_end'); assert.equal(f.pattern().length, 0);
   renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
-  assert.match(display.textContent, /bewolkingsgegevens ontbreken/);
+  assert.match(display.textContent, /wachten tot de meetdag voorbij is/);
+  assert.equal(f.finish(learner).status, 'clear_sky_data_missing');
   f.clearWindow();
   assert.equal(learner.learn().status, 'updated'); assert.equal(f.pattern().length, 1);
   renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
@@ -410,8 +419,9 @@ test('een mislukte correctie wordt bewaard en een nieuwe paneelconfiguratie neem
   const f = fixture(t); f.trio();
   const repository = { ...f.repository, savePvBlockCorrection() { throw new Error('Testfout tijdens opslaan'); } };
   const learner = createPvCorrectionLearner({ ...f, repository, panelErrors: [], clock: () => f.now });
-  assert.equal(learner.learn().status, 'clear_sky_data_missing');
+  assert.equal(learner.learn().status, 'waiting_for_day_end');
   f.clearWindow();
+  f.now = localDayRange(localDay(target)).end_ms;
   assert.equal(learner.learn().status, 'error'); assert.equal(f.pattern().length, 0);
   const display = {}; renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
   assert.match(display.textContent, /fout bij berekenen/); assert.match(display.title, /Testfout tijdens opslaan/);

@@ -27,7 +27,6 @@ function main() {
   const repository = createRepository(db, debug);
   refreshPvForecast(repository, settings, panels, panelErrors, Date.now());
   const correction = createPvCorrectionLearner({ settings, panels, panelErrors, repository });
-  correction.learn();
   const weather = createWeatherScheduler({ settings, panels, panelErrors, repository, onForecast: (at) => correction.learn(null, at) });
   const homewizard = createHomeWizardPoller(settings, repository);
   const sockets = createSocketPoller(settings, repository, join(root, 'config/appliances'));
@@ -55,6 +54,7 @@ function main() {
     process.exitCode = 1;
   });
   http.on('error', (error) => { console.error('HTTP:', error); process.exitCode = 1; });
+  correction.start();
   weather.start();
   homewizard.start();
   sockets.start();
@@ -68,7 +68,7 @@ function main() {
   async function stop() {
     if (stopping) return;
     stopping = true;
-    weather.stop(); homewizard.stop(); backups.stop();
+    correction.stop(); weather.stop(); homewizard.stop(); backups.stop();
     await Promise.all([sockets.stop(), growattCloud.stop(), new Promise((resolve) => http.close(resolve)), stopGrowattServer(growatt)]);
     db.close();
   }

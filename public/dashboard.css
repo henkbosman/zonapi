@@ -32,6 +32,7 @@ body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 5%,#
 .legend-cycle-solar { background:#2e9d44 }
 .legend-cycle-grid { background:#d84945 }
 .legend-base-forecast { background:#efd7a2 }
+.chart-legend .legend-correction-block { height:12px; background:#edf8ee; border:1px solid #cce3ce }
 .legend-baseload { background:#c64040 }
 .section-heading { display:flex; justify-content:space-between; align-items:center; gap:18px }
 .section-heading h2 { font-size:23px; letter-spacing:-.04em; margin:5px 0 }

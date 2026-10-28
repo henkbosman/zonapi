@@ -6,6 +6,7 @@ function time(value) { return value ? fullTime.format(new Date(value)) : '—'; 
 /** Vat de driepuntscorrectie samen; input: correctieresultaat; output: kwartier, aantal gebruikte metingen of wachtreden. */
 function correctionText(result) {
   if (!result) return '—';
+  if (result.status === 'waiting_for_day_end') return `Wachten tot de meetdag voorbij is${result.ready_at ? ` · vanaf ${time(result.ready_at)}` : ''}`;
   if (['checking_clear_sky', 'waiting_for_clear_sky_window'].includes(result.status)) return 'Bewolkingscontrole';
   if (result.status === 'waiting_for_samples') return `${result.received_samples}/3 ontvangen · wachten op ${result.missing_times.map(time).join(', ')}`;
   if (result.status === 'clouds_present') return `Geen nieuwe correctie: bewolking boven ${result.clear_sky?.max_allowed_cloud_cover_percent ?? 0}%`;

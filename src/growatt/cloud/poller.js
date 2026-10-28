@@ -6,6 +6,7 @@ import { localDay } from '../../weather/local-day.js';
 import { offlineSunTimes } from '../../weather/solar-position.js';
 import { CLOUD_POLL_MS, nextPollSlot, pollSlotAtOrAfter, restoredPollSlot } from './schedule.js';
 import { productionFreshnessMinutes } from '../../production/freshness.js';
+import { correctionModelKey } from '../../pv/correction-key.js';
 
 /** Maakt de Growatt-webbron op vaste vijfminutenmomenten; input: instellingen, panelen, opslag en optionele klok/omgeving/client/timers/callback; output: {poll,start,stop,status} met persistente foutwachttijd. */
 export function createGrowattCloudPoller({ settings, panels, repository, clock = () => Date.now(), environment = process.env, client, onMeasurements, timers = { setTimeout, clearTimeout } }) {
@@ -150,6 +151,14 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
   /** Geeft uitsluitend niet-geheime webbronstatus terug; input: geen; output: configuratie, planning, fouten en herkende omvormers. */
   function status() {
     const iso = (ms) => Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+    const attempt = repository.diagnosticState('growatt', 'pv_correction');
+    const attempted = Date.parse(attempt?.attempted_at);
+    let correction = attempt && attempt.model_key === correctionModelKey(settings, panels) && attempted <= clock()
+      && attempted >= (state.last_attempt_ms ?? -Infinity) ? attempt : state.forecast_correction;
+    if (correction === attempt && ['updated', 'unchanged'].includes(attempt?.status)) {
+      const block = repository.pvBlockCorrection(attempt.model_key, Date.parse(attempt.target_time));
+      if (block) correction = { ...attempt, sampling: JSON.parse(block.sampling_json) };
+    }
     return { enabled: config.source !== 'shinelink', configured: Boolean(token), production_source: config.source, base_url: config.base_url, token_env: config.token_env,
       fetching: pending !== null, poll_seconds: config.poll_seconds, poll_schedule: config.poll_schedule,
       fresh_minutes: productionFreshnessMinutes(settings.growatt.fresh_minutes, 'cloud'), daylight_only: config.daylight_only,
@@ -162,7 +171,7 @@ export function createGrowattCloudPoller({ settings, panels, repository, clock =
         requested_at: iso(row.requested_ms), measured_at: iso(row.measured_ms), received_at: iso(row.received_ms),
         age_at_receipt_seconds: Number.isFinite(row.received_ms) ? (row.received_ms - row.measured_ms) / 1000 : null })),
       plant_id: config.plant_id || state.plant_id || null, plants: state.plants ?? [], devices: configured.length ? configured : state.devices ?? [],
-      last_measurement_count: state.last_measurement_count ?? 0, forecast_correction: state.forecast_correction ?? null,
+      last_measurement_count: state.last_measurement_count ?? 0, forecast_correction: correction ?? null,
       last_request: repository.diagnosticState('growatt', 'cloud_last_request') };
   }
 

@@ -37,7 +37,7 @@ function publicCorrection(value) {
       sampling: Number.isFinite(sampling?.used_samples) ? { used_samples: sampling.used_samples,
         ignored_times: sampling.ignored_times ?? [], samples: (sampling.samples ?? []).map((row) => pick(row, ['time', 'power_w', 'used'])),
         ...(sampling.clear_sky ? { clear_sky: publicClearSky(sampling.clear_sky) } : {}) } : null } : null,
-    last_attempt: attempt ? { ...pick(attempt, ['status', 'attempted_at', 'target_time', 'received_samples', 'received_inverters', 'expected_inverters']),
+    last_attempt: attempt ? { ...pick(attempt, ['status', 'attempted_at', 'target_time', 'ready_at', 'received_samples', 'received_inverters', 'expected_inverters']),
       moments: (attempt.moments ?? []).map((row) => pick(row, ['time', 'received_inverters', 'expected_inverters', 'complete'])),
       diagnostics: pick(attempt.diagnostics, ['rejected_timing', 'rejected_skew']),
       ...(attempt.clear_sky ? { clear_sky: publicClearSky(attempt.clear_sky) } : {}) } : null };

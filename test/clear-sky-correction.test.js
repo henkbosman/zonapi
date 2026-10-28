@@ -15,6 +15,8 @@ import { normalizeOpenMeteo, forecastUrl } from '../src/weather/open-meteo-clien
 import { createWeatherScheduler } from '../src/weather/scheduler.js';
 import { startHttpServer } from '../src/api/http-server.js';
 import { renderPvCorrection } from '../public/pv-correction-status.js';
+import { localDay } from '../src/weather/local-day.js';
+import { localDayRange } from '../src/weather/local-calendar.js';
 
 const minute = 60000, hour = 3600000, five = 5 * minute, quarter = 15 * minute;
 const target = Date.parse('2026-10-20T07:15:00Z'); // 09:00–09:15 in Nederland.
@@ -65,6 +67,7 @@ function fixture(t, path = ':memory:') {
     for (const row of f.conditionRows(end, options)) f.repository.saveWeatherCondition(weatherLocationKey(settings.location), row);
   };
   f.ready = (end = target) => { f.now = Math.max(f.now, clearSkyBounds(end).until + 1000); };
+  f.finish = (end = target) => { f.now = Math.max(f.now, localDayRange(localDay(end - quarter)).end_ms); return f.learner.learn([], f.now); };
   t.after(() => f.db.close());
   return f;
 }
@@ -111,21 +114,108 @@ test('het hele kwartier plus een uur ervoor en erna gebruikt alle beschikbare uu
   assert.equal(result.max_cloud_cover_percent, 0);
 });
 
-test('de laatste Growatt-meting publiceert direct met eerder opgehaalde heldere verwachtingen, zonder nieuwe weeropvraag', (t) => {
+test('de laatste Growatt-meting bewaart invoer en publiceert pas na de meetdag met opgeslagen weergegevens', (t) => {
   const f = fixture(t); f.sky();
   const fetched = f.now;
-  const result = f.capture();
+  const captured = f.capture();
+  assert.equal(captured.status, 'waiting_for_day_end'); assert.equal(f.blocks().length, 0);
+  assert.equal(captured.ready_at, '2026-10-20T22:00:00.000Z');
+  const result = f.finish();
   assert.equal(result.status, 'updated'); assert.equal(result.factor, 0.81);
   assert.equal(result.processed_count, 1); assert.equal(f.pending().length, 0);
   const block = f.blocks()[0], sky = JSON.parse(block.sampling_json).clear_sky;
   assert.equal(block.updated_ms, f.now); assert.equal(sky.checked_at, iso(f.now));
-  assert.equal(sky.uses_forecast, true); assert.ok(f.now < clearSkyBounds(target).until);
+  assert.equal(sky.uses_forecast, false); assert.ok(f.now > clearSkyBounds(target).until);
   assert.ok(sky.samples.every((row) => row.fetched_at === iso(fetched)));
   assert.equal(f.repository.countCalls('2026-10-20'), 0);
 });
 
-test('een echt meer-modelantwoord gebruikt dezelfde heldere ICON-D2-data voor de opgeslagen bewolking en de directe correctie', async (t) => {
-  const f = fixture(t); assert.equal(f.capture().status, 'clear_sky_data_missing');
+test('de zelfstandige dagafsluiting rekent exact vanaf Nederlandse middernacht op dagen van 23, 24 en 25 uur', (t) => {
+  for (const [date, hours] of [['2026-03-29', 23], ['2026-10-25', 25], ['2026-10-28', 24]]) {
+    const f = fixture(t), range = localDayRange(date), end = Date.parse(`${date}T12:15:00Z`);
+    assert.equal((range.end_ms - range.start_ms) / hour, hours);
+    f.now = end - 10 * minute; f.forecast(end); f.sky(end);
+    const captured = f.capture(end);
+    assert.equal(captured.status, 'waiting_for_day_end'); assert.equal(captured.ready_at, iso(range.end_ms));
+    assert.equal(f.pending()[0].ready_ms, range.end_ms);
+    f.now = range.end_ms - 1;
+    assert.equal(f.learner.learn().status, 'waiting_for_day_end'); assert.equal(f.learner.tick(), null);
+    assert.equal(f.blocks().length, 0);
+    f.now++;
+    const result = f.learner.tick();
+    assert.equal(result.status, 'updated'); assert.equal(result.factor, 0.81); assert.equal(result.processed_count, 1);
+    assert.equal(f.blocks()[0].updated_ms, range.end_ms); assert.equal(f.pending().length, 0);
+    const saved = { ...f.blocks()[0] };
+    assert.equal(f.learner.tick(), null); assert.deepEqual({ ...f.blocks()[0] }, saved);
+  }
+});
+
+test('23:45–00:00 hoort bij de vorige meetdag en kan na het laatste meetpunt meteen worden afgesloten', (t) => {
+  const f = fixture(t), end = localDayRange('2026-10-25').end_ms;
+  f.now = end - 10 * minute; f.forecast(end); f.sky(end);
+  const result = f.capture(end);
+  assert.equal(result.status, 'updated'); assert.equal(result.factor, 0.81);
+  assert.equal(f.blocks()[0].start_ms, end - quarter); assert.equal(f.blocks()[0].end_ms, end);
+  assert.equal(localDay(f.blocks()[0].start_ms), '2026-10-25'); assert.equal(f.pending().length, 0);
+});
+
+test('de minuutcontrole sluit de dag af zonder nachtelijke Growatt- of weeropvraag en stopt vóór de database sluit', (t) => {
+  const f = fixture(t); f.sky(); f.capture();
+  const cutoff = localDayRange(localDay(target)).end_ms;
+  f.now = cutoff - minute - 1;
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const candidates = t.mock.method(f.repository, 'pvCorrectionCandidates');
+  f.learner.start(); f.learner.start();
+  t.after(() => f.learner.stop());
+  f.now += minute; t.mock.timers.tick(minute);
+  assert.equal(f.blocks().length, 0);
+  f.now += minute; t.mock.timers.tick(minute);
+  assert.equal(f.blocks().length, 1); assert.equal(f.blocks()[0].updated_ms, f.now);
+  assert.equal(f.repository.countCalls('2026-10-20'), 0); assert.equal(f.repository.countCalls('2026-10-21'), 0);
+  f.learner.stop(); f.learner.stop();
+  const calls = candidates.mock.callCount();
+  f.now += hour; t.mock.timers.tick(hour);
+  assert.equal(candidates.mock.callCount(), calls);
+});
+
+test('herstart na een gemiste middernacht verwerkt de bewaarde invoer en negeert oude controletijden', (t) => {
+  const folder = mkdtempSync(join(tmpdir(), 'zonapi-day-end-'));
+  const f = fixture(t, join(folder, 'data.sqlite'));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  f.sky(); f.capture();
+  const original = f.pending()[0].candidate_json, cutoff = localDayRange(localDay(target)).end_ms;
+  f.db.prepare('UPDATE pv_correction_candidates SET ready_ms=0').run();
+  assert.equal(f.learner.learn().status, 'waiting_for_day_end'); assert.equal(f.blocks().length, 0);
+  f.db.prepare('UPDATE pv_correction_candidates SET ready_ms=?').run(cutoff + 7 * 86400000);
+  f.now = cutoff + 9 * hour; f.restart();
+  assert.equal(f.pending()[0].candidate_json, original);
+  f.learner.start(); f.learner.stop();
+  assert.equal(f.blocks().length, 1); assert.equal(f.blocks()[0].factor, 0.81);
+  assert.equal(f.blocks()[0].updated_ms, f.now); assert.equal(f.pending().length, 0);
+});
+
+test('de bewolkingsgrens wordt bij de dagafsluiting op de laatst opgeslagen uurpunten getoetst', (t) => {
+  const f = fixture(t); f.sky(); f.capture();
+  f.now += hour; f.sky(target, { cover: 1 });
+  assert.equal(f.finish().status, 'clouds_present'); assert.equal(f.blocks().length, 0);
+  f.now++; f.sky();
+  assert.equal(f.learner.tick().status, 'updated'); assert.equal(f.blocks()[0].factor, 0.81);
+});
+
+test('een geblokkeerd vorig etmaal blijft zichtbaar naast wachtende kwartieren van de lopende dag', (t) => {
+  const f = fixture(t); f.sky(target, { cover: 1 }); f.capture();
+  assert.equal(f.finish().status, 'clouds_present');
+  const next = target + 86400000;
+  f.now = next - 10 * minute; f.forecast(next); f.sky(next);
+  assert.equal(f.capture(next).status, 'clouds_present'); assert.equal(f.pending().length, 2);
+  f.settings.pv.automatic_correction.max_cloud_cover_percent = 1;
+  assert.equal(f.learner.tick().processed_count, 1);
+  assert.equal(f.blocks().length, 1); assert.equal(f.blocks()[0].end_ms, target);
+  assert.equal(f.pending().length, 1); assert.equal(f.pending()[0].end_ms, next);
+});
+
+test('een echt meer-modelantwoord bewaart dezelfde ICON-D2-bewolking voor de berekening na de meetdag', async (t) => {
+  const f = fixture(t); assert.equal(f.capture().status, 'waiting_for_day_end');
   const bounds = clearSkyBounds(target), times = f.conditionRows().map((row) => row.time_ms / 1000);
   const quarters = [];
   for (let time = bounds.from; time <= bounds.until; time += quarter) quarters.push(time / 1000);
@@ -137,6 +227,8 @@ test('een echt meer-modelantwoord gebruikt dezelfde heldere ICON-D2-data voor de
   const weather = createWeatherScheduler({ ...f, panelErrors: [], clock: () => f.now,
     source: async () => normalizeOpenMeteo(json, f.now), onForecast: () => { processed = f.learner.learn(); } });
   assert.equal((await weather.tick()).reason, 'ok');
+  assert.equal(processed.status, 'waiting_for_day_end'); assert.equal(f.blocks().length, 0);
+  processed = f.finish();
   assert.equal(processed.status, 'updated'); assert.equal(processed.factor, 0.81);
   assert.equal(f.pending().length, 0); assert.equal(f.blocks().length, 1);
   const stored = f.repository.weatherConditions(weatherLocationKey(f.settings.location), bounds.from, bounds.until);
@@ -207,7 +299,8 @@ test('de productiedienst berekent bij een grens van 100 procent ook met weercode
   const f = fixture(t);
   f.settings.pv.automatic_correction.max_cloud_cover_percent = 100;
   f.sky(target, { cover: 100, code: 3 });
-  const learned = f.capture();
+  assert.equal(f.capture().status, 'waiting_for_day_end');
+  const learned = f.finish();
   assert.equal(learned.status, 'updated'); assert.equal(learned.factor, 0.81);
   assert.equal(learned.clear_sky.max_allowed_cloud_cover_percent, 100);
   assert.equal(learned.clear_sky.max_cloud_cover_percent, 100);
@@ -219,10 +312,12 @@ test('de interne weerpagina en openbare correctieonderbouwing tonen de ingesteld
   const f = fixture(t);
   f.settings.pv.automatic_correction.max_cloud_cover_percent = 40;
   f.sky(target, { cover: 40, code: 3 });
-  assert.equal(f.capture().status, 'updated');
+  assert.equal(f.capture().status, 'waiting_for_day_end');
+  assert.equal(f.finish().status, 'updated');
+  f.sky(target + 86400000, { cover: 40, code: 3 });
   t.mock.method(Date, 'now', () => f.now);
   const weather = { status: () => ({ source: 'open-meteo', location_configured: true, poll_minutes: 120, used_requests: 0,
-    sunrise: iso(target - 2 * hour), sunset: iso(target + 10 * hour) }) };
+    sunrise: iso(localDayRange(localDay(f.now)).start_ms + 6 * hour), sunset: iso(localDayRange(localDay(f.now)).start_ms + 18 * hour) }) };
   const server = startHttpServer({ ...f, panelErrors: [], weather, homewizard: { status: () => ({}) } });
   await once(server, 'listening'); t.after(() => new Promise((resolve) => server.close(resolve)));
   const get = async (path) => {
@@ -251,9 +346,10 @@ test('een ruimere grens hervat een wachtende correctie na herstart op de oorspro
   const f = fixture(t, join(folder, 'data.sqlite'));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   f.capture(); f.sky(target, { cover: 40, code: 3 });
-  assert.equal(f.learner.learn().status, 'clouds_present');
+  f.capture(target + quarter);
+  assert.equal(f.finish().status, 'clouds_present');
   const modelKey = f.key();
-  assert.equal(f.pending().length, 1);
+  assert.equal(f.pending().length, 2);
   f.settings.pv.automatic_correction.max_cloud_cover_percent = 40;
   f.now++; f.restart();
   const learned = f.learner.learn();
@@ -263,9 +359,11 @@ test('een ruimere grens hervat een wachtende correctie na herstart op de oorspro
   const approved = { ...f.blocks()[0] };
   assert.equal(JSON.parse(approved.sampling_json).clear_sky.max_allowed_cloud_cover_percent, 40);
   f.settings.pv.automatic_correction.max_cloud_cover_percent = 10;
-  f.now++; f.sky(target + quarter, { cover: 40, code: 3 });
-  assert.equal(f.capture(target + quarter).status, 'clouds_present');
-  assert.equal(f.blocks().length, 1);
+  f.now = target + 86400000 - 10 * minute; f.forecast(target + 86400000);
+  f.sky(target + 86400000, { cover: 40, code: 3 });
+  assert.equal(f.capture(target + 86400000).status, 'waiting_for_day_end');
+  assert.equal(f.finish(target + 86400000).status, 'clouds_present');
+  assert.equal(f.blocks().length, 2);
   assert.deepEqual({ ...f.blocks()[0] }, approved);
   const display = {};
   renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
@@ -276,7 +374,7 @@ test('een ruimere grens hervat een wachtende correctie na herstart op de oorspro
 
 test('de productiedienst bewaart eerst het meetdrietal en berekent de factor pas na goedkeuring op de oorspronkelijke basis', (t) => {
   const f = fixture(t);
-  assert.equal(f.capture().status, 'clear_sky_data_missing');
+  assert.equal(f.capture().status, 'waiting_for_day_end');
   assert.equal(f.blocks().length, 0); assert.equal(f.pending().length, 1);
   const pending = JSON.parse(f.pending()[0].candidate_json);
   assert.equal(pending.predicted_w, 1000); assert.equal(pending.measured_w, 810);
@@ -287,14 +385,15 @@ test('de productiedienst bewaart eerst het meetdrietal en berekent de factor pas
   assert.ok(f.now < clearSkyBounds(target).until);
   f.forecast(target, 2000); // Het later ophalen van weerdata mag de opgeslagen basis niet verwisselen.
   f.sky();
-  const result = f.learner.learn();
+  assert.equal(f.learner.learn().status, 'waiting_for_day_end');
+  const result = f.finish();
   assert.equal(result.status, 'updated'); assert.equal(result.factor, 0.81); assert.equal(result.processed_count, 1);
   assert.equal(f.pending().length, 0);
   const block = f.blocks()[0], sampling = JSON.parse(block.sampling_json);
   assert.equal(block.predicted_w, 1000); assert.equal(block.measured_w, 810);
   assert.equal(sampling.used_samples, 2); assert.deepEqual(sampling.ignored_times, [iso(target)]);
   assert.equal(sampling.clear_sky.status, 'clear'); assert.equal(sampling.clear_sky.samples.length, 4);
-  assert.equal(sampling.clear_sky.uses_forecast, true);
+  assert.equal(sampling.clear_sky.uses_forecast, false);
   const stored = f.repository.pv(target - quarter, target);
   assert.ok(stored.every((row) => row.correction_factor === 0.81));
   assert.equal(stored.reduce((sum, row) => sum + row.power_w, 0), 810);
@@ -302,9 +401,9 @@ test('de productiedienst bewaart eerst het meetdrietal en berekent de factor pas
   assert.deepEqual({ ...f.blocks()[0] }, before);
 });
 
-test('voorspelde bewolking voorkomt een nieuwe factor; een heldere weerupdate hervat direct zonder tijdvenster', (t) => {
+test('bewolking boven de grens voorkomt ook na de meetdag een nieuwe factor; geldige weerdata hervatten daarna', (t) => {
   const f = fixture(t); f.capture(); f.sky(target, { cover: 1 });
-  const result = f.learner.learn();
+  const result = f.finish();
   assert.equal(result.status, 'clouds_present'); assert.equal(f.blocks().length, 0); assert.equal(f.pending().length, 1);
   const display = {};
   renderPvCorrection(display, createPvForecastModel(f.repository, f.settings, f.panels, f.now).status());
@@ -316,6 +415,7 @@ test('voorspelde bewolking voorkomt een nieuwe factor; een heldere weerupdate he
 test('een gewone weeropvraag verwerkt alle gereedstaande kwartieren na de transactie, zonder extra weerverzoeken', async (t) => {
   const f = fixture(t); f.capture(target, [800, 820, 840]); f.capture(target + quarter, [900, 920, 940]);
   assert.equal(f.pending().length, 2); assert.ok(f.now < clearSkyBounds(target + quarter).until);
+  f.now = localDayRange(localDay(target)).end_ms;
   let requests = 0, processed;
   const weather = createWeatherScheduler({ ...f, panelErrors: [], clock: () => f.now,
     source: async () => {
@@ -323,7 +423,7 @@ test('een gewone weeropvraag verwerkt alle gereedstaande kwartieren na de transa
       return { sun: [], conditions: f.conditionRows(target + quarter), rows: f.repository.forecast(target - quarter, target + 2 * quarter) };
     }, onForecast: () => { processed = f.learner.learn(); } });
   assert.equal((await weather.tick()).reason, 'ok');
-  assert.equal(requests, 1); assert.equal(f.repository.countCalls('2026-10-20'), 1);
+  assert.equal(requests, 1); assert.equal(f.repository.countCalls('2026-10-21'), 1);
   assert.equal(processed.processed_count, 2); assert.equal(f.pending().length, 0);
   assert.deepEqual(f.blocks().map((row) => row.factor), [0.82, 0.92]);
   assert.ok(f.blocks().every((row) => JSON.parse(row.sampling_json).clear_sky.status === 'clear'));
@@ -338,7 +438,8 @@ test('kandidaten en bewolking overleven herstart en logs wissen; v6-migratie bew
   assert.equal(f.pending().length, 1); assert.equal(f.repository.cloudInverterHistory(0, Infinity).length, measurements);
   f.db.prepare('UPDATE pv_correction_candidates SET ready_ms=?').run(clearSkyBounds(target).until);
   f.sky(); f.restart();
-  assert.ok(f.now < f.pending()[0].ready_ms, 'Een bewaard wachttijdstip uit de vorige versie mag niet blokkeren');
+  assert.equal(f.learner.learn().status, 'waiting_for_day_end');
+  f.now = localDayRange(localDay(target)).end_ms;
   assert.equal(f.learner.learn().status, 'updated'); assert.equal(f.blocks().length, 1);
   const block = { ...f.blocks()[0] };
   f.db.exec('DROP TABLE weather_conditions; DROP TABLE pv_correction_candidates; PRAGMA user_version=6');
@@ -363,6 +464,7 @@ test('uitschakelen of een ander paneelmodel publiceert geen wachtend blok en ver
 
 test('een mislukte cacheverversing houdt het kandidaatblok vast en publiceert geen halve correctie', (t) => {
   const f = fixture(t); f.capture(); f.sky();
+  f.now = localDayRange(localDay(target)).end_ms;
   const repository = { ...f.repository, savePv() { throw new Error('Testfout cacheverversing'); } };
   const learner = createPvCorrectionLearner({ ...f, repository, panelErrors: [], clock: () => f.now });
   assert.equal(learner.learn().status, 'error'); assert.equal(f.blocks().length, 0); assert.equal(f.pending().length, 1);
@@ -386,7 +488,7 @@ test('de interne weerpagina toont bewolking en de openbare correctiestatus geeft
   const f = fixture(t); f.capture(); f.sky();
   t.mock.method(Date, 'now', () => f.now);
   const weather = { status: () => ({ source: 'open-meteo', location_configured: true, poll_minutes: 120, used_requests: 0,
-    sunrise: iso(target - 2 * hour), sunset: iso(target + 10 * hour) }) };
+    sunrise: iso(localDayRange(localDay(f.now)).start_ms + 6 * hour), sunset: iso(localDayRange(localDay(f.now)).start_ms + 18 * hour) }) };
   const server = startHttpServer({ ...f, panelErrors: [], weather, homewizard: { status: () => ({}) } });
   await once(server, 'listening'); t.after(() => new Promise((resolve) => server.close(resolve)));
   const get = async (path) => {
@@ -400,28 +502,29 @@ test('de interne weerpagina toont bewolking en de openbare correctiestatus geeft
   assert.match(page, /Bewolking vandaag/); assert.match(page, /weather-conditions/);
   const snapshot = await get('/api/v1/dashboard');
   const status = snapshot.forecasts.days[0].automatic_correction;
-  assert.equal(status.last_attempt.status, 'clear_sky_data_missing');
-  assert.equal(status.last_attempt.clear_sky.uses_forecast, true);
-  assert.equal(Object.hasOwn(status.last_attempt.clear_sky, 'ready_at'), false);
+  assert.equal(status.last_attempt.status, 'waiting_for_day_end');
+  assert.equal(status.last_attempt.ready_at, '2026-10-20T22:00:00.000Z');
+  assert.equal(Object.hasOwn(status.last_attempt, 'clear_sky'), false);
   assert.doesNotMatch(JSON.stringify(snapshot), /INV000000|location_key|candidate_json|latitude|signature/);
   const display = {}; renderPvCorrection(display, status);
-  assert.match(display.textContent, /bewolkingsgegevens ontbreken/); assert.match(display.title, /08:00 tot 10:15/);
-  assert.equal(f.learner.learn().status, 'updated');
+  assert.match(display.textContent, /wachten tot de meetdag voorbij is/); assert.match(display.title, /21-10-2026.*00:00/);
+  assert.equal(f.finish().status, 'updated');
   const approvedSnapshot = await get('/api/v1/dashboard');
   const approved = approvedSnapshot.forecasts.days[0].automatic_correction;
   for (const [index, day] of approvedSnapshot.forecasts.days.entries()) {
-    const slot = day.slots.find((row) => Date.parse(row.end) === target + index * 86400000);
+    const slot = day.slots.find((row) => Date.parse(row.end) === target + (index + 1) * 86400000);
     assert.equal(slot.correction_computed_at, iso(f.now));
     assert.notEqual(slot.correction_computed_at, slot.correction_reference_end);
   }
   assert.equal(approved.latest.sampling.clear_sky.status, 'clear');
-  assert.equal(approved.latest.sampling.clear_sky.uses_forecast, true);
+  assert.equal(approved.latest.sampling.clear_sky.uses_forecast, false);
   renderPvCorrection(display, approved);
   assert.match(display.title, /Bewolking binnen 0%: 08:00–10:15/);
-  assert.match(display.title, /bewolkingsverwachting.*direct gebruikt/);
-  f.capture(target + 2 * hour);
+  assert.doesNotMatch(display.title, /bewolkingsverwachting.*direct gebruikt/);
+  f.now = target + 86400000 - 10 * minute; f.forecast(target + 86400000);
+  f.capture(target + 86400000);
   const waiting = (await get('/api/v1/dashboard')).forecasts.days[0].automatic_correction;
   renderPvCorrection(display, waiting);
-  assert.match(display.textContent, /Correctie -19%.*bewolkingsgegevens ontbreken/);
+  assert.match(display.textContent, /Correctie -19%.*wachten tot de meetdag voorbij is/);
   assert.equal((await get('/intern/api/v1/database/rows?table=pv_correction_candidates')).total_rows, 1);
 });
