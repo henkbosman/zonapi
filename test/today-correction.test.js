@@ -134,7 +134,7 @@ test('echte driepuntsmetingen worden iedere dag verzameld en pas na de dagafslui
   for (const [offset, quarters] of scenarios.entries()) {
     const first = target + offset * day;
     f.now = first - 10 * minute; f.freshen();
-    f.approve(first + quarter);
+    f.approve(first); f.approve(first + quarter);
     for (const [index, powers] of quarters.entries()) {
       const end = first + index * quarter;
       for (const [sample, power] of powers.entries()) {
@@ -146,7 +146,7 @@ test('echte driepuntsmetingen worden iedere dag verzameld en pas na de dagafslui
         }
       }
     }
-    assert.ok(f.now < clearSkyBounds(first).until);
+    assert.ok(f.now < localDayRange(localDay(first)).end_ms);
     const closed = f.closeDay(first);
     assert.equal(closed.status, 'updated'); assert.equal(closed.processed_count, 2); assert.equal(closed.clear_sky.uses_forecast, false);
     for (const [index, powers] of quarters.entries()) {

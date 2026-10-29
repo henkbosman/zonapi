@@ -26,7 +26,7 @@ test('drie uur terugblik en de toekomstige stappen volgen de bronklok en de Nede
       assert.equal(Math.floor(now / quarter) * quarter + Number(params.get('forecast_minutely_15')) * quarter, until);
       const hourUrl = forecastUrl(52, 5, days, 60, now);
       assert.equal(hourUrl.searchParams.get('forecast_hours'), params.get('forecast_hours'));
-      assert.equal(hourUrl.searchParams.has('minutely_15'), false); assert.equal(hourUrl.searchParams.has('past_minutely_15'), false);
+      assert.equal(hourUrl.searchParams.get('minutely_15'), 'cloud_cover,weather_code'); assert.equal(hourUrl.searchParams.get('past_minutely_15'), '12');
     }
   }
   const summer = forecastUrl(52, 5, 3, 15, Date.parse('2026-03-28T23:00:00Z'));
@@ -39,8 +39,9 @@ test('uurmodus gebruikt expliciet Best Match met drie uur terugblik en bewaart d
   const url = forecastUrl(52.442903, 5.854103, 3, 60);
   assert.equal(url.searchParams.get('models'), 'best_match');
   assert.equal(url.searchParams.get('past_hours'), '3');
-  assert.equal(url.searchParams.has('past_minutely_15'), false);
-  assert.equal(url.searchParams.get('hourly'), 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover,weather_code');
+  assert.equal(url.searchParams.get('past_minutely_15'), '12');
+  assert.equal(url.searchParams.get('minutely_15'), 'cloud_cover,weather_code');
+  assert.equal(url.searchParams.get('hourly'), 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation');
   assert.equal(url.searchParams.get('forecast_days'), '3');
   assert.equal(url.searchParams.has('past_days'), false);
   await assert.rejects(fetchOpenMeteo({ latitude: 52.442903, longitude: 5.854103, days: 3, resolutionMinutes: 60, fetcher: async (target) => {

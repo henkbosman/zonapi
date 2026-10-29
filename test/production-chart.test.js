@@ -82,6 +82,35 @@ function element(tagName) {
   };
 }
 
+test('weericonen gebruiken op alle drie dagen het eigen kwartierpunt en tonen geen waarde uit een buurkwartier', () => {
+  const before = globalThis.document;
+  globalThis.document = { createElementNS: (_, tag) => element(tag), createElement: (tag) => element(tag) };
+  try {
+    for (const width of [280, 1180]) for (const dayIndex of [0, 1, 2]) {
+      const start = Date.parse('2026-10-29T09:00:00Z') + dayIndex * 86400000;
+      const at = (index) => new Date(start + index * 900000).toISOString();
+      const conditions = { resolution_minutes: 15, time_basis: 'instant', rows: [
+        { time: at(-1), condition: 'cloudy', cloud_cover_percent: 100 },
+        { time: at(0), condition: 'clear', cloud_cover_percent: 0 },
+        { time: at(1), condition: 'cloudy', cloud_cover_percent: 100 },
+        { time: at(2), condition: 'partly_cloudy', cloud_cover_percent: 20 },
+        { time: at(4), condition: 'clear', cloud_cover_percent: 0 }
+      ] };
+      const slots = Array.from({ length: 4 }, (_, index) => ({ start: at(index), end: at(index + 1), power_w: 1000 }));
+      const container = element('div'); container.clientWidth = width;
+      drawProductionChart(container, { sunrise: at(0), sunset: at(4), now: at(1), points: [] }, slots, { forecastOnly: dayIndex > 0, conditions });
+      const svg = container.children[0], strip = svg.children.find((node) => 'data-weather-icons' in node.attributes);
+      const icons = strip.children.filter((node) => 'data-weather-time' in node.attributes);
+      assert.deepEqual(icons.map((node) => node.attributes['data-weather-source-time']), [at(0), at(1), at(2), at(3)]);
+      assert.deepEqual(icons.map((node) => node.attributes['data-weather-condition']), ['clear', 'cloudy', 'partly_cloudy', 'unknown']);
+      assert.ok(icons.every((node) => /Kwartierpunt:/.test(node.children[0].textContent)));
+      assert.match(icons[0].children[0].textContent, /10:00–10:15.*0% bewolking.*Kwartierpunt:.*10:00/);
+      const dots = svg.children.filter((node) => node.attributes['data-series'] === 'forecast');
+      assert.deepEqual(icons.map((node) => node.attributes['data-weather-time']), dots.map((node) => node.attributes['data-time']));
+    }
+  } finally { globalThis.document = before; }
+});
+
 test('alle daggrafieken kleuren uitsluitend echte correctiekwartieren groen, inclusief factor 0 en 1, met afkapping op de zonranden', () => {
   const before = globalThis.document;
   globalThis.document = { createElementNS: (_, tag) => element(tag), createElement: (tag) => element(tag) };

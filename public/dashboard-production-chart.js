@@ -19,7 +19,7 @@ function drawSun(group, cx, cy, radius) {
   }
 }
 
-/** Plaatst boven elk zichtbaar kwartier een weericoon met oorspronkelijke uurbron in de tooltip; input: SVG, kwartierpunten, tijdprojectie en plotranden; output: iconenrij boven het vermogensplot. */
+/** Plaatst boven elk zichtbaar kwartier een weericoon met de oorspronkelijke brontijd in de tooltip; input: SVG, kwartierpunten, tijdprojectie en plotranden; output: iconenrij boven het vermogensplot. */
 function drawWeatherIcons(svg, points, x, left, right) {
   const strip = node('g', { 'data-weather-icons': '', role: 'group', 'aria-label': 'Bewolkingsverwachting per kwartier' });
   strip.append(node('rect', { x: left - 9, y: 23, width: right - left + 18, height: 29, rx: 6, fill: '#f4f7f3' }));
@@ -30,7 +30,7 @@ function drawWeatherIcons(svg, points, x, left, right) {
     const model = { icon_d2: 'ICON-D2', best_match: 'Best Match' }[point.model] ?? 'onbekend';
     const fetched = Number.isFinite(point.fetchedMs) ? ` · Opgehaald: ${weatherSourceTime.format(new Date(point.fetchedMs))}` : '';
     const code = Number.isInteger(point.weatherCode) ? ` · Weercode: ${point.weatherCode}` : '';
-    title.textContent = `${timeLabel.format(new Date(point.ms - 900000))}–${timeLabel.format(new Date(point.ms))} · ${name}${cover} · Uurverwachting: ${weatherSourceTime.format(new Date(point.sourceMs))} · Model: ${model}${fetched}${code}${point.stale ? ' · Verouderde weerdata' : ''}`;
+    title.textContent = `${timeLabel.format(new Date(point.ms - 900000))}–${timeLabel.format(new Date(point.ms))} · ${name}${cover} · ${point.resolutionMinutes === 15 ? 'Kwartierpunt' : 'Uurverwachting'}: ${weatherSourceTime.format(new Date(point.sourceMs))} · Model: ${model}${fetched}${code}${point.stale ? ' · Verouderde weerdata' : ''}`;
     const group = node('g', { transform: `translate(${x(point.ms) - 8},29) scale(0.666667)`, role: 'img', 'aria-label': title.textContent,
       'data-weather-time': new Date(point.ms).toISOString(), 'data-weather-source-time': new Date(point.sourceMs).toISOString(), 'data-weather-condition': point.condition });
     group.append(title);

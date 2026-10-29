@@ -72,7 +72,7 @@ test('compacte aanvraag is gelijk aan de getoonde en gelogde URL en houdt drie d
     direct_normal_irradiance_best_match: times.map(() => 0), diffuse_radiation_best_match: times.map(() => 200),
     cloud_cover_best_match: times.map(() => 0), weather_code_best_match: times.map(() => 0),
     cloud_cover_icon_d2: times.map(() => 0), weather_code_icon_d2: times.map(() => 0) },
-    minutely_15: { time: quarters, shortwave_radiation_best_match: quarters.map(() => 250),
+    minutely_15: { time: quarters, cloud_cover_best_match: quarters.map(() => 0), weather_code_best_match: quarters.map(() => 0), shortwave_radiation_best_match: quarters.map(() => 250),
       direct_normal_irradiance_best_match: quarters.map(() => 0), diffuse_radiation_best_match: quarters.map(() => 250) },
     daily: { sunrise_best_match: days.map((day) => Date.parse(`${day}T06:00:00Z`) / 1000),
       sunset_best_match: days.map((day) => Date.parse(`${day}T16:00:00Z`) / 1000) } };

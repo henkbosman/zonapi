@@ -49,7 +49,8 @@ export function renderPvCorrection(element, correction) {
     if (attempt.clear_sky) {
       const sky = attempt.clear_sky;
       details.push(`Maximaal ${sky.max_allowed_cloud_cover_percent ?? 0}% bewolking van ${time.format(new Date(sky.window_start))} tot ${time.format(new Date(sky.window_end))}`);
-      details.push(`Controle van de omringende uurpunten tot ${time.format(new Date(sky.checked_until))}`);
+      details.push(sky.checked_from === sky.checked_until ? `Bewolkingspunt in dit kwartier: ${time.format(new Date(sky.checked_from))}`
+        : `Gecontroleerde bronpunten: ${time.format(new Date(sky.checked_from))}–${time.format(new Date(sky.checked_until))}`);
       if (Number.isFinite(sky.max_cloud_cover_percent)) details.push(`Hoogste bewolking: ${sky.max_cloud_cover_percent}%`);
     }
   }

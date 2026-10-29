@@ -6,7 +6,7 @@ import { productionFreshnessMinutes } from '../production/freshness.js';
 
 const iso = (ms) => new Date(ms).toISOString();
 
-/** Bereidt een Open-Meteo-kwartier voor uit drie volledige Growatt-totalen op t-5/t/t+5; input: opslag, model, fouten, bronrijen, ontvangsttijd en optionele rekenmodus; output: wachtstatus en gebruikte/gefilterde metingen. De productiedienst beoordeelt daarna het onbewolkte venster. */
+/** Bereidt een Open-Meteo-kwartier voor uit drie volledige Growatt-totalen op t-5/t/t+5; input: opslag, model, fouten, bronrijen, ontvangsttijd en optionele rekenmodus; output: wachtstatus en gebruikte/gefilterde metingen. De productiedienst toetst na de meetdag het eigen bewolkingspunt. */
 export function learnQuarterCorrection(repository, settings, panels, panelErrors, rows, now, { defer = true } = {}) {
   const config = automaticCorrectionConfig(settings);
   if (!config.enabled) return { status: 'disabled' };

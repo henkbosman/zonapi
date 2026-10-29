@@ -6,13 +6,12 @@ export function forecastUrl(latitude, longitude, days, resolutionMinutes = 15, n
   const until = localDayRange(addCalendarDays(localDay(now), days - 1)).end_ms;
   const hour = 3600000, quarter = 900000;
   const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.search = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), hourly: 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation,cloud_cover,weather_code', daily: 'sunrise,sunset', timezone: 'Europe/Amsterdam', timeformat: 'unixtime', models: 'best_match', forecast_days: String(days),
+  url.search = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), hourly: 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation', daily: 'sunrise,sunset', timezone: 'Europe/Amsterdam', timeformat: 'unixtime', models: 'best_match', forecast_days: String(days),
     past_hours: '3', forecast_hours: String((until - Math.floor(now / hour) * hour) / hour) }).toString();
-  if (resolutionMinutes === 15) {
-    url.searchParams.set('minutely_15', 'shortwave_radiation,direct_normal_irradiance,diffuse_radiation');
-    url.searchParams.set('past_minutely_15', '12');
-    url.searchParams.set('forecast_minutely_15', String((until - Math.floor(now / quarter) * quarter) / quarter));
-  }
+  const radiation = resolutionMinutes === 15 ? ['shortwave_radiation', 'direct_normal_irradiance', 'diffuse_radiation'] : [];
+  url.searchParams.set('minutely_15', [...radiation, 'cloud_cover', 'weather_code'].join(','));
+  url.searchParams.set('past_minutely_15', '12');
+  url.searchParams.set('forecast_minutely_15', String((until - Math.floor(now / quarter) * quarter) / quarter));
   return url;
 }
 
@@ -43,7 +42,7 @@ function radiationRows(series, model, stepSeconds, fetchedMs) {
   return rows;
 }
 
-/** Leest uitsluitend het Best Match-paar of de enkelmodelvelden; input: uurreeks en ontvangsttijd; output: oorspronkelijke uurpunten zonder aanvulling uit ICON-D2 of een andere antwoordvorm. */
+/** Leest uitsluitend het Best Match-paar of de enkelmodelvelden; input: kwartierreeks en ontvangsttijd; output: oorspronkelijke kwartierpunten zonder aanvulling uit uurdata, ICON-D2 of een andere antwoordvorm. */
 function conditionRows(series, fetchedMs) {
   if (!Array.isArray(series?.time)) return [];
   const namedBest = Object.hasOwn(series, 'cloud_cover_best_match') || Object.hasOwn(series, 'weather_code_best_match');
@@ -72,7 +71,7 @@ export function normalizeOpenMeteo(json, fetchedMs, resolutionMinutes = 15) {
     const sunset = Number.isFinite(sets[index]) ? sets[index] * 1000 : NaN;
     if (Number.isFinite(sunrise) && Number.isFinite(sunset) && sunset > sunrise) sun.push({ day: localDay(sunrise), sunrise_ms: sunrise, sunset_ms: sunset });
   }
-  return { rows, sun, conditions: conditionRows(json.hourly, fetchedMs) };
+  return { rows, sun, conditions: conditionRows(json.minutely_15, fetchedMs) };
 }
 
 /** Haalt uitsluitend Open-Meteo-voorspellingen op; input: locatie, dagen, optionele resolutie en fetch-functie; output: genormaliseerde rijen en HTTP-metadata of fout met metadata. */

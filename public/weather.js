@@ -70,7 +70,7 @@ function renderCalls(data) {
   element('#page-info').textContent = data.calls.rows.length ? `${data.calls.offset + 1}–${data.calls.offset + data.calls.rows.length}` : 'Geen resultaten';
 }
 
-/** Toont oorspronkelijke bewolkingsuurpunten, zonder ze naar instralingskwartieren te verschuiven; input: weeroverzicht; output: void. */
+/** Toont oorspronkelijke bewolkingskwartierpunten op hun eigen tijdstip; input: weeroverzicht; output: void. */
 function renderConditions(data) {
   const body = element('#weather-conditions');
   element('#correction-cloud-limit').textContent = `Maximale bewolking voor correcties: ${data.conditions?.max_allowed_cloud_cover_percent ?? 0}%`;

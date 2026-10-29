@@ -295,7 +295,7 @@ test('vijfminutenopvragen met vertraagde Growatt-antwoorden sturen de driepuntsc
   assert.equal(calls, 16);
   assert.equal(f.pattern().length, 0);
   assert.equal(cloud.status().forecast_correction.status, 'waiting_for_day_end');
-  assert.ok(f.now < clearSkyBounds(target).until);
+  assert.ok(f.now < localDayRange(localDay(target)).end_ms);
   assert.equal(f.finish(learner).status, 'updated');
   assert.equal(f.pattern().length, 1);
   assert.equal(cloud.status().forecast_correction.status, 'updated');
@@ -369,7 +369,7 @@ test('nieuwe weerdata bereidt invoer na de weertransactie voor; publicatie volgt
       ghi: 125, dni: 0, dhi: 125, fetched_ms: f.now }], conditions, sun: [] }),
     onForecast: (at) => { callbacks++; assert.equal(at, f.now); assert.equal(learner.learn(null, at).status, 'waiting_for_day_end'); } });
   assert.equal((await weather.refresh()).reason, 'ok'); assert.equal(callbacks, 1);
-  assert.equal(f.pattern().length, 0); assert.ok(f.now < bounds.until);
+  assert.equal(f.pattern().length, 0); assert.ok(f.now < localDayRange(localDay(target)).end_ms);
   assert.equal(f.finish(learner).status, 'updated');
   assert.equal(f.pattern().length, 1);
   assert.equal(f.pattern()[0].factor, 0.82); assert.equal(f.repository.diagnosticState('growatt', 'pv_correction').status, 'updated');

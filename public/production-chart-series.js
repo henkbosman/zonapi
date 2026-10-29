@@ -40,16 +40,17 @@ export function blockCorrectionComputedAt(slots, ms) {
   return Number.isFinite(computed) ? computed : null;
 }
 
-/** Koppelt elk zichtbaar kwartiereinde aan het dichtstbijzijnde oorspronkelijke uurpunt bij het kwartiermidden; input: bewolkingsuurpunten en zonuren; output: kwartiericonen zonder interpolatie of hergebruik over ontbrekende uren. */
+/** Koppelt elk zichtbaar kwartier aan zijn eigen bewolkingspunt op het begin; input: bewolkingspunten en zonuren; output: iconen zonder lokale interpolatie, met compatibiliteit voor oudere uursnapshots. */
 export function quarterWeatherPoints(conditions, start, end) {
   const hour = 3600000, quarter = 900000;
   const byTime = new Map((conditions?.rows ?? []).map((row) => [Date.parse(row.time), row]));
   const points = [];
   for (let ms = Math.floor(start / quarter) * quarter + quarter; ms <= end; ms += quarter) {
-    const sourceMs = Math.round((ms - quarter / 2) / hour) * hour;
+    const resolutionMinutes = conditions?.resolution_minutes === 15 ? 15 : 60;
+    const sourceMs = resolutionMinutes === 15 ? ms - quarter : Math.round((ms - quarter / 2) / hour) * hour;
     const row = byTime.get(sourceMs);
     const condition = ['clear', 'partly_cloudy', 'cloudy'].includes(row?.condition) ? row.condition : 'unknown';
-    points.push({ ms, sourceMs, condition, cloudCover: row?.cloud_cover_percent, weatherCode: row?.weather_code,
+    points.push({ ms, sourceMs, resolutionMinutes, condition, cloudCover: row?.cloud_cover_percent, weatherCode: row?.weather_code,
       model: row?.weather_model, fetchedMs: Date.parse(row?.fetched_at), stale: row?.stale === true });
   }
   return points;

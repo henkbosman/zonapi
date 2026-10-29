@@ -123,7 +123,7 @@ test('de drie daggrafieken volgen bewolkingspercentages met veilige bronmetadata
   const snapshot = await f.get('/api/v1/dashboard'), internal = await f.get('/intern/api/v1/forecast/days');
   for (let day = 0; day < 3; day++) {
     const conditions = snapshot.forecasts.days[day].conditions;
-    assert.equal(conditions.time_basis, 'instant'); assert.equal(conditions.resolution_minutes, 60);
+    assert.equal(conditions.time_basis, 'instant'); assert.equal(conditions.resolution_minutes, 15);
     assert.equal(conditions.rows.length, 1);
     assert.equal(conditions.rows[0].condition, ['clear', 'partly_cloudy', 'cloudy'][day]);
     assert.equal(conditions.rows[0].cloud_cover_percent, day * 50);

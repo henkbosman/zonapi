@@ -12,7 +12,7 @@ export function createClearSkyStore(db) {
     /** Bewaart één modelpunt zonder ontbrekende waarden als nul te behandelen; input: locatie en bronpunt; output: SQLite-resultaat. */
     saveWeatherCondition(location, row) { return condition.run(location, row.time_ms, row.source, row.model ?? null,
       row.cloud_cover ?? null, row.weather_code ?? null, row.fetched_ms); },
-    /** Leest oorspronkelijke uurpunten; input: locatie en inclusieve tijdgrenzen; output: tijdgeordende modelpunten. */
+    /** Leest oorspronkelijke bewolkingspunten; input: locatie en inclusieve tijdgrenzen; output: tijdgeordende modelpunten. */
     weatherConditions(location, from, to) {
       return db.prepare('SELECT * FROM weather_conditions WHERE location_key=? AND time_ms>=? AND time_ms<=? ORDER BY time_ms').all(location, from, to);
     },

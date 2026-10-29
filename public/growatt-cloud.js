@@ -30,7 +30,7 @@ export function renderGrowattCloud(cloud) {
   if (correction) correction.title = cloud.forecast_correction?.sampling?.samples.map((sample) => `${time(sample.time)} · ${Math.round(sample.power_w)} W${sample.used ? '' : ' · genegeerd'}`).join('\n') ?? '';
   if (correction && cloud.forecast_correction?.clear_sky) {
     const sky = cloud.forecast_correction.clear_sky;
-    correction.title += `${correction.title ? '\n' : ''}Maximaal ${sky.max_allowed_cloud_cover_percent ?? 0}% bewolking: ${time(sky.window_start)}–${time(sky.window_end)}; controle tot ${time(sky.checked_until)}`;
+    correction.title += `${correction.title ? '\n' : ''}Maximaal ${sky.max_allowed_cloud_cover_percent ?? 0}% bewolking: ${time(sky.window_start)}–${time(sky.window_end)}; bronpunt ${time(sky.checked_from)}`;
     if (sky.uses_forecast) correction.title += '\nDe bewolkingsverwachting voor de komende uren is direct gebruikt.';
   }
   document.getElementById('cloud-poll').disabled = !cloud.enabled || !cloud.configured || cloud.fetching;
