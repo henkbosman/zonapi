@@ -194,10 +194,10 @@ test('nieuwe weerdata behoudt de eigen correctiereferentie, zonder de omliggende
   assert.equal(f.value(target + quarter).power_w, 2000); assert.equal(f.value(target + quarter).correction_factor, 1);
   assert.equal(f.value(target + 86400000).base_power_w, 2000); assert.equal(f.value(target + 86400000).power_w, 1600);
   assert.equal(f.repository.pv(target + 86400000 - quarter, target + 86400000).reduce((sum, row) => sum + row.power_w, 0), 1600);
-  assert.equal(f.learn(800, target, f.now + 1000).factor, 0.4);
-  assert.equal(f.value(target).power_w, 800); assert.equal(f.value(target).base_power_w, 2000);
+  assert.equal(f.learn(800, target, f.now + 1000).factor, 0.8);
+  assert.equal(f.value(target).power_w, 800); assert.equal(f.value(target).base_power_w, 1000);
   assert.equal(f.value(target + quarter).power_w, 2000);
-  assert.equal(f.value(target + 86400000).power_w, 800);
+  assert.equal(f.value(target + 86400000).power_w, 1600);
 });
 
 test('uurterugval wordt voor één eigen correctie gesplitst; de drie overige kwartieren blijven ongecorrigeerd', (t) => {

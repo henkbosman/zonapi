@@ -1,5 +1,5 @@
 import { attachTimeCursor } from './chart-cursor.js';
-import { forecastLinePoints, lineValueAt, canConnectPoints, clockAxisTicks, blockCorrectionAt, blockCorrectionComputedAt, quarterWeatherPoints } from './production-chart-series.js';
+import { forecastLinePoints, lineValueAt, canConnectPoints, clockAxisTicks, blockCorrectionAt, blockCorrectionComputedAt, blockCorrectionReferenceAt, quarterWeatherPoints } from './production-chart-series.js';
 
 const timeLabel = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit' });
 const preciseTime = new Intl.DateTimeFormat('nl-NL', { timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -92,7 +92,10 @@ function drawLine(svg, points, x, y, color, maxGapMs, { base = false } = {}) {
       const source = point.source_resolution_minutes > (point.interval_end_ms - point.interval_start_ms) / 60000 ? ` · bron ${point.source_resolution_minutes} min` : '';
       const correction = !base && Number.isFinite(point.correction_factor) ? ` · Correctie ${correctionLabel((point.correction_factor - 1) * 100)}` : '';
       const computed = !base && Number.isFinite(point.correction_computed_ms) ? ` · Correctie berekend: ${correctionDate.format(new Date(point.correction_computed_ms))}` : '';
-      title.textContent = `${timeLabel.format(new Date(point.ms))} · ${Math.round(point.value)} W${base ? ' · Zonder correctie' : ''}${correction} · Gemiddelde ${timeLabel.format(new Date(point.sample_start_ms))}–${timeLabel.format(new Date(point.sample_end_ms))}${source}${computed}`;
+      const reference = !base && Number.isFinite(point.reference_end_ms) ? ` · Broncorrectie: ${correctionDate.format(new Date(point.reference_end_ms))}${Number.isFinite(point.reference_start_ms) ? ` (vanaf ${timeLabel.format(new Date(point.reference_start_ms))})` : ''}` : '';
+      const learned = !base && Number.isFinite(point.reference_predicted_w) && Number.isFinite(point.reference_measured_w)
+        ? ` · Leerbasis ${Math.round(point.reference_predicted_w)} W · Leermeting ${Math.round(point.reference_measured_w)} W` : '';
+      title.textContent = `${timeLabel.format(new Date(point.ms))} · ${Math.round(point.value)} W${base ? ' · Zonder correctie' : ''}${correction} · Gemiddelde ${timeLabel.format(new Date(point.sample_start_ms))}–${timeLabel.format(new Date(point.sample_end_ms))}${source}${computed}${reference}${learned}`;
     }
     circle.append(title);
     svg.append(circle);
@@ -117,6 +120,7 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
   const forecast = forecastLinePoints(slots, start, end);
   const baseForecast = forecastLinePoints(slots.map((slot) => ({ ...slot, power_w: slot.base_power_w })), start, end);
   const hasCorrection = slots.some((slot) => Number.isFinite(slot.power_w) && Number.isFinite(slot.automatic_correction_factor));
+  const hasReference = slots.some((slot) => Number.isFinite(Date.parse(slot.correction_reference_end)));
   const weather = conditions ? quarterWeatherPoints(conditions, start, end) : [];
   const width = Math.max(280, container.clientWidth || 780, weather.length ? Math.ceil((end - start) / 900000 * 18) + 70 : 0), height = weather.length ? 400 : 360;
   const svg = node('svg', { viewBox: `0 0 ${width} ${height}`, width, height, preserveAspectRatio: 'xMinYMin meet', role: 'group',
@@ -174,6 +178,10 @@ export function drawProductionChart(container, day, slots, { forecastOnly = fals
     ...(hasCorrection ? [{ label: 'Correctie', color: '#996200', valueAt: (ms) => blockCorrectionAt(slots, ms), formatValue: correctionLabel }] : []),
     ...(hasCorrection ? [{ label: 'Correctie berekend', color: '#607477', valueAt: (ms) => blockCorrectionComputedAt(slots, ms),
       formatValue: (ms) => correctionDate.format(new Date(ms)), multiline: true }] : []),
+    ...(hasReference ? [{ label: 'Broncorrectie', color: '#607477', valueAt: (ms) => blockCorrectionReferenceAt(slots, ms).endMs,
+      formatValue: (ms) => correctionDate.format(new Date(ms)), multiline: true },
+    { label: 'Leerbasis', color: '#607477', valueAt: (ms) => blockCorrectionReferenceAt(slots, ms).predictedW },
+    { label: 'Leermeting', color: '#137771', valueAt: (ms) => blockCorrectionReferenceAt(slots, ms).measuredW }] : []),
     ...(hasBaseload ? [{ label: 'Basislast', color: '#c64040', valueAt: () => baseloadW }] : [])
   ]);
   container.append(svg);

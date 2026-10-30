@@ -1,37 +1,31 @@
 ZonAPI
-Versie: 2026-10-29-Kwartierbewolking1
+Versie: 2026-10-30-Correctiebasis1
 
-Bewolkingscontrole uitsluitend voor het eigen correctiekwartier.
+Dezelfde oorspronkelijke voorspelbasis voor grafiek en kwartiercorrectie.
 
-- De controle van het uur vóór en na het correctiekwartier vervalt.
-- Voor 09:00–09:15 wordt uitsluitend het Best Match-bewolkingspunt van
-  09:00 getoetst aan pv.automatic_correction.max_cloud_cover_percent.
-- De grenswaarde zelf blijft toegestaan. Een bewolkt buurkwartier
-  blokkeert de correctie van het eigen kwartier niet.
-- Bij ontbrekende of ongeldige eigen gegevens blijft de nieuwe correctie
-  wachten; buurkwartieren worden niet overgenomen of lokaal geïnterpoleerd.
-- Open-Meteo levert bewolking en weercode via minutely_15, ook bij
-  uurinstraling. Alles blijft in één verzoek met models=best_match,
-  drie uur terugblik en de bestaande toekomstige kalendergrenzen.
-- cloud_cover is een momentane modelwaarde op het kwartierbegin, geen
-  gemeten gemiddelde over alle vijftien minuten. Open-Meteo kan daarvoor
-  modelinterpolatie gebruiken.
-- Dagafsluiting na 00:00 Nederlandse tijd en de bestaande bewolkingsgrens
-  blijven gelden. Iedere correctie blijft onafhankelijk.
-- Weericonen en correctiecontrole gebruiken hetzelfde kwartierpunt;
-  tooltips tonen de oorspronkelijke tijd. Ook wintertijduren blijven apart.
-- Nieuwe onderbouwingen bevatten één bronpunt, resolutie 15 minuten en
-  uitsluitend de kwartiergrenzen. Bestaande correcties blijven behouden.
-- Lichtgroene correctiekolommen en oorspronkelijke voorspelbasis blijven.
+- Een latere weerupdate kon een andere ongecorrigeerde bron opleveren dan
+  de historische basis die de daggrafiek bewaarde. De correctie kon daardoor
+  een percentage tonen dat niet paste bij de zichtbare voorspelling.
+- De leerfunctie gebruikt nu dezelfde basis als de grafiek, met oorspronkelijke
+  paneelgroepen en GTI uit een volledige cache voor het actieve paneelmodel.
+- Bij ontbrekende, onvolledige of niet passende cache gebruiken beide routes
+  de ongecorrigeerde bron. Bestaande automatische factoren worden niet gestapeld.
+- De popup toont Broncorrectie, Leerbasis en Leermeting; de punttooltip noemt
+  het oorspronkelijke bronkwartier, inclusief datum. Zo is ook zichtbaar of een
+  factor afkomstig is van gisteren of een oudere geschikte meetdag.
+- Er is in de klokregressies geen vaste verschuiving van twee uur gevonden.
+  Een correctie op 09:45 blijft op 09:45, ook bij andere servertijdzones,
+  herstart en zomer-/wintertijd. Er is geen vaste tijdverschuiving toegevoegd.
+- Bestaande goedgekeurde factoren en kandidaten blijven behouden. Oude factoren
+  worden niet blind verplaatst of herberekend; de opgeslagen bronwaarden zijn
+  nu zichtbaar, maar de oorspronkelijke zichtbare basis kan al overschreven zijn.
+- Best Match, drie uur terugblik, kwartierbewolking, dagafsluiting, groene
+  correctiekolommen en dagelijkse apparaatadviezen blijven in gebruik.
 
 Bestaande installatie: stop ZonAPI, vervang src/ en public/ en herstart.
-Je hoeft settings.json niet aan te passen. Behoud je eigen config/ en data/.
-Nieuwe kwartierbewolking wordt bij de volgende weeropvraag opgehaald,
-of via Nu ophalen op de interne Weer-pagina. Oudere uurpunten worden niet
-gebruikt om ontbrekende kwartierpunten te verzinnen.
+Instellingen wijzigen is niet nodig. Behoud je eigen config/ en data/.
 Schema blijft 7. De update-ZIP bevat geen config/ of database.
 Caddyfile en HTTP-poort 3002 zijn ongewijzigd.
 
-293 tests slagen, inclusief onafhankelijke buurkwartieren, ontbrekende
-eigen gegevens, bewolkingsgrens, dagafsluiting, kwartiericonen, herstart,
-zomer-/wintertijd, drie uur terugblik en behoud van correctiebasis.
+300 tests slagen, inclusief oorspronkelijke correctiebasis, klokkwartieren,
+herstart, drie hosttijdzones, zomer-/wintertijd, popup en openbare afscherming.

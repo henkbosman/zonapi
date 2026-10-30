@@ -215,9 +215,9 @@ test('dezelfde drie metingen worden niet opnieuw gestapeld en nieuwe weerdata ge
   assert.equal(f.pattern()[0].signature, signature);
   assert.equal(f.pattern()[0].updated_ms, computed);
   f.forecast(2000, f.now);
-  assert.equal(f.learn().factor, 0.41);
+  assert.equal(f.learn().factor, 0.82);
   assert.equal(f.pattern()[0].measured_w, 820);
-  assert.equal(f.pattern()[0].predicted_w, 2000);
+  assert.equal(f.pattern()[0].predicted_w, 1000);
   assert.equal(f.pattern().length, 1);
 });
 

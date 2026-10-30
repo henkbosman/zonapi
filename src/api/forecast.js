@@ -13,6 +13,8 @@ export function forecastResponse(rows, panels, panelErrors, location, now, stale
       base_power_w: result?.base_power_w ?? result?.power_w ?? null, automatic_correction_factor: result?.correction_factor ?? 1,
       correction_source: result?.correction_source ?? 'none', correction_reference_start: result?.correction_reference_start ?? null,
       correction_reference_end: result?.correction_reference_end ?? null,
+      correction_reference_predicted_w: result?.correction_reference_predicted_w ?? null,
+      correction_reference_measured_w: result?.correction_reference_measured_w ?? null,
       correction_computed_at: result?.correction_computed_at ?? null, groups: result?.groups ?? null };
   });
   const status = model?.status();

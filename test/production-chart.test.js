@@ -389,3 +389,37 @@ test('mouseover leest uitsluitend de correctie van het eigen blok en mengt geen 
   assert.equal(blockCorrectionAt(slots, start - 1), null);
   assert.equal(blockCorrectionAt(slots, start + 2700001), null);
 });
+
+test('de popup toont de echte broncorrectie, leerbasis en leermeting op alle dagen zonder ze tussen kwartieren te mengen', () => {
+  const before = globalThis.document;
+  globalThis.document = { createElementNS: (_, tag) => element(tag), createElement: (tag) => element(tag) };
+  try {
+    for (const width of [280, 780, 1180]) for (const day of [0, 1, 2]) {
+      const start = Date.parse('2026-10-30T10:30:00Z') + day * 86400000;
+      const at = (offset) => new Date(start + offset * 900000).toISOString();
+      const slots = [0.70135, 1.079].map((factor, index) => ({ start: at(index), end: at(index + 1), power_w: 2300 * factor,
+        base_power_w: 2300, automatic_correction_factor: factor, correction_source: 'same_clock_quarter',
+        correction_reference_start: index ? '2026-10-29T10:45:00Z' : '2026-10-29T10:30:00Z',
+        correction_reference_end: index ? '2026-10-29T11:00:00Z' : '2026-10-29T10:45:00Z',
+        correction_reference_predicted_w: index ? 1000 : 2000, correction_reference_measured_w: index ? 1079 : 1402.7,
+        correction_computed_at: '2026-10-29T23:00:10Z' }));
+      const container = element('div'); container.clientWidth = width;
+      drawProductionChart(container, { sunrise: at(0), sunset: at(2), now: at(0), points: [] }, slots,
+        { forecastOnly: day > 0, baseloadW: 400, conditions: { resolution_minutes: 15, rows: [] } });
+      const svg = container.children[0], target = svg.children.find((child) => child.attributes.role === 'slider');
+      target.listeners.keydown({ key: 'End', preventDefault() {} });
+      assert.match(target.attributes['aria-valuetext'], /Correctie: \+7,9%/);
+      assert.match(target.attributes['aria-valuetext'], /Broncorrectie: 29-10-2026, 12:00/);
+      assert.match(target.attributes['aria-valuetext'], /Leerbasis: 1.000 W, Leermeting: 1.079 W/);
+      target.listeners.keydown({ key: 'ArrowLeft', preventDefault() {} });
+      assert.match(target.attributes['aria-valuetext'], /Broncorrectie: 29-10-2026, 11:45/);
+      assert.match(target.attributes['aria-valuetext'], /Leerbasis: 2.000 W, Leermeting: 1.403 W/);
+      const dots = svg.children.filter((child) => child.attributes['data-series'] === 'forecast');
+      assert.match(dots[0].children[0].textContent, /Broncorrectie: 29-10-2026, 11:45 \(vanaf 11:30\).*Leerbasis 2000 W.*Leermeting 1403 W/);
+      const values = svg.children.find((child) => 'data-chart-cursor' in child.attributes).children.find((child) => 'data-chart-values' in child.attributes);
+      const box = values.children[0];
+      assert.ok(Number(box.attributes.y) + Number(box.attributes.height) <= Number(svg.attributes.height));
+      assert.ok(Number(box.attributes.x) + Number(box.attributes.width) <= width - 18);
+    }
+  } finally { globalThis.document = before; }
+});

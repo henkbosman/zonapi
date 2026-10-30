@@ -26,7 +26,7 @@ export function createPvCorrectionStore(db) {
     /** Kiest de nieuwste gemeten dag per Nederlands klokkwartier; input: modelhash, peiltijd en optionele exclusieve grens voor de blokstart; output: maximaal 96 lichte referenties zonder historische weer-/groepswaarden. */
     pvBlockCorrectionPattern(modelKey, now, beforeStart = Infinity) {
       const byQuarter = new Map();
-      const rows = db.prepare(`SELECT start_ms,end_ms,factor,measured_ms,updated_ms FROM pv_block_corrections
+      const rows = db.prepare(`SELECT start_ms,end_ms,factor,predicted_w,measured_w,measured_ms,updated_ms FROM pv_block_corrections
         WHERE model_key=? AND end_ms<=? AND measured_ms<=? AND updated_ms<=? AND start_ms<? ORDER BY end_ms DESC`).iterate(modelKey, now, now, now, beforeStart);
       for (const row of rows) {
         const quarter = clockQuarter(row.end_ms);

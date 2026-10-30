@@ -111,6 +111,7 @@ test('vandaag gebruikt dezelfde correcties in de openbare grafiek, interne grafi
     const slot = graph.slots.find((row) => Date.parse(row.end) === end);
     assert.equal(slot.base_power_w, 1500); assert.equal(slot.power_w, 600);
     assert.equal(slot.automatic_correction_factor, 0.4); assert.equal(slot.correction_reference_end, iso(target));
+    assert.equal(slot.correction_reference_predicted_w, 1000); assert.equal(slot.correction_reference_measured_w, 400);
     assert.equal(graph.slots.find((row) => Date.parse(row.end) === end + quarter).power_w, 1500);
   }
   for (const response of [snapshot.daily, await get('/intern/api/v1/appliances/daily')]) {

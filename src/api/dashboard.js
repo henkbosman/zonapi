@@ -49,7 +49,8 @@ function publicForecast(value) {
     conditions: { ...pick(value.conditions, ['resolution_minutes', 'time_basis']),
       rows: (value.conditions?.rows ?? []).map((row) => pick(row, ['time', 'cloud_cover_percent', 'weather_code', 'condition', 'weather_model', 'fetched_at', 'stale'])) },
     slots: value.slots.map((row) => pick(row, ['start', 'end', 'time', 'sample_start', 'sample_end', 'resolution_minutes', 'source_resolution_minutes',
-      'ghi_w_m2', 'power_w', 'base_power_w', 'automatic_correction_factor', 'correction_source', 'correction_reference_start', 'correction_reference_end', 'correction_computed_at'])) };
+      'ghi_w_m2', 'power_w', 'base_power_w', 'automatic_correction_factor', 'correction_source', 'correction_reference_start', 'correction_reference_end',
+      'correction_reference_predicted_w', 'correction_reference_measured_w', 'correction_computed_at'])) };
 }
 
 /** Selecteert de zichtbare start-/energiegegevens van een cyclus; input: berekend kandidaatadvies; output: openbaar kandidaatadvies of null. */

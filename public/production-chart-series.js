@@ -40,6 +40,13 @@ export function blockCorrectionComputedAt(slots, ms) {
   return Number.isFinite(computed) ? computed : null;
 }
 
+/** Leest de oorspronkelijke meetdag en vermogens van de eigen toegepaste correctie; input: slots en tijd; output: controleerbare referentie zonder interpolatie tussen kwartieren. */
+export function blockCorrectionReferenceAt(slots, ms) {
+  const slot = correctionSlotAt(slots, ms);
+  return { endMs: Date.parse(slot?.correction_reference_end), predictedW: slot?.correction_reference_predicted_w,
+    measuredW: slot?.correction_reference_measured_w };
+}
+
 /** Koppelt elk zichtbaar kwartier aan zijn eigen bewolkingspunt op het begin; input: bewolkingspunten en zonuren; output: iconen zonder lokale interpolatie, met compatibiliteit voor oudere uursnapshots. */
 export function quarterWeatherPoints(conditions, start, end) {
   const hour = 3600000, quarter = 900000;
@@ -66,6 +73,8 @@ export function forecastLinePoints(slots, start, end) {
     const ms = to;
     const point = { ms, value: slot.power_w, correction_factor: slot.automatic_correction_factor, interval_start_ms: from, interval_end_ms: to,
       correction_computed_ms: Date.parse(slot.correction_computed_at),
+      reference_start_ms: Date.parse(slot.correction_reference_start), reference_end_ms: Date.parse(slot.correction_reference_end),
+      reference_predicted_w: slot.correction_reference_predicted_w, reference_measured_w: slot.correction_reference_measured_w,
       sample_start_ms: Date.parse(slot.sample_start ?? slot.start), sample_end_ms: Date.parse(slot.sample_end ?? slot.end),
       source_resolution_minutes: slot.source_resolution_minutes ?? (to - from) / 60000 };
     samples.set(ms, point);

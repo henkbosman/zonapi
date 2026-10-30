@@ -26,7 +26,7 @@ export function learnPvCorrection(repository, settings, panels, panelErrors, row
   if (!Number.isSafeInteger(target) || target % 900000 !== 0 || target > now) return { status: 'invalid_block' };
   const existing = repository.pvBlockCorrection(modelKey, target);
   if (existing && measuredMs < existing.measured_ms) return { status: 'older_measurement' };
-  const predicted = basePvAtPeriodEnd(repository, settings, panels, target);
+  const predicted = basePvAtPeriodEnd(repository, settings, panels, target, now);
   if (!predicted) return { status: 'forecast_unavailable' };
   if (now - predicted.fetched_ms > settings.weather.stale_after_hours * 3600000) return { status: 'forecast_stale' };
   if (predicted.power_w < config.min_forecast_w) return { status: 'low_forecast' };
